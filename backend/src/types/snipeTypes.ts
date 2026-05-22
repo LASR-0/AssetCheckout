@@ -1,0 +1,91 @@
+export type Model = {
+  id: number;
+  name: string;
+  remaining: number;
+  manufacturer?: { id: number; name: string };
+  category?: {
+    id: number;
+  };
+  fieldset?: { id: number; name: string };
+};
+
+export type Asset = {
+  id: number;
+  asset_tag: string;
+  status_label?: {
+    name: string;
+  };
+  assigned_to?: unknown;
+  custom_fields?: Record<string, { value?: string }>;
+};
+
+export type SnipeAssetDetail = {
+  id: number;
+  asset_tag: string;
+  serial?: string | null;
+  model?: { id: number; name: string } | null;
+  company?: { id: number; name: string } | null;
+  location?: { id: number; name: string } | null;
+  status_label?: { id: number; name: string } | null;
+  custom_fields?: Record<string, { value?: string | null }>;
+};
+
+export type User = {
+  id: number;
+  name: string;
+};
+
+export type StatusLabel = {
+  id: number;
+  name: string;
+};
+
+export type TierMatch = { mode: "any" };
+
+export type CheckoutInput = {
+  user_id: number;
+  category_id: number;
+  tierMatch: TierMatch;
+};
+
+export type CustomField = {
+  id: number;
+  name: string;
+  db_column_name?: string;
+  field_values: string | null;
+  field_values_array?: string[];
+};
+
+export type SearchModelsInput = {
+  manufacturer: string;
+  modelName: string;
+  categoryId: number;
+};
+
+export type CreateSnipeModelInput = {
+  manufacturer: string;
+  modelName: string;
+  modelNumber: string;
+  categoryId: number;
+  fieldsetId: number;
+};
+
+export type CreateSkeletonAssetInput = {
+  modelId: number;
+  statusId: number;
+};
+
+export type SnipeNamedRecord = {
+  id: number;
+  name: string;
+};
+
+export type AssetDetailsInput = {
+  companyId?: number | null;
+  serial?: string;
+  statusId?: number | null;
+  locationId?: number | null;
+  tier?: string;
+  price?: number;
+  assetTag?: string;
+};

@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma_client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/* ===================== REQUESTS ===================== */
+model Request {
+  id             Int      @id @default(autoincrement())
+
+  userId         Int
+
+  userName       String
+
+  categoryId     Int
+  categoryName   String
+
+  requestType    RequestType
+  status         RequestStatus @default(PENDING)
+
+  reason         String?
+  manager        String?
+
+  callText       Boolean @default(false)
+  newNumber      Boolean @default(false)
+
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedBy        String?
+  rejectedAt        DateTime?
+
+  modelRequest   ModelRequest?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/* ===================== MODEL REQUESTS ===================== */
+model ModelRequest {
+  id             Int      @id @default(autoincrement())
+
+  requestId      Int      @unique
+  request        Request  @relation(fields: [requestId], references: [id])
+
+// Working buffer for the admin's Create Model form. Persisted on partial submits
+// so the form can resume if Snipe-IT creation fails midway. Populated by admin
+// during model creation, not by the requester.
+  manufacturer   String?
+  modelName      String?
+  modelNumber    String?
+  price          Float?
+
+  linkedAssetId  Int?
+  snipeModelId   Int?
+
+  status         ModelRequestStatus @default(PENDING)
+  assetReady     Boolean            @default(false)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/* ===================== SETTINGS ===================== */
+model Setting {
+  key       String   @id
+  value     String   // JSON-serialized
+  updatedAt DateTime @updatedAt
+}
+
+/* ===================== ENUMS ===================== */
+enum RequestType {
+  STANDARD
+  NON_STANDARD
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum ModelRequestStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+}

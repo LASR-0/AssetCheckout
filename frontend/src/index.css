@@ -1,0 +1,276 @@
+@import "tailwindcss";
+@import "@fontsource-variable/figtree";
+
+
+@layer base {
+  :root {
+    /* Backgrounds */
+    --background: 253 248 249;
+    --foreground: 52 50 52;
+    --nav: 249 245 241;
+    --error-background: 255 226 226;
+    --shadcn-background: 250 245 255;
+    --success-form: 255 255 255;
+    --filter: 202 216 218;
+
+    --surface: 253 248 249;
+    --surface-container: 242 236 238;
+    --surface-container-low: 248 242 244;
+    --surface-container-lowest: 255 255 255;
+
+    --approver-bg: 255 170 0;
+    --requester-bg: 249 230 249;
+
+    /* Brand */
+    --twilight-purple: 46 26 71;
+    --primary: 74 43 117;
+    --check: 137 37 177;
+
+    /* Text */
+    --on-background: 52 50 52;
+    --on-surface: 52 50 52;
+    --on-surface-variant: 57 54 57;
+    --nav-tab-selected: 29 41 61;
+    --nav-tab: 217 215 184 ;
+    --error: 193 0 7;
+    --shadcn-text: 89 22 139;
+    --approver-text: 173 114 0;
+    --requester-text: 94 26 117;
+    --not-found-text: 196 160 233;
+
+    /* Borders */
+    --outline: 243 244 246;
+    --underline: 98 116 142;
+    --info-light: 97 94 97;
+
+    --theme-bg: 220 220 220;
+    --theme-text: 84 84 84;
+    --theme-sun: 237 158 26;
+    --theme-moon: 220 220 220;
+    --loading: 107 61 194;
+
+    /* Misc */
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.144);
+
+    /* modals */
+    --modal-text-primary: 52 50 52;
+    --modal-text-secondary: 92 92 92;
+    --modal-text-accent: 99 91 119;
+
+    --modal-surface: 253 248 249;
+    --modal-surface-elevated: 255 255 255;
+    --modal-surface-accent: 232 221 255;
+
+    --modal-border: 182 176 180;
+    --modal-border-light: 182 176 180;
+    
+    --modal-brand: 161 138 222;
+    --modal-brand-secondary: 80 37 186;
+    --modal-error: 158 63 78;
+    --twilight-gradient: linear-gradient(145deg, rgb(187, 149, 214) 0%, rgb(80, 37, 186) 100%);
+    --not-found: linear-gradient(145deg, rgb(195, 16, 250) 0%, rgb(80, 37, 186) 100%);
+
+    --tooltip-bg: 43 29 32;
+    --tooltip-text: 255 255 255;
+  }
+
+  .dark {
+    --background: 18 23 42;
+    --foreground: 248 250 252;
+    --nav: 10 2 25;
+    --error-background: 40 0 10;
+    --shadcn-background: 20 4 55;
+    --success-form: 10 2 25;
+    --filter: 10 2 25;
+    --requester-bg: 64 17 80;
+
+    --surface: 18 8 30;
+    --surface-container: 20 20 49;
+    --surface-container-low: 50 29 54;
+    --surface-container-lowest: 10 2 25;
+
+    --twilight-purple: 46 26 71;
+    --primary: 152 16 250;
+    --check: 167 139 222;
+
+    --on-background: 255 241 219;
+    --on-surface: 248 250 252;
+    --on-surface-variant: 255 241 219;
+    --nav-tab-selected: 255 241 219;
+    --nav-tab: 255 228 189 ;
+    --error: 220 1 80;
+    --shadcn-text: 250 245 255;
+    --approver-text: 255 221 158;
+    --requester-text: 249 230 249;
+    --not-found-text: 230 0 38;
+
+    --outline: 64 58 34;
+    --underline: 255 241 219;
+    --info-light: 158 134 124;
+
+    --theme-bg: 133 125 101;
+    --theme-text: 240 230 197;
+    --theme-sun: 54 42 1;
+    --theme-moon: 255 204 30;
+    --loading: 235 218 183;
+
+    --shadow-md: 0 0 0 2px rgba(161, 138, 222, 0.14), 0 4px 18px rgba(238, 181, 255, 0.231);
+
+    --modal-text-primary: 255 228 189;
+    --modal-text-secondary: 255 241 219;
+    --modal-text-accent: 152 16 250;
+
+    --modal-surface: 18 8 30;
+    --modal-surface-elevated: 20 20 49;
+    --modal-surface-accent: 10 2 25;
+
+    --modal-border: 64 58 34;
+    --modal-border-light: 255 241 219;
+    
+    --modal-brand: 152 16 250;
+    --modal-brand-secondary: 152 16 250;
+    --modal-error: 220 1 80;
+    --twilight-gradient: linear-gradient(145deg, rgb(195, 16, 250) 0%, rgb(80, 37, 186) 100%);
+    --not-found: linear-gradient(145deg, rgb(250, 16, 172) 0%, rgb(186, 37, 37) 100%);
+
+    --tooltip-bg: 13 8 30;
+    --tooltip-text: 255 241 219;
+  }
+
+  input[type="checkbox"] {
+    accent-color: rgb(var(--check));
+    background-color: rgb(var(--surface-container-low));
+  }
+
+}
+
+
+@theme {
+
+  --font-sans: "Figtree Variable", system-ui, sans-serif;
+  /* --font-mono: "JetBrains Mono Variable", monospace; */
+
+  --color-twilight-purple: rgb(var(--primary));
+  --color-midnight-purple: rgb(var(--twilight-purple));
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-error-background: rgb(var(--error-background));
+  --color-nav: rgb(var(--nav));
+  --color-shadcn-background: rgb(var(--shadcn-background));
+  --color-success-form: rgb(var(--success-form));
+  --color-filter: rgb(var(--filter));
+
+  --color-surface: rgb(var(--surface));
+  --color-surface-container: rgb(var(--surface-container));
+  --color-surface-container-low: rgb(var(--surface-container-low));
+  --color-surface-container-lowest: rgb(var(--surface-container-lowest));
+
+  --color-approver-bg: rgb(var(--approver-bg));
+  --color-requester-bg: rgb(var(--requester-bg));
+  
+
+  --color-primary: rgb(var(--primary));
+  --color-check: rgb(var(--check));
+
+  --color-on-background: rgb(var(--on-background));
+  --color-on-surface: rgb(var(--on-surface));
+  --color-on-surface-variant: rgb(var(--on-surface-variant));
+  --color-nav-tab-selected: rgb(var(--nav-tab-selected));
+  --color-nav-tab: rgb(var(--nav-tab));
+  --color-error: rgb(var(--error));
+  --color-shadcn-text: rgb(var(--shadcn-text));
+  --color-approver-text: rgb(var(--approver-text));
+  --color-requester-text: rgb(var(--requester-text));
+  --color-not-found-text: rgb(var(--not-found-text));
+
+  --color-outline: rgb(var(--outline));
+  --color-underline: rgb(var(--underline));
+  --color-info-light: rgb(var(--info-light));
+
+  --color-theme-bg: rgb(var(--theme-bg));
+  --color-theme-sun: rgb(var(--theme-sun));
+  --color-theme-moon: rgb(var(--theme-moon));
+  --color-theme-text: rgb(var(--theme-text));
+  --color-loading: rgb(var(--loading));
+
+  --color-modal-text-primary: rgb(var(--modal-text-primary));
+  --color-modal-text-secondary: rgb(var(--modal-text-secondary));
+  --color-modal-text-accent: rgb(var(--modal-text-accent));
+  --color-modal-surface: rgb(var(--modal-surface));
+  --color-modal-surface-elevated: rgb(var(--modal-surface-elevated));
+  --color-modal-surface-accent: rgb(var(--modal-surface-accent));
+  --color-modal-border: rgb(var(--modal-border));
+  --color-modal-border-light: rgb(var(--modal-border-light));
+  --color-modal-brand: rgb(var(--modal-brand));
+  --color-modal-brand-sencondary: rgb(var(--modal-brand-sencondary));
+  --color-modal-error: rgb(var(--modal-error));
+  --color-twilight-gradient: rgb(var(--twilight-gradient));
+  --color-not-found: rgb(var(--not-found));
+
+   --color-tooltip-bg: rgb(var(--tooltip-bg));
+   --color-tooltip-text: rgb(var(--tooltip-text));
+}
+
+@layer components {
+
+  .twilight-gradient {
+  background: var(--twilight-gradient);
+  }
+
+  .not-found {
+  background: var(--not-found);
+  }
+
+  .switch-thumb {
+    transform: translateX(0);
+    transition: transform 0.2s ease;
+  }
+
+  [data-state="checked"] .switch-thumb {
+    transform: translateX(14px);
+  }
+
+@keyframes slide-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-out-to-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(5rem);
+  }
+}
+
+.slide-animation[data-state="open"] {
+  animation: slide-in-from-right 200ms ease-out;
+}
+
+.slide-animation[data-state="closed"] {
+  animation: slide-out-to-right 200ms ease-in;
+}
+
+.group\/icon:hover .icon-fill-hover {
+  font-variation-settings: 'FILL' 1;
+  transition: font-variation-settings 450ms ease;
+}
+}
+
+@layer utilities {
+  .shadow-md {
+    box-shadow: var(--shadow-md);
+  }
+
+}
+
+

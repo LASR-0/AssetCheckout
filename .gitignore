@@ -1,0 +1,84 @@
+# ----------------------------------------------------------------------------
+# Dependencies
+# ----------------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+
+# ----------------------------------------------------------------------------
+# Environment files
+# ----------------------------------------------------------------------------
+# Real .env files are local-only. Use .env.example as the template for
+# contributors and self-hosters.
+.env
+.env.local
+.env.*.local
+*.local
+
+# Allow the example templates to be tracked
+!.env.example
+
+# ----------------------------------------------------------------------------
+# Build output
+# ----------------------------------------------------------------------------
+dist/
+dist-ssr/
+build/
+out/
+*.tsbuildinfo
+
+# ----------------------------------------------------------------------------
+# Prisma — generated client
+# ----------------------------------------------------------------------------
+# The Prisma client is generated from schema.prisma at install time; it
+# shouldn't be tracked. Migrations DO need to be tracked (they're the
+# canonical record of schema evolution).
+backend/generated/
+
+# ----------------------------------------------------------------------------
+# SQLite databases (local dev only)
+# ----------------------------------------------------------------------------
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# ----------------------------------------------------------------------------
+# Logs
+# ----------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ----------------------------------------------------------------------------
+# Editor / OS noise
+# ----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Visual Studio (Windows) project files — unlikely but harmless to exclude
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Windows zone-identifier metadata (WSL artifact when downloading files)
+*:Zone.Identifier
+
+# Explicitly track this file despite .vscode/ being ignored — it shares
+# recommended extensions with contributors.
+!.vscode/extensions.json
+
+# ----------------------------------------------------------------------------
+# Misc — internal-only scratch
+# ----------------------------------------------------------------------------
+# The misc/ folder is for project notes / drafts that probably shouldn't be
+# public. If you want to track specific subfolders, override with !misc/foo/.
+misc/
