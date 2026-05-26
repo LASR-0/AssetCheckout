@@ -89,7 +89,7 @@ router.post("/:requestId/reject", async (req, res, next) => {
 });
 
 ///  +-----------------------------------------------------------------+
-///  |          PHASE 5C-III — MODEL CREATION ROUTES                  |
+///  |                 MODEL CREATION ROUTES                           |
 ///  +-----------------------------------------------------------------+
 
 router.get("/:requestId/search-models", async (req, res, next) => {
@@ -251,25 +251,10 @@ router.post("/:requestId/complete", async (req, res, next) => {
 });
 
 ///  +-----------------------------------------------------------------+
-///  |          PHASE 5D-II — ASSET DETAILS ROUTE                     |
+///  |                     ASSET DETAILS ROUTE                         |
 ///  +-----------------------------------------------------------------+
 
-/**
- * Submit asset details for a row-4 request.
- *
- * Body:
- *   - companyId: number
- *   - serial:    string (non-empty after trim)
- *   - statusId:  number
- *   - locationId: number
- *   - tier:      string (non-empty after trim)
- *   - price:     number
- *   - assetTag?: string (optional; if provided, must be non-empty after trim)
- *
- * Light validation here — Snipe's PATCH does the real work. We just check
- * presence and types so the user gets a clean error rather than Snipe rejecting
- * a malformed call.
- */
+
 router.post("/:requestId/asset-details", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
@@ -290,13 +275,7 @@ router.post("/:requestId/asset-details", async (req, res, next) => {
     }
  
     const body = req.body ?? {};
- 
-    // Each field is optional. If provided, must be the right type.
-    // Empty strings are treated as "clear this field" by the service layer
-    // (matches the locked design — pre-population means an empty field is
-    // an intentional clear, not an accidental omission).
- 
-    // Helper: validate "if present, must be a finite number"
+
     function asOptionalNumber(value: unknown, fieldName: string): number | undefined | null {
       if (value === undefined || value === null) return undefined;
       if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -305,7 +284,7 @@ router.post("/:requestId/asset-details", async (req, res, next) => {
       return value;
     }
  
-    // Helper: validate "if present, must be a string"
+
     function asOptionalString(value: unknown): string | undefined {
       if (value === undefined || value === null) return undefined;
       if (typeof value !== "string") {
@@ -335,9 +314,6 @@ router.post("/:requestId/asset-details", async (req, res, next) => {
         });
       }
       price = priceValue ?? undefined;
- 
-      // Strings — pass through whatever was sent (including empty strings,
-      // which the service interprets as "clear this field in Snipe").
       serial = asOptionalString(body.serial);
       tier = asOptionalString(body.tier);
       assetTag = asOptionalString(body.assetTag);

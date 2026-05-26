@@ -100,7 +100,6 @@ export default function StandardModelsSelector() {
     const current = config[String(categoryId)] ?? { primary: null, backup: null };
     const updated = { ...current, [field]: value };
 
-    // Optimistic update
     setConfig((prev) => ({ ...prev, [String(categoryId)]: updated }));
 
     try {
@@ -113,7 +112,6 @@ export default function StandardModelsSelector() {
       );
       setConfig(newConfig);
     } catch (err: any) {
-      // Roll back optimistic update on failure
       setConfig((prev) => ({ ...prev, [String(categoryId)]: current }));
       setError(err.message || "Failed to save");
       console.error(err);
@@ -122,7 +120,6 @@ export default function StandardModelsSelector() {
     }
   }
 
-  // Count how many categories have at least primary configured — for the trigger label.
   const configuredCount = Object.values(config).filter((c) => c.primary !== null).length;
 
   return (
@@ -274,13 +271,11 @@ function ModelSlot({
   disabled?: boolean;
   onChange: (value: number | null) => void;
 }) {
-  // Display name for the currently saved value, or "(none)" if cleared.
   const initialName =
     value !== null
       ? models.find((m) => m.id === value)?.name ?? ""
       : NONE_LABEL;
 
-  // The other slot's selected model name (if any) — to disable in this slot.
   const excludeName =
     excludeId !== null
       ? models.find((m) => m.id === excludeId)?.name

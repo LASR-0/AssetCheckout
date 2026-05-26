@@ -11,9 +11,6 @@ type GetRequestsParams = {
   currentUserName?: string;
 };
 
-// -----------------------------
-// GET REQUESTS
-// -----------------------------
 export async function getRequests(params?: GetRequestsParams) {
 
   const query = new URLSearchParams();

@@ -6,7 +6,6 @@ export default function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // Fix hydration mismatch (important)
   useEffect(() => setMounted(true), []);
 
   if (!mounted) return null;

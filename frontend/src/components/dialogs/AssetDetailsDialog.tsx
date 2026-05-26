@@ -548,10 +548,7 @@ export default function AssetDetailsDialog({
 ///  +-----------------------------------------------------------------+
 ///  |                       INLINE HELPERS                            |
 ///  +-----------------------------------------------------------------+
-//
-//  Small UI bits used only here. Keeping them in-file means the dialog
-//  stays self-contained — only ComboboxField is shared.
-///  +-----------------------------------------------------------------+
+
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (

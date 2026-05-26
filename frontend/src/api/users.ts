@@ -7,7 +7,5 @@ export async function fetchUsers() {
 
   const data = await res.json();
 
-  //debug
-  //console.log("🟡 USERS API RESPONSE:", data)
   return data;
 }

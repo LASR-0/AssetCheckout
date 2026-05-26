@@ -13,7 +13,7 @@ export default function DeploymentSuccess({
 }: Props) {
   return (
     <div className="bg-success-form rounded-xl px-10 py-10 text-center">
-      {/* Big icon */}
+      {/* icon */}
       <div className="mb-6 flex mx-auto bg-surface w-32 h-32 rounded-[100%] justify-center">
         <span className="my-auto material-symbols-outlined !text-6xl text-purple-700">
           check_circle

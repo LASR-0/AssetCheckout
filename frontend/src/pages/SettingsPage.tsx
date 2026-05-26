@@ -5,24 +5,6 @@ import RequestableCategoriesSelector from "@/components/settings/RequestableCate
 import StandardModelsSelector from "@/components/settings/StandardModelsSelector";
 import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
 
-///  +-----------------------------------------------------------------+
-///  |                       SETTINGS PAGE                             |
-///  +-----------------------------------------------------------------+
-//
-//  Layout: centered max-w-3xl content. The app-level <Navbar /> renders
-//  on top of every page from App.tsx, so this page is just the inner
-//  content area.
-//
-//  Section visibility:
-//    - Appearance              → everyone
-//    - Asset Configuration     → admins only
-//    - Snipe-IT Configuration  → admins only
-//    - Dev Auth                → always shown for now (will be removed for production)
-//
-//  Settings persist as the user changes them — each selector handles its
-//  own auto-save, no Save/Discard buttons needed at the page level.
-///  +-----------------------------------------------------------------+
-
 export default function SettingsPage() {
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
@@ -84,14 +66,6 @@ export default function SettingsPage() {
   );
 }
 
-///  +-----------------------------------------------------------------+
-///  |                       SECTION PRIMITIVES                        |
-///  +-----------------------------------------------------------------+
-//
-//  Pulled inline to keep the page-level JSX readable. If we add more
-//  settings pages later we can extract these into their own file.
-///  +-----------------------------------------------------------------+
-
 type SectionProps = {
   icon: string;
   title: string;
@@ -116,11 +90,6 @@ type RowProps = {
   children: React.ReactNode;
 };
 
-/**
- * A label/control row inside a SettingsSection. Used when the control is a
- * single element (toggle, button) — for richer controls like the selectors
- * we just render them directly inside the section.
- */
 function SettingsRow({ title, description, children }: RowProps) {
   return (
     <div className="flex items-center justify-between gap-4">

@@ -4,12 +4,13 @@ import {
   getRequestableCategoryIds,
   getAllConfiguredStandardModelIds,
 } from './settings.js';
-import type { CheckoutInput, 
-  CustomField, 
-  Asset, 
-  TierMatch, 
-  Model, 
-  User, 
+import type {
+  CheckoutInput,
+  CustomField,
+  Asset,
+  TierMatch,
+  Model,
+  User,
   StatusLabel,
   SearchModelsInput,
   CreateSnipeModelInput,
@@ -17,8 +18,19 @@ import type { CheckoutInput,
   AssetDetailsInput,
   SnipeAssetDetail,
   CreateSkeletonAssetInput
- }
-  from '../types/snipeTypes.js';
+} from '../types/snipeTypes.js';
+
+///  +-----------------------------------------------------------------+
+///  |                     TYPES & CONFIG                              |
+///  +-----------------------------------------------------------------+
+//
+//  Thin wrapper around the Snipe-IT REST API. Every function in this file
+//  ultimately hits an /api/v1/* endpoint and translates the response into
+//  shapes the rest of the app can consume.
+//
+//  All requests share the same bearer-token auth (the Snipe service user)
+//  and a default fetch timeout — see fetchWithTimeout + getHeaders below.
+///  +-----------------------------------------------------------------+
 
 const BASE_URL = process.env.SNIPEIT_API_URL;
 const API_TOKEN = process.env.SNIPEIT_BOT_TOKEN;
@@ -31,9 +43,69 @@ const baseUrl: string = BASE_URL;
 const apiToken: string = API_TOKEN;
 
 ///  +-----------------------------------------------------------------+
-///  |                     PRIMARY FUNCTION                            |
+///  |                            HELPERS                              |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * fetch() with a timeout. Snipe-IT can be slow or unreachable on a flaky
+ * network, and we'd rather surface a clean 504/502 than hang the request.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 8000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+
+    clearTimeout(id);
+    return res;
+  } catch (err: unknown) {
+    clearTimeout(id);
+
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new AppError('Snipe-IT request timed out', 504);
+    }
+
+    throw new AppError('Failed to connect to Snipe-IT', 502);
+  }
+}
+
+function getHeaders(): HeadersInit {
+  return {
+    Authorization: `Bearer ${apiToken}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+}
+
+/**
+ * Currently just checks that the asset has *some* non-empty Tier value. The
+ * tierMatch param is reserved for future "must be tier X" filtering — for
+ * now any tier counts as a match.
+ */
+function assetMatchesTier(asset: Asset, _tierMatch: TierMatch): boolean {
+  const rawTier = asset.custom_fields?.Tier?.value;
+  if (typeof rawTier !== "string") return false;
+
+  const normalized = rawTier.trim();
+  return normalized.length > 0;
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       CHECKOUT FLOW                             |
+///  +-----------------------------------------------------------------+
+
+/**
+ * High-level checkout orchestrator: pick a model in the category, find an
+ * available asset for that model, check it out to the user.
+ *
+ * Note: only used as a standalone helper — the main approval flow in
+ * services/requests.ts drives checkouts directly via checkoutAsset() below
+ * because it needs finer control over model selection (primary/backup, etc.).
+ */
 export async function requestAssetCheckout({ user_id, category_id, tierMatch }: CheckoutInput) {
   if (!user_id) {
     throw new AppError('User ID is required', 400);
@@ -67,139 +139,42 @@ export async function requestAssetCheckout({ user_id, category_id, tierMatch }: 
   };
 }
 
-export async function getAveragePricesFromSnipe(tier?: string) {
-  const res = await fetch(
-    `${baseUrl.replace(/\/$/, "")}/api/v1/hardware`,
-    {
-      method: "GET",
-      headers: getHeaders(),
-    }
-  );
+/**
+ * Low-level checkout. Assigns the asset to the user as a regular user-checkout
+ * (not to a location or another asset). Always tagged with the same note so
+ * Snipe's history shows checkouts originating from this app.
+ */
+export async function checkoutAsset(assetId: number, userId: number) {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/hardware/${assetId}/checkout`;
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch assets from Snipe-IT");
-  }
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      checkout_to_type: 'user',
+      assigned_user: userId,
+      note: 'Checked out via API',
+    }),
+  });
 
   const data = await res.json();
-  const allAssets = data.rows || [];
-
-  const ALLOWED_CATEGORIES = new Set([3, 9, 4, 5]);
-
-  const pricesByCategory: Record<number, number[]> = {};
-
-  for (const asset of allAssets) {
-    const categoryId = Number(asset.category?.id ?? asset.category_id);
-
-    if (Number.isNaN(categoryId)) continue;
-    if (!ALLOWED_CATEGORIES.has(categoryId)) continue;
-
-    const assetTier = asset.custom_fields?.Tier?.value;
-    const normalizedTier = assetTier?.toUpperCase();
-
-    if (tier && normalizedTier !== tier.toUpperCase()) continue;
-
-    const rawPrice = asset.purchase_cost;
-
-    if (rawPrice == null || rawPrice === "") continue;
-
-    const price =
-      typeof rawPrice === "string"
-        ? parseFloat(rawPrice.replace(/,/g, ""))
-        : rawPrice;
-
-    if (!Number.isFinite(price)) continue;
-
-    if (!pricesByCategory[categoryId]) {
-      pricesByCategory[categoryId] = [];
-    }
-
-    pricesByCategory[categoryId].push(price);
-  }
-
-  const averages: Record<number, number> = {};
-
-  for (const categoryId in pricesByCategory) {
-    const prices = pricesByCategory[Number(categoryId)];
-
-    if (!prices.length) continue;
-
-    const cleaned = removeOutliers(prices);
-
-    if (!cleaned.length) continue;
-
-    averages[Number(categoryId)] = getMean(cleaned);
-  }
-
-  return averages;
-}
-
-export async function getTierValues(): Promise<string[]> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/fields`;
-
-  const res = await fetchWithTimeout(url, {
-    method: 'GET',
-    headers: getHeaders(),
-  });
 
   if (!res.ok) {
-    throw new AppError(`Failed to fetch custom fields, status: ${res.status}`, 500);
+    throw new AppError(`Checkout failed for asset ${assetId}`, 500);
   }
 
-  const data: { rows: CustomField[] } = await res.json();
-
-  const tierField = data.rows.find((field) =>
-    field.name.toLowerCase().includes('tier')
-  );
-
-  if (!tierField) {
-    throw new AppError('No "Tier" custom field found in Snipe-IT', 404);
-  }
-
-  if (tierField.field_values_array?.length) {
-    return tierField.field_values_array
-      .map((v) => v.trim())
-      .filter(Boolean);
-  }
-
-  if (tierField.field_values) {
-    return tierField.field_values
-      .split(/\r?\n/)
-      .map((v) => v.trim())
-      .filter(Boolean);
-  }
-
-  return [];
+  return data;
 }
 
-export async function getTierCustomFieldColumnName(): Promise<string> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/fields`;
+///  +-----------------------------------------------------------------+
+///  |                          CATEGORIES                             |
+///  +-----------------------------------------------------------------+
 
-  const res = await fetchWithTimeout(url, {
-    method: 'GET',
-    headers: getHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new AppError(`Failed to fetch custom fields, status: ${res.status}`, 500);
-  }
-
-  const data: { rows: CustomField[] } = await res.json();
-
-  const tierField = data.rows.find((field) =>
-    field.name.toLowerCase().includes('tier')
-  );
-
-  if (!tierField) {
-    throw new AppError('No "Tier" custom field found in Snipe-IT', 404);
-  }
-
-  if (!tierField.db_column_name) {
-    throw new AppError('Tier custom field is missing db_column_name in Snipe response', 500);
-  }
-
-  return tierField.db_column_name;
-}
-
+/**
+ * Every asset category in Snipe-IT, regardless of whether it's allowed for
+ * new requests. The admin settings page uses this to populate the
+ * requestable-categories selector.
+ */
 export async function getAllAssetCategories(): Promise<{ id: number; name: string }[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/categories?category_type=asset&limit=500`;
 
@@ -223,6 +198,11 @@ export async function getAllAssetCategories(): Promise<{ id: number; name: strin
     }));
 }
 
+/**
+ * Only the categories admins have whitelisted as requestable. If no
+ * whitelist has been configured (returns null from settings), all asset
+ * categories are considered requestable.
+ */
 export async function getRequestableAssetCategories(): Promise<{ id: number; name: string }[]> {
   const all = await getAllAssetCategories();
   const allowedIds = await getRequestableCategoryIds();
@@ -230,54 +210,14 @@ export async function getRequestableAssetCategories(): Promise<{ id: number; nam
   return all.filter((c) => allowedIds.includes(c.id));
 }
 
-
 ///  +-----------------------------------------------------------------+
-///  |                            HELPERS                              |
-///  +-----------------------------------------------------------------+
-
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 8000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const res = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-
-    clearTimeout(id);
-    return res;
-  } catch (err: unknown) {
-    clearTimeout(id);
-
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new AppError('Snipe-IT request timed out', 504);
-    }
-
-    throw new AppError('Failed to connect to Snipe-IT', 502);
-  }
-}
-
-function getHeaders(): HeadersInit {
-  return {
-    Authorization: `Bearer ${apiToken}`,
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-}
-
-function assetMatchesTier(asset: Asset, _tierMatch: TierMatch): boolean {
-  const rawTier = asset.custom_fields?.Tier?.value;
-  if (typeof rawTier !== "string") return false;
-
-  const normalized = rawTier.trim();
-  return normalized.length > 0;
-}
-
-///  +-----------------------------------------------------------------+
-///  |                         API FUNCTIONS                           |
+///  |                         MODELS — READ                           |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Models in a category that currently have at least one unassigned asset.
+ * Used by the standard-approval flow to find something to check out.
+ */
 export async function getModelsByCategory(categoryId: number): Promise<Model[]> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/v1/models`;
 
@@ -299,6 +239,10 @@ export async function getModelsByCategory(categoryId: number): Promise<Model[]> 
   );
 }
 
+/**
+ * Every model in a category, including ones with no available assets.
+ * Used by the admin settings page to populate the standard-models picker.
+ */
 export async function getAllModelsByCategory(categoryId: number): Promise<Model[]> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/v1/models?limit=500`;
 
@@ -315,123 +259,20 @@ export async function getAllModelsByCategory(categoryId: number): Promise<Model[
   return data.rows.filter((model) => model.category?.id === categoryId);
 }
 
-export async function getAvailableAssetFromModel(
-  modelId: number,
-  tierMatch: TierMatch
-): Promise<Asset | null> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/hardware?model_id=${modelId}`;
-
-  const res = await fetchWithTimeout(url, {
-    method: 'GET',
-    headers: getHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new AppError(`Failed to fetch assets for model ${modelId}`, 500);
-  }
-
-  const data: { rows: Asset[] } = await res.json();
-
-  const availableAssets = data.rows.filter((asset) => {
-    if (asset.status_label?.name !== 'Ready to Deploy') return false;
-    if (asset.assigned_to !== null) return false;
-    if (!assetMatchesTier(asset, tierMatch)) return false;
-    return true;
-  });
-
-  return availableAssets[0] ?? null;
-}
-
-export async function checkoutAsset(assetId: number, userId: number) {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/hardware/${assetId}/checkout`;
-
-  const res = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({
-      checkout_to_type: 'user',
-      assigned_user: userId,
-      note: 'Checked out via API',
-    }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new AppError(`Checkout failed for asset ${assetId}`, 500);
-  }
-
-  return data;
-}
-
-export async function getAllUsersCleaned(): Promise<User[]> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/users`;
-
-  const res = await fetchWithTimeout(url, {
-    method: 'GET',
-    headers: getHeaders(),
-  });
-
-  const data: { rows: User[] } = await res.json();
-
-  if (!data?.rows) {
-    throw new AppError('Failed to fetch users', 500);
-  }
-
-  return data.rows
-    .filter((user) => user.name)
-    .map((user) => ({
-      id: user.id,
-      name: user.name,
-    }));
-}
-
-///  +-----------------------------------------------------------------+
-///  |                    MODEL CREATION HELPERS                       |
-///  +-----------------------------------------------------------------+
-
-export async function getStatusIdByName(name: string): Promise<number | null> {
-  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/statuslabels?limit=200`;
-
-  const res = await fetchWithTimeout(url, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new AppError(`Failed to fetch status labels, status: ${res.status}`, 500);
-  }
-
-  const data: { rows: StatusLabel[] } = await res.json();
-  const target = name.trim().toLowerCase();
-
-  const match = data.rows.find(
-    (label) => label.name.trim().toLowerCase() === target
-  );
-
-  return match?.id ?? null;
-}
-
-export async function getFieldsetIdForCategory(categoryId: number): Promise<number | null> {
-  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/models?limit=500`;
-
-  const res = await fetchWithTimeout(url, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new AppError(`Failed to fetch models, status: ${res.status}`, 500);
-  }
-
-  const data: { rows: Model[] } = await res.json();
-
-  const inCategory = data.rows.find((model) => model.category?.id === categoryId);
-  if (!inCategory) return null;
-
-  return inCategory.fieldset?.id ?? null;
-}
-
+/**
+ * Fuzzy search for existing models when an admin is processing a non-standard
+ * request. Filters:
+ *
+ *   - must be in the same category as the request
+ *   - must NOT be a model configured as a standard (those are reserved for
+ *     standard requests; non-standard shouldn't reuse them)
+ *   - manufacturer name must match exactly (case-insensitive)
+ *   - model name must contain the search string (case-insensitive substring)
+ *   - must have at least one available asset right now
+ *
+ * Returns only matches that pass all five filters, so an admin clicking
+ * "Select" on a result can be reasonably confident it'll succeed.
+ */
 export async function searchModelsByManufacturer({
   manufacturer,
   modelName,
@@ -468,6 +309,9 @@ export async function searchModelsByManufacturer({
     return true;
   });
 
+  // Parallel availability check — one API call per candidate. Acceptable for
+  // typical search result sizes (<10); if this gets slow we could fold the
+  // availability check into the initial /hardware fetch and group by model.
   const availabilityChecks = await Promise.all(
     candidates.map(async (model) => {
       const asset = await getAvailableAssetFromModel(model.id, { mode: "any" });
@@ -480,6 +324,19 @@ export async function searchModelsByManufacturer({
     .map((entry) => entry.model);
 }
 
+///  +-----------------------------------------------------------------+
+///  |                        MODELS — WRITE                           |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Create a new model in Snipe-IT. Resolves the manufacturer by name, creating
+ * the manufacturer on the fly if it doesn't already exist.
+ *
+ * The fieldset MUST be provided by the caller and must match the category's
+ * existing fieldset — Snipe won't surface custom fields (including Tier) on
+ * a model with no fieldset, and the checkout flow depends on Tier being
+ * present.
+ */
 export async function createSnipeModel({
   manufacturer,
   modelName,
@@ -520,6 +377,12 @@ export async function createSnipeModel({
   return newModelId;
 }
 
+/**
+ * Private — used only by createSnipeModel. Snipe-IT doesn't let you create
+ * a model with a manufacturer NAME, it needs an ID, so we resolve the name
+ * to an existing manufacturer (case-insensitive exact match) or create a new
+ * one and return its ID.
+ */
 async function getOrCreateManufacturerId(name: string): Promise<number> {
   const trimmed = name.trim();
   const target = trimmed.toLowerCase();
@@ -564,6 +427,12 @@ async function getOrCreateManufacturerId(name: string): Promise<number> {
   return newId;
 }
 
+/**
+ * Create a barebones "skeleton" asset attached to a model. No serial, no
+ * company, no location — admins fill those in via fillAssetDetailsForRequest
+ * after this returns. The status_id should be the configured skeleton status
+ * (typically something like "Pending" that isn't deployable yet).
+ */
 export async function createSkeletonAsset({
   modelId,
   statusId,
@@ -596,6 +465,13 @@ export async function createSkeletonAsset({
   return newAssetId;
 }
 
+/**
+ * Rollback helper for createNewModelForRequest in services/requests.ts.
+ *
+ * Logs and continues on failure rather than throwing — if rollback fails
+ * we'd rather complete the surrounding error path than mask the original
+ * error with a cleanup error.
+ */
 export async function deleteSnipeModel(modelId: number): Promise<void> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/models/${modelId}`;
 
@@ -612,9 +488,52 @@ export async function deleteSnipeModel(modelId: number): Promise<void> {
 }
 
 ///  +-----------------------------------------------------------------+
-///  |                      ASSET COMPLETENESS                         |
+///  |                        ASSETS — READ                            |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Pick the first available asset attached to a model. Filters:
+ *
+ *   - status_label must be "Ready to Deploy" (Snipe's canonical "deployable"
+ *     state)
+ *   - must not be checked out to anyone
+ *   - must pass assetMatchesTier (currently just "has a non-empty tier")
+ *
+ * Returns null if nothing's available; callers decide whether that's an
+ * error or a fallback signal.
+ */
+export async function getAvailableAssetFromModel(
+  modelId: number,
+  tierMatch: TierMatch
+): Promise<Asset | null> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/hardware?model_id=${modelId}`;
+
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch assets for model ${modelId}`, 500);
+  }
+
+  const data: { rows: Asset[] } = await res.json();
+
+  const availableAssets = data.rows.filter((asset) => {
+    if (asset.status_label?.name !== 'Ready to Deploy') return false;
+    if (asset.assigned_to !== null) return false;
+    if (!assetMatchesTier(asset, tierMatch)) return false;
+    return true;
+  });
+
+  return availableAssets[0] ?? null;
+}
+
+/**
+ * Full asset detail by ID. Returns null if Snipe-IT returns 404, throws on
+ * any other failure. Used both for completeness checking and for fetching
+ * the latest asset_tag at checkout time.
+ */
 export async function getSnipeAssetDetail(assetId: number): Promise<SnipeAssetDetail | null> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware/${assetId}`;
 
@@ -632,6 +551,18 @@ export async function getSnipeAssetDetail(assetId: number): Promise<SnipeAssetDe
   return (await res.json()) as SnipeAssetDetail;
 }
 
+/**
+ * "Is this asset fully populated and ready to deploy?" — the source of
+ * truth for ModelRequest.assetReady. All of these must be true:
+ *
+ *   - model, company, location are set
+ *   - status_label is "Ready to Deploy"
+ *   - serial and asset_tag are non-empty after trimming
+ *   - the Tier custom field is non-empty after trimming
+ *
+ * If any of these fail, the request stays at Row 4 (awaiting details) rather
+ * than advancing to Row 5 (ready for checkout).
+ */
 export async function isSnipeAssetComplete(assetId: number): Promise<boolean> {
   const asset = await getSnipeAssetDetail(assetId);
   if (!asset) return false;
@@ -656,17 +587,26 @@ export async function isSnipeAssetComplete(assetId: number): Promise<boolean> {
 }
 
 ///  +-----------------------------------------------------------------+
-///  |                      ASSET DETAILS UPDATE                       |
+///  |                        ASSETS — WRITE                           |
 ///  +-----------------------------------------------------------------+
 
-
+/**
+ * Partial-update an asset. Every field is optional from the caller's POV
+ * (admins fill them in over multiple passes), but we always send something
+ * for each field so Snipe-IT either updates or clears it — never leaves it
+ * as "don't touch."
+ *
+ * The Tier value goes under whatever column name Snipe assigned to the Tier
+ * custom field (typically `_snipeit_tier_N` for some N), which we look up
+ * dynamically.
+ */
 export async function updateSnipeAsset(
   assetId: number,
   fields: AssetDetailsInput
 ): Promise<unknown> {
- 
+
   const tierColumnName = await getTierCustomFieldColumnName();
- 
+
   const body: Record<string, unknown> = {
     company_id: fields.companyId ?? null,
     status_id: fields.statusId ?? null,
@@ -678,45 +618,54 @@ export async function updateSnipeAsset(
         : "",
     [tierColumnName]: fields.tier ?? "",
   };
- 
+
   if (fields.assetTag !== undefined) {
     body.asset_tag = fields.assetTag;
   }
- 
+
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware/${assetId}`;
- 
+
   const res = await fetchWithTimeout(url, {
     method: "PATCH",
     headers: getHeaders(),
     body: JSON.stringify(body),
   });
- 
+
   const data = await res.json();
- 
+
   if (!res.ok || data?.status === "error") {
     throw new AppError(
       `Failed to update asset ${assetId} in Snipe: ${data?.messages ?? res.statusText}`,
       500
     );
   }
- 
+
   return data;
 }
 
+///  +-----------------------------------------------------------------+
+///  |                       REFERENCE DATA                            |
+///  +-----------------------------------------------------------------+
+//
+//  Lookup endpoints for populating dropdowns in the admin UI. Companies,
+//  locations, and status labels are all small lists (typically <200 entries)
+//  so we just fetch everything in one call with a high limit.
+///  +-----------------------------------------------------------------+
+
 export async function getCompanies(): Promise<SnipeNamedRecord[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/companies?limit=500`;
- 
+
   const res = await fetchWithTimeout(url, {
     method: "GET",
     headers: getHeaders(),
   });
- 
+
   if (!res.ok) {
     throw new AppError(`Failed to fetch companies, status: ${res.status}`, 500);
   }
- 
+
   const data: { rows: SnipeNamedRecord[] } = await res.json();
- 
+
   return (data.rows ?? []).map((row) => ({
     id: row.id,
     name: row.name,
@@ -725,18 +674,18 @@ export async function getCompanies(): Promise<SnipeNamedRecord[]> {
 
 export async function getLocations(): Promise<SnipeNamedRecord[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/locations?limit=500`;
- 
+
   const res = await fetchWithTimeout(url, {
     method: "GET",
     headers: getHeaders(),
   });
- 
+
   if (!res.ok) {
     throw new AppError(`Failed to fetch locations, status: ${res.status}`, 500);
   }
- 
+
   const data: { rows: SnipeNamedRecord[] } = await res.json();
- 
+
   return (data.rows ?? []).map((row) => ({
     id: row.id,
     name: row.name,
@@ -745,22 +694,283 @@ export async function getLocations(): Promise<SnipeNamedRecord[]> {
 
 export async function getAllStatuses(): Promise<SnipeNamedRecord[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/statuslabels?limit=200`;
- 
+
   const res = await fetchWithTimeout(url, {
     method: "GET",
     headers: getHeaders(),
   });
- 
+
   if (!res.ok) {
     throw new AppError(`Failed to fetch status labels, status: ${res.status}`, 500);
   }
- 
+
   const data: { rows: SnipeNamedRecord[] } = await res.json();
- 
+
   return (data.rows ?? []).map((row) => ({
     id: row.id,
     name: row.name,
   }));
 }
+
+/**
+ * Resolve a status label name to its ID. Used as a fallback when the
+ * skeleton status isn't configured in settings — services/requests.ts looks
+ * up "Pending" by name.
+ *
+ * Note: duplicates the fetch that getAllStatuses() does. Kept separate
+ * because the call sites want different return shapes (ID vs full list).
+ * Negligible cost at our scale.
+ */
+export async function getStatusIdByName(name: string): Promise<number | null> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/statuslabels?limit=200`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch status labels, status: ${res.status}`, 500);
+  }
+
+  const data: { rows: StatusLabel[] } = await res.json();
+  const target = name.trim().toLowerCase();
+
+  const match = data.rows.find(
+    (label) => label.name.trim().toLowerCase() === target
+  );
+
+  return match?.id ?? null;
+}
+
+/**
+ * Infers the fieldset for a category by looking at an existing model in that
+ * category. Snipe-IT attaches custom-field definitions to fieldsets, not to
+ * categories directly, so we have to ride on a sibling model's fieldset when
+ * creating a new model. Returns null if no models exist in the category yet.
+ */
+export async function getFieldsetIdForCategory(categoryId: number): Promise<number | null> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/models?limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch models, status: ${res.status}`, 500);
+  }
+
+  const data: { rows: Model[] } = await res.json();
+
+  const inCategory = data.rows.find((model) => model.category?.id === categoryId);
+  if (!inCategory) return null;
+
+  return inCategory.fieldset?.id ?? null;
+}
+
+///  +-----------------------------------------------------------------+
+///  |                    CUSTOM FIELDS — TIER                         |
+///  +-----------------------------------------------------------------+
+
+/**
+ * The allowed tier values, scraped from Snipe-IT's "Tier" custom field
+ * definition. We don't store these locally — whatever the Snipe admin
+ * configures in /fields is the source of truth.
+ *
+ * Tries field_values_array first (newer Snipe), falls back to splitting
+ * field_values on newlines (older Snipe).
+ */
+export async function getTierValues(): Promise<string[]> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/fields`;
+
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch custom fields, status: ${res.status}`, 500);
+  }
+
+  const data: { rows: CustomField[] } = await res.json();
+
+  const tierField = data.rows.find((field) =>
+    field.name.toLowerCase().includes('tier')
+  );
+
+  if (!tierField) {
+    throw new AppError('No "Tier" custom field found in Snipe-IT', 404);
+  }
+
+  if (tierField.field_values_array?.length) {
+    return tierField.field_values_array
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  if (tierField.field_values) {
+    return tierField.field_values
+      .split(/\r?\n/)
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+/**
+ * The DB column name Snipe-IT assigned to the Tier custom field (e.g.
+ * `_snipeit_tier_5`). updateSnipeAsset needs this because Snipe's PATCH
+ * endpoint takes custom-field values keyed by column name, not by display
+ * name.
+ */
+export async function getTierCustomFieldColumnName(): Promise<string> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/fields`;
+
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch custom fields, status: ${res.status}`, 500);
+  }
+
+  const data: { rows: CustomField[] } = await res.json();
+
+  const tierField = data.rows.find((field) =>
+    field.name.toLowerCase().includes('tier')
+  );
+
+  if (!tierField) {
+    throw new AppError('No "Tier" custom field found in Snipe-IT', 404);
+  }
+
+  if (!tierField.db_column_name) {
+    throw new AppError('Tier custom field is missing db_column_name in Snipe response', 500);
+  }
+
+  return tierField.db_column_name;
+}
+
+///  +-----------------------------------------------------------------+
+///  |                            USERS                                |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Trimmed-down user list for populating the "who is this for?" dropdown on
+ * the request form. Users with no name are filtered out — they exist in
+ * Snipe sometimes (service accounts, legacy data) but can't sensibly be
+ * shown to humans.
+ */
+export async function getAllUsersCleaned(): Promise<User[]> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/users`;
+
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  const data: { rows: User[] } = await res.json();
+
+  if (!data?.rows) {
+    throw new AppError('Failed to fetch users', 500);
+  }
+
+  return data.rows
+    .filter((user) => user.name)
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+    }));
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       PRICE ANALYTICS                           |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Returns the outlier-trimmed mean purchase cost per category, optionally
+ * filtered to a specific tier. Used by AssetDetailsDialog to show admins a
+ * "typical price" reference next to the price input.
+ *
+ * Categories considered are the same set that admins have whitelisted as
+ * requestable. If no whitelist is configured, ALL categories are included
+ * — extra entries in the result are harmless because consumers only look
+ * up the average for their own category.
+ */
+export async function getAveragePricesFromSnipe(tier?: string) {
+  const res = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/hardware`,
+    {
+      method: "GET",
+      headers: getHeaders(),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch assets from Snipe-IT");
+  }
+
+  const data = await res.json();
+  const allAssets = data.rows || [];
+
+  const allowedIds = await getRequestableCategoryIds();
+  // null = no whitelist configured = include every category.
+  const allowedCategorySet: Set<number> | null =
+    allowedIds !== null ? new Set(allowedIds) : null;
+
+  const pricesByCategory: Record<number, number[]> = {};
+
+  for (const asset of allAssets) {
+    const categoryId = Number(asset.category?.id ?? asset.category_id);
+
+    if (Number.isNaN(categoryId)) continue;
+    if (allowedCategorySet !== null && !allowedCategorySet.has(categoryId)) continue;
+
+    const assetTier = asset.custom_fields?.Tier?.value;
+    const normalizedTier = assetTier?.toUpperCase();
+
+    if (tier && normalizedTier !== tier.toUpperCase()) continue;
+
+    const rawPrice = asset.purchase_cost;
+
+    if (rawPrice == null || rawPrice === "") continue;
+
+    const price =
+      typeof rawPrice === "string"
+        ? parseFloat(rawPrice.replace(/,/g, ""))
+        : rawPrice;
+
+    if (!Number.isFinite(price)) continue;
+
+    if (!pricesByCategory[categoryId]) {
+      pricesByCategory[categoryId] = [];
+    }
+
+    pricesByCategory[categoryId].push(price);
+  }
+
+  const averages: Record<number, number> = {};
+
+  for (const categoryId in pricesByCategory) {
+    const prices = pricesByCategory[Number(categoryId)];
+
+    if (!prices.length) continue;
+
+    const cleaned = removeOutliers(prices);
+
+    if (!cleaned.length) continue;
+
+    averages[Number(categoryId)] = getMean(cleaned);
+  }
+
+  return averages;
+}
+
+///  +-----------------------------------------------------------------+
+///  |                         RE-EXPORTS                              |
+///  +-----------------------------------------------------------------+
 
 export type { TierMatch, SnipeAssetDetail, AssetDetailsInput };

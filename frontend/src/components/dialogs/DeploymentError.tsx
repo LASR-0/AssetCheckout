@@ -3,18 +3,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/**
- * Shared error body for asset deployment result dialogs.
- *
- * Used by:
- *   - CompleteResultDialog (Complete action failed)
- *   - StandardApprovalResultDialog (standard auto-checkout failed)
- *
- * Display-only. Parent supplies the message + callbacks.
- *
- * The retry button is optional — passing onRetry=undefined hides it (useful
- * for terminal failures that don't make sense to retry).
- */
 type Props = {
   message: string;
   contextHint?: string;

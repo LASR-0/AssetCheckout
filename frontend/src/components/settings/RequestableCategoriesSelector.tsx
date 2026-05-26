@@ -34,7 +34,6 @@ export default function RequestableCategoriesSelector() {
         ]);
         if (cancelled) return;
         setCategories(allCats);
-        // null means "all allowed" — initialize to everything checked
         setAllowed(new Set(allowedIds ?? allCats.map((c) => c.id)));
       } catch (err) {
         if (!cancelled) {
@@ -60,7 +59,6 @@ export default function RequestableCategoriesSelector() {
     }
     setAllowed(next);
 
-    // Save immediately on each toggle — no separate "save" button
     try {
       setSaving(true);
       setError(null);

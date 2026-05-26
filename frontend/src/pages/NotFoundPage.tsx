@@ -10,9 +10,7 @@ export default function NotFoundPage() {
 
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  // Hydration guard: next-themes can't resolve the theme until after mount,
-  // and we don't want to flash the wrong image (or briefly show the fallback
-  // icon and then swap to an image).
+
   useEffect(() => setMounted(true), []);
 
   const watermark =
@@ -25,8 +23,6 @@ export default function NotFoundPage() {
           <img
             src={watermark}
             alt=""
-            // Image shrinks substantially on mobile so the heading and button
-            // remain visible without scrolling on iPhone-sized screens.
             className="h-64 md:h-124 w-auto"
           />
         ) : (
@@ -35,9 +31,6 @@ export default function NotFoundPage() {
           </span>
         ))}
 
-      {/* Negative margin scales with image size — smaller image needs less
-          overlap to maintain the same visual relationship between art and
-          heading. */}
       <h1 className="text-2xl md:text-4xl text-not-found-text mt-[-30px] md:mt-[-100px] font-mono font-bold text-center">
         Oops... Looks like you got lost
       </h1>

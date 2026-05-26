@@ -51,7 +51,7 @@ router.put("/requestable-categories", async (req: Request, res: Response, next: 
 });
 
 ///  +-----------------------------------------------------------------+
-///  |                PHASE 4.6 — STANDARD MODELS                     |
+///  |                       STANDARD MODELS                           |
 ///  +-----------------------------------------------------------------+
 
 /**

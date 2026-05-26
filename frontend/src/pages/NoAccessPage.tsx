@@ -3,18 +3,14 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
 export default function NoAccessPage() {
-  // Optional admin-provided watermarks. Two env vars to support different
-  // images for each theme — a single image rarely reads well on both light
-  // and dark backgrounds. If neither is set (or the relevant one is empty
-  // for the current theme), we fall back to the "4 [block] 3" treatment.
+  // Optional admin-provided watermark image. When set in the frontend .env as
+  // VITE_CATCH_ALL_WATERMARK_LIGHT / _DARK, render it in place of the fallback icon.
   const watermarkLight = import.meta.env.VITE_NO_ACCESS_WATERMARK_LIGHT;
   const watermarkDark = import.meta.env.VITE_NO_ACCESS_WATERMARK_DARK;
 
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  // Hydration guard: next-themes can't resolve the theme until after mount,
-  // and we don't want to flash the wrong image (or briefly show the fallback
-  // icon and then swap to an image).
+
   useEffect(() => setMounted(true), []);
 
   const watermark =
@@ -22,7 +18,6 @@ export default function NoAccessPage() {
 
   return (
     <main className="min-h-screen bg-surface flex flex-col items-center justify-center text-on-background gap-4 px-6">
-      {/* Show nothing until mounted; then swap to image or fallback "4 [block] 3". */}
       {mounted &&
         (watermark ? (
           <img
@@ -31,9 +26,7 @@ export default function NoAccessPage() {
             className="h-64 md:h-124 w-auto"
           />
         ) : (
-          // Digits + icon scale down on mobile to fit narrow viewports.
-          // !text-[120px] mobile keeps the treatment visible without overflowing;
-          // md:!text-[250px] restores the full visual on tablet+.
+
           <div className="flex items-center justify-center gap-2">
             <span className="!text-[120px] md:!text-[250px] font-bold text-not-found-text/50 leading-none">
               4

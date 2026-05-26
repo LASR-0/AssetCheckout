@@ -21,7 +21,7 @@ export default function RejectionReasonDialog({
   const [reason, setReason] = useState("");
 
   useEffect(() => {
-    if (!open) setReason(""); // reset when closed
+    if (!open) setReason(""); 
   }, [open]);
 
   return (

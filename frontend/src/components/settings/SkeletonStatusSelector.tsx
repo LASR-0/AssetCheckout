@@ -70,8 +70,6 @@ export default function SkeletonStatusSelector() {
     }
   }
 
-  // Pre-populated name for the currently-saved status, or the default label
-  // if nothing is set.
   const initialName =
     selected !== null
       ? statuses.find((s) => s.id === selected)?.name ?? ""

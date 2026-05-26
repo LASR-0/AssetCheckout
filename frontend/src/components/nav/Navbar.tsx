@@ -9,19 +9,13 @@ export default function Navbar() {
   const isActive = (path: string) =>
     location.pathname === path;
 
-  // Theme-aware logo paths. Logic:
-  //   LIGHT set + DARK set  → use whichever matches current theme
-  //   LIGHT set + DARK unset → always use LIGHT
-  //   LIGHT unset            → no logo at all (DARK alone is ignored)
   const logoLight = import.meta.env.VITE_LOGO_PATH_LIGHT;
   const logoDark = import.meta.env.VITE_LOGO_PATH_DARK;
   const companyName = import.meta.env.VITE_COMPANY_NAME;
 
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  // Hydration guard: next-themes can't resolve the theme until after mount.
-  // We don't render the logo at all until then to avoid a flash of the wrong
-  // image. Same pattern used in NoAccessPage / NotFoundPage.
+
   useEffect(() => setMounted(true), []);
 
   const activeLogo = (() => {
@@ -54,7 +48,6 @@ export default function Navbar() {
             </span>
           </div>
 
-          {/* Inline links on md+; hidden on mobile (moved into mobile bar below) */}
           <nav className="hidden md:flex  gap-6">
 
             <Link
@@ -96,11 +89,6 @@ export default function Navbar() {
         {/* Right side — burger (mobile only) + settings (always) */}
         <div className="flex items-center gap-4">
 
-          {/* Hamburger — only visible <md.
-              md:hidden has to live on the outer <button>, not on the icon
-              <span>, because `material-symbols-outlined` from Google Fonts
-              sets display inline-block via the external stylesheet and
-              overrides Tailwind's `hidden` utility. */}
           <button
             onClick={() => setMobileNavOpen((open) => !open)}
             aria-label={mobileNavOpen ? "Close menu" : "Open menu"}

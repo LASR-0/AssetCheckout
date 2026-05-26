@@ -67,13 +67,13 @@ export default function RequestTablePage() {
       }
 
       if (!cancelled) setAverages(allTierAverages);
-    } catch (err) {
-      console.error("Failed to load tier averages", err);
+      } catch (err) {
+        console.error("Failed to load tier averages", err);
+      }
     }
-  }
-  load();
-  return () => { cancelled = true; };
-}, []);
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   async function loadTiers() {
     try {
@@ -88,7 +88,6 @@ export default function RequestTablePage() {
     try {
       const data = await getRequests({
         status: status === "ALL" ? undefined : status,
-        // Backend will use these to filter; admin sends nothing, manager sends their name, requester sends their name
         viewAs: role,
         currentUserName,
       });
@@ -119,9 +118,6 @@ export default function RequestTablePage() {
       const data = await res.json();
   
       if (!res.ok) {
-        // For STANDARD failures, show the celebration dialog's error variant.
-        // For non-standard failures, fall back to whatever the current handling is
-        // (alerts, console, etc.) — out of scope for this phase.
         if (data?.type === "STANDARD" || request.requestType === "STANDARD") {
           setStandardResult({
             type: "error",
@@ -129,7 +125,6 @@ export default function RequestTablePage() {
           });
           setStandardResultOpen(true);
         } else {
-          // Existing non-standard error handling — leave as-is for now.
           console.error("Approval failed:", data);
           alert(data.message || data.error || "Approval failed.");
         }
@@ -137,9 +132,6 @@ export default function RequestTablePage() {
       }
   
       if (data.type === "STANDARD") {
-        // Standard auto-checkout succeeded — show the celebration dialog.
-        // Background refresh happens in parallel; by the time admin reads the
-        // dialog and clicks Back to requests, the table is already updated.
         loadRequests();
   
         setStandardResult({
@@ -150,8 +142,6 @@ export default function RequestTablePage() {
         });
         setStandardResultOpen(true);
       } else {
-        // Non-standard approve — just refresh the table, no celebration
-        // (there's still work to do downstream).
         await loadRequests();
       }
     } catch (err: any) {
@@ -205,9 +195,6 @@ export default function RequestTablePage() {
     setCompleteDialogOpen(true);
   }
 
-  // -----------------------------
-  // PAGINATION CALC (driven by table's filtered count)
-  // -----------------------------
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
@@ -256,7 +243,7 @@ export default function RequestTablePage() {
             onFilteredCountChange={setFilteredCount}
             columnVisibility={columnVisibility}
           />
-
+          {/* DIALOGS */}
           <RejectionReasonDialog
             open={rejectDialogOpen}
             onOpenChange={setRejectDialogOpen}

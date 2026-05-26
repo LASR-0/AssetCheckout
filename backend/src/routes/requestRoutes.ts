@@ -5,36 +5,17 @@ import {
   getAveragePricesFromSnipe,
   getTierValues,
 } from "../services/snipeit.js";
-import { RequestType, RequestStatus } from "@prisma/client";
+import { isValidRequestStatus, isValidRequestType, isValidRole } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import { createRequest } from "../services/request.js";
 
-
-
 const router = express.Router();
-
-//later these could be moved in to /utils under something like validation.ts?
-const isValidRequestStatus = (value: any): value is RequestStatus => {
-  return value === "PENDING" ||
-         value === "COMPLETED" ||
-         value === "REJECTED";
-};
-
-const isValidRequestType = (value: any): value is RequestType => {
-  return value === "STANDARD" ||
-         value === "NON_STANDARD";
-};
-
-function isValidRole(role: unknown): role is "ADMIN" | "MANAGER" | "REQUESTER" {
-  return role === "ADMIN" || role === "MANAGER" || role === "REQUESTER";
-}
 
 ///  +-----------------------------------------------------------------+
 ///  |                     POST REQUEST                                |
 ///  +-----------------------------------------------------------------+
 
 router.post("/", async (req, res, next) => {
-  //console.log("CREATING REQUEST:", req.body);
   try {
     const result = await createRequest(req.body);
 
@@ -69,29 +50,6 @@ router.post("/checkout", async (req, res, next) => {
   }
 });
 
-/// TEST: CHECKOUT DIRECT (TEMP / DEV ONLY)
-router.post("/test-checkout", async (req, res, next) => {
-  try {
-    const { asset_id, user_id } = req.body;
-
-    if (!asset_id || !user_id) {
-      return res.status(400).json({
-        success: false,
-        message: "asset_id and user_id are required",
-      });
-    }
-
-    const result = await checkoutAsset(asset_id, user_id);
-
-    res.json({
-      success: true,
-      result,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 ///  +-----------------------------------------------------------------+
 ///  |                       AVAILABLE ASSET                           |
 ///  +-----------------------------------------------------------------+
@@ -108,8 +66,8 @@ router.get("/models/:id/available-asset", async (req, res) => {
       });
     }
 
-    //const asset = await getAvailableAssetFromModel(modelId);
-    const asset = null; //this is a depreciated line to avoid error indicators this will be removed and reworked in phase 5
+
+    const asset = null;
 
     if (!asset) {
       return res.status(404).json({

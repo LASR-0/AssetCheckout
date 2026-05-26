@@ -34,7 +34,7 @@ function SortIndicator({ column }: { column: Column<Request, unknown> }) {
   );
 }
 
-// --- Sortable header (clickable) ---
+// --- Sortable header
 function SortableHeader({
   column,
   icon,
@@ -242,8 +242,6 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     }
 
     if (isModelCreated) {
-      // Decide between Asset Details and Complete based on whether the linked asset is "ready"
-      // For Phase 4, we use a placeholder check — Phase 5 will wire this to real Snipe-IT field-population logic.
       const assetReady = (request.modelRequest as any)?.assetReady ?? false;
 
       if (assetReady) {

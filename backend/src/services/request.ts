@@ -20,7 +20,7 @@ import {
   getSkeletonStatusId
 } from "../services/settings.js";
 import { AppError } from "../utils/errors.js";
-import type { 
+import type {
   CreateNewModelInput,
   CreateRequestInput,
   CreateResponse,
@@ -39,6 +39,14 @@ const SKELETON_STATUS_NAME = "Pending";
 ///  |                             CREATE                              |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Creates a new request.
+ *
+ * The category must be in the requestable-categories allow-list (or no
+ * allow-list set at all). For STANDARD requests no ModelRequest is created;
+ * for NON_STANDARD the ModelRequest is created later, at manager approval
+ * time, by handleNonStandardApproval.
+ */
 export async function createRequest(input: CreateRequestInput): Promise<CreateResponse> {
 
   if (typeof input.categoryId !== "number" || input.categoryId === 0) {
@@ -82,6 +90,11 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
 ///  |                         APPROVE                                 |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Public entry point for approval. Dispatches to the correct handler based
+ * on which row the request is currently sitting at:
+ * Any other state is rejected as un-approvable.
+ */
 export async function approveRequest(
   requestId: number,
   actorName: string
@@ -113,6 +126,15 @@ export async function approveRequest(
   throw new AppError("Request is not in a state that can be approved", 400);
 }
 
+/**
+ * Picks the asset to assign by trying, in order:
+ *   1. The configured primary standard model for the category
+ *   2. The configured backup standard model for the category
+ *   3. If neither is configured: scan all models in the category and use
+ *      the first one with an available asset
+ *
+ * Throws if no available asset can be found through any of those paths.
+ */
 async function handleStandardApproval(
   request: Request,
   actorName: string
@@ -192,6 +214,11 @@ async function handleStandardApproval(
   };
 }
 
+/**
+ * Creates the ModelRequest stub atomically with the request status update,
+ * so a failed write can never leave us with an APPROVED request and no
+ * ModelRequest row to drive the rest of the flow.
+ */
 async function handleNonStandardApproval(
   request: Request & { modelRequest: ModelRequest | null },
   actorName: string
@@ -236,6 +263,10 @@ async function handleNonStandardApproval(
   };
 }
 
+/**
+ * Just flips the ModelRequest status from PENDING to APPROVED. No Snipe-IT
+ * work happens here — that's deferred to the model-creation step.
+ */
 async function handleAdminNonStandardApproval(
   request: Request & { modelRequest: ModelRequest | null },
   actorName: string
@@ -247,6 +278,8 @@ async function handleAdminNonStandardApproval(
       500
     );
   }
+
+  void actorName;
 
   const updatedModelRequest = await prisma.modelRequest.update({
     where: { id: request.modelRequest.id },
@@ -265,9 +298,15 @@ async function handleAdminNonStandardApproval(
 }
 
 ///  +-----------------------------------------------------------------+
-///  |          PHASE 5C-II — MODEL CREATION (ROW 3 → ROW 4)          |
+///  |                      MODEL CREATION                             |
 ///  +-----------------------------------------------------------------+
 
+/** Throws if anything's off (missing, wrong status, missing
+ * ModelRequest, ModelRequest not approved, or already linked to an asset).
+ *
+ * Used by both useExistingModelForRequest and createNewModelForRequest so
+ * both paths get identical preconditions.
+ */
 async function loadRequestAtRow3(
   requestId: number
 ): Promise<Request & { modelRequest: ModelRequest }> {
@@ -306,6 +345,14 @@ async function loadRequestAtRow3(
   return request as Request & { modelRequest: ModelRequest };
 }
 
+/**
+ * Verifies an available asset still exists for the chosen model, links the request to that
+ * asset, and probes the asset's completeness so assetReady is set correctly.
+ *
+ * If the asset already has all required fields populated in Snipe (company,
+ * location, tier, etc.) the request lands at Row 5 directly, skipping the
+ * fill-asset-details step.
+ */
 export async function useExistingModelForRequest(
   requestId: number,
   snipeModelId: number
@@ -344,6 +391,19 @@ export async function useExistingModelForRequest(
   };
 }
 
+/**
+ * Three-step Snipe-IT write sequence:
+ *   1. Create the model 
+ *   2. Create the skeleton asset attached to that new model
+ *   3. Update our local ModelRequest row to link them
+ *
+ * If step 2 fails after step 1 succeeded, the new model is rolled back via
+ * deleteSnipeModel so Snipe-IT doesn't accumulate orphan models.
+ *
+ * Skeleton asset status: pulled from settings (getSkeletonStatusId), with a
+ * fallback to looking up the status named "Pending" in Snipe-IT. If neither
+ * is available we throw with guidance pointing at the settings page.
+ */
 export async function createNewModelForRequest(
   requestId: number,
   input: CreateNewModelInput
@@ -360,7 +420,7 @@ export async function createNewModelForRequest(
   }
 
   let statusId: number | null = await getSkeletonStatusId();
-  
+
   if (statusId === null) {
     statusId = await getStatusIdByName(SKELETON_STATUS_NAME);
     if (statusId === null) {
@@ -386,6 +446,7 @@ export async function createNewModelForRequest(
       statusId,
     });
   } catch (err) {
+    // Asset creation failed — roll back the model so Snipe doesn't keep an orphan.
     await deleteSnipeModel(newModelId);
     throw err;
   }
@@ -410,6 +471,8 @@ export async function createNewModelForRequest(
       message: "New model and skeleton asset created",
     };
   } catch (err) {
+    // DB write failed after Snipe writes succeeded — log loudly so the
+    // orphan model + asset in Snipe can be cleaned up manually.
     console.error(
       `Snipe model ${newModelId} and asset ${newAssetId} were created but DB linkage failed for request ${requestId}. Manual cleanup may be required.`,
       err
@@ -418,6 +481,9 @@ export async function createNewModelForRequest(
   }
 }
 
+/** ready to have its asset details filled in. The model
+ * exists, but the asset hasn't been fully populated yet.
+ */
 async function loadRequestAtRow4(
   requestId: number
 ): Promise<Request & { modelRequest: ModelRequest }> {
@@ -456,12 +522,17 @@ async function loadRequestAtRow4(
   return request as Request & { modelRequest: ModelRequest };
 }
 
-
+/**
+ *
+ * Writes the supplied fields to the linked Snipe asset, then re-probes the
+ * asset's completeness.
+ * Only `price` is persisted to our DB; everything else lives only in Snipe-IT.
+ */
 export async function fillAssetDetailsForRequest(
   requestId: number,
   fields: AssetDetailsInput
 ): Promise<AssetDetailsResponse> {
- 
+
   const request = await loadRequestAtRow4(requestId);
   const linkedAssetId = request.modelRequest.linkedAssetId!;
 
@@ -472,16 +543,16 @@ export async function fillAssetDetailsForRequest(
   const dbUpdate: { assetReady: boolean; price?: number | null } = {
     assetReady,
   };
- 
+
   if (fields.price !== undefined) {
     dbUpdate.price = fields.price;
   }
- 
+
   const updatedModelRequest = await prisma.modelRequest.update({
     where: { id: request.modelRequest.id },
     data: dbUpdate,
   });
- 
+
   return {
     success: true,
     request,
@@ -496,56 +567,66 @@ export async function fillAssetDetailsForRequest(
 ///  |                         COMPLETE                                |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Guard that loads a request fully
+ * ready to be checked out. Strictest of the guards: model exists, asset
+ * exists, AND assetReady is true.
+ */
 async function loadRequestReadyForCompletion(
   requestId: number
 ): Promise<Request & { modelRequest: ModelRequest }> {
- 
+
   const request = await prisma.request.findUnique({
     where: { id: requestId },
     include: { modelRequest: true },
   });
- 
+
   if (!request) {
     throw new AppError("Request not found", 404);
   }
- 
+
   if (request.status !== "APPROVED") {
     throw new AppError("Request is not in APPROVED state — cannot complete", 400);
   }
- 
+
   if (!request.modelRequest) {
     throw new AppError("Request has no ModelRequest — cannot complete", 500);
   }
- 
+
   if (request.modelRequest.status !== "COMPLETED") {
     throw new AppError(
       "ModelRequest is not in COMPLETED state — model creation must happen first",
       400
     );
   }
- 
+
   if (request.modelRequest.linkedAssetId === null) {
     throw new AppError("ModelRequest has no linked asset — cannot complete", 400);
   }
- 
+
   if (!request.modelRequest.assetReady) {
     throw new AppError(
       "Asset is not ready for checkout — please fill in remaining details first",
       400
     );
   }
- 
+
   return request as Request & { modelRequest: ModelRequest };
 }
 
+/**
+ * Fetches the asset detail from Snipe-IT (so we have a fresh asset_tag and
+ * model name for the response payload), checks it out to the request's user,
+ * and marks the request COMPLETED.
+ */
 export async function completeRequest(
   requestId: number,
   _actorName: string
 ): Promise<CompleteResponse> {
- 
+
   const request = await loadRequestReadyForCompletion(requestId);
   const linkedAssetId = request.modelRequest.linkedAssetId!;
- 
+
   const assetDetail = await getSnipeAssetDetail(linkedAssetId);
   if (!assetDetail) {
     throw new AppError(
@@ -553,7 +634,6 @@ export async function completeRequest(
       500
     );
   }
- 
 
   await checkoutAsset(linkedAssetId, request.userId);
 
@@ -563,7 +643,7 @@ export async function completeRequest(
       status: "COMPLETED",
     },
   });
- 
+
   return {
     success: true,
     request: updated,
@@ -581,6 +661,13 @@ export async function completeRequest(
 ///  |                         REJECT                                  |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Records the actor and (optional) reason on the request. No Snipe-IT work
+ * happens here — if a skeleton asset was already created for a
+ * non-standard request, it stays in Snipe-IT untouched. Cleaning that up is
+ * a deliberate manual step rather than automatic, since the asset may still
+ * be useful for other requests.
+ */
 export async function rejectRequest(
   requestId: number,
   actorName: string,

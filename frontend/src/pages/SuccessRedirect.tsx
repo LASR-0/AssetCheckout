@@ -2,26 +2,12 @@ import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Request } from "@/types/requestType";
 
-/**
- * Post-submission confirmation page. Reads the full submitted Request from
- * navigation state and shows a summary of what was requested.
- *
- * Conditional rendering rules:
- *   - Spec level + Category: always shown (core facts)
- *   - Reason: non-standard only (not meaningful for standard requests)
- *   - Manufacturer / Model name / Model number: non-standard only
- *   - New number / Text call: only when true (opt-in features)
- *
- * If state.request is missing (e.g., user reloaded the page), redirect home.
- */
 export default function SuccessRedirect() {
   const { state } = useLocation();
   const navigate = useNavigate();
 
   const request: Request | undefined = state?.request;
 
-  // Page only works as a destination immediately after submission — bounce
-  // home if the user landed here without state (reload, direct link, etc.).
   useEffect(() => {
     if (!request) {
       navigate("/", { replace: true });
@@ -49,7 +35,7 @@ export default function SuccessRedirect() {
           You're all set!
         </h1>
 
-        {/* Subtitle — mentions asset category instead of model */}
+        {/* Subtitle */}
         <p className="text-on-surface-variant mb-8">
           Your{" "}
           <span className="font-semibold text-nav-text">
@@ -146,10 +132,7 @@ export default function SuccessRedirect() {
 ///  +-----------------------------------------------------------------+
 ///  |                       INLINE COMPONENTS                         |
 ///  +-----------------------------------------------------------------+
-//
-//  Kept inline since they're only used here. If a similar details card
-//  appears elsewhere later, extract these into a shared layout file.
-///  +-----------------------------------------------------------------+
+
 
 function DetailRow({
   label,
@@ -168,11 +151,6 @@ function DetailRow({
   );
 }
 
-/**
- * Color-coded badge for the spec level. Standard = a calmer color since it's
- * the common path; non-standard = a more attention-grabby color since it
- * needs admin review.
- */
 function SpecBadge({
   isStandard,
   label,
@@ -193,10 +171,6 @@ function SpecBadge({
   );
 }
 
-/**
- * Simple "Yes" pill for opt-in boolean fields. Implies "this was requested"
- * (we only render the row when true, so no "No" variant needed).
- */
 function YesPill() {
   return (
     <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-700">
