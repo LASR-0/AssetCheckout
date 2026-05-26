@@ -38,8 +38,9 @@ cd ../frontend && npm install
 ### 2. Configure environment variables
 
 ```bash
-cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
+cd ../backend
+cp backend/.env.example backend/.env
 ```
 
 Fill in `backend/.env` with at minimum:
@@ -57,6 +58,7 @@ Frontend env values (`frontend/.env`) are optional and cover branding (company n
 
 ```bash
 cd backend
+npx prisma generate
 npx prisma migrate dev
 ```
 
