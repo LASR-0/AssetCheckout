@@ -1,14 +1,14 @@
-const raw = process.env.ADMIN_NAMES ?? "";
+const raw = process.env.ADMIN_EMAILS ?? "";
 
-export const ADMIN_NAMES: string[] = raw
+export const ADMIN_EMAILS: string[] = raw
   .split(",")
-  .map((n) => n.trim().toLowerCase())
+  .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
 export function normalizeName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-export function isAdminName(name: string): boolean {
-  return ADMIN_NAMES.includes(normalizeName(name));
+export function isAdminEmail(email: string): boolean {
+  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }

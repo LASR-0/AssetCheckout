@@ -1,20 +1,35 @@
 import { Router, Request as ExpressRequest, Response, NextFunction } from "express";
 import { prisma } from "../db/prisma.js";  // or wherever the file above lives
-import { isAdminName, normalizeName } from "../config/auth.js";
+import { isAdminEmail, normalizeName } from "../config/auth.js";
 
 const router = Router();
 
 router.get("/role", async (req: ExpressRequest, res: Response, next: NextFunction) => {
   try {
-    const rawName = (req.headers["x-dev-user-name"] as string | undefined) ?? "";
+    // Production: Caddy injects X-User-Name/X-User-Email after validating the HRT session.
+    // Development: fall back to x-dev-user-* headers set by DevAuthToggle.
+    const rawName =
+      (req.headers["x-user-name"] as string | undefined)?.trim() ||
+      (req.headers["x-dev-user-name"] as string | undefined)?.trim() ||
+      "";
+    const rawEmail =
+      (req.headers["x-user-email"] as string | undefined)?.trim() ||
+      (req.headers["x-dev-user-email"] as string | undefined)?.trim() ||
+      "";
 
-    if (!rawName.trim()) {
+    if (!rawName && !rawEmail) {
       return res.json({ role: null, name: "" });
     }
 
-    // 1. Admin check
-    if (isAdminName(rawName)) {
-      return res.json({ role: "ADMIN", name: rawName });
+    // 1. Admin check — keyed on email so it's stable across display name changes
+    if (rawEmail && isAdminEmail(rawEmail)) {
+      return res.json({ role: "ADMIN", name: rawName || rawEmail });
+    }
+
+    // Manager/requester checks require a name — if there's only an email and
+    // it didn't match admin, there's nothing left to resolve.
+    if (!rawName) {
+      return res.json({ role: null, name: rawEmail });
     }
 
     const target = normalizeName(rawName);
