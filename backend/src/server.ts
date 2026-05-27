@@ -1,8 +1,8 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from "./routes/index.js";
+import { prisma } from "./db/prisma.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,8 +55,26 @@ app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(
-    `Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`
-  );
+///  +-----------------------------------------------------------------+
+///  |                         STARTUP                                 |
+///  +-----------------------------------------------------------------+
+
+async function configureDatabase(): Promise<void> {
+  await prisma.$executeRawUnsafe("PRAGMA journal_mode = WAL");
+  console.log("SQLite WAL mode enabled");
+}
+
+async function start() {
+  await configureDatabase();
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(
+      `Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`
+    );
+  });
+}
+
+start().catch((err) => {
+  console.error("Fatal error during server startup:", err);
+  process.exit(1);
 });

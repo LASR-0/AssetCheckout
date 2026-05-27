@@ -20,18 +20,6 @@ import type {
   CreateSkeletonAssetInput
 } from '../types/snipeTypes.js';
 
-///  +-----------------------------------------------------------------+
-///  |                     TYPES & CONFIG                              |
-///  +-----------------------------------------------------------------+
-//
-//  Thin wrapper around the Snipe-IT REST API. Every function in this file
-//  ultimately hits an /api/v1/* endpoint and translates the response into
-//  shapes the rest of the app can consume.
-//
-//  All requests share the same bearer-token auth (the Snipe service user)
-//  and a default fetch timeout — see fetchWithTimeout + getHeaders below.
-///  +-----------------------------------------------------------------+
-
 const BASE_URL = process.env.SNIPEIT_API_URL;
 const API_TOKEN = process.env.SNIPEIT_BOT_TOKEN;
 
