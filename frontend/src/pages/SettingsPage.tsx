@@ -52,13 +52,14 @@ export default function SettingsPage() {
             </SettingsSection>
           )}
 
-          {/* Dev Auth — always shown for now (remove for production) */}
-          <SettingsSection icon="science" title="Dev Auth">
-            <p className="text-sm text-info-light mb-4">
-              Temporary developer-only control for impersonating users until SSO is wired up.
-            </p>
-            <DevAuthToggle />
-          </SettingsSection>
+          {import.meta.env.VITE_APP_ENV === "development" && (
+            <SettingsSection icon="science" title="Dev Auth">
+              <p className="text-sm text-info-light mb-4">
+                Developer-only control for impersonating users when running outside the SSO gateway.
+              </p>
+              <DevAuthToggle />
+            </SettingsSection>
+          )}
 
         </div>
       </div>

@@ -1,0 +1,11 @@
+packages:
+  - backend
+  - frontend
+
+allowBuilds:
+  "@prisma/engines": true
+  better-sqlite3: true
+  esbuild: true
+  prisma: true
+  bcrypt: false
+  msw: false

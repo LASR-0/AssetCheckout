@@ -1,10 +1,10 @@
 {
-  "name": "assetcheckout",
+  "name": "@asset-checkout/backend",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node dist/server.js",
     "dev": "tsx --env-file=.env src/server.ts"
   },
   "keywords": [],
@@ -14,16 +14,15 @@
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@prisma/client-runtime-utils": "^7.8.0",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "prisma": "^7.8.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
-    "prisma": "^7.8.0",
-    "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

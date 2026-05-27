@@ -1,0 +1,12 @@
+{
+  "name": "asset-checkout",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "pnpm run -r --parallel dev",
+    "dev:backend": "pnpm --filter @asset-checkout/backend dev",
+    "dev:frontend": "pnpm --filter @asset-checkout/frontend dev",
+    "build": "pnpm run -r build",
+    "lint": "pnpm run -r lint"
+  }
+}

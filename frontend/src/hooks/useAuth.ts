@@ -10,6 +10,7 @@ export interface AuthState {
 }
 
 const STORAGE_KEY = "dev-user-name";
+const STORAGE_KEY_EMAIL = "dev-user-email";
 const CHANGE_EVENT = "dev-user-changed";
 
 export function getDevUserName(): string {
@@ -24,7 +25,21 @@ export function setDevUserName(name: string): void {
   } else {
     localStorage.removeItem(STORAGE_KEY);
   }
-  // Notify all useAuth() consumers in the app to re-fetch
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+export function getDevUserEmail(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(STORAGE_KEY_EMAIL) ?? "";
+}
+
+export function setDevUserEmail(email: string): void {
+  if (typeof window === "undefined") return;
+  if (email) {
+    localStorage.setItem(STORAGE_KEY_EMAIL, email);
+  } else {
+    localStorage.removeItem(STORAGE_KEY_EMAIL);
+  }
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
@@ -50,9 +65,12 @@ export function useAuth(): AuthState {
     async function loadRole() {
       try {
         setIsLoading(true);
-        const devName = getDevUserName();
+        const isDev = import.meta.env.VITE_APP_ENV === "development";
+        const devName = isDev ? getDevUserName() : "";
 
-        if (!devName) {
+        // In dev mode, if no identity has been picked in DevAuthToggle,
+        // treat as unauthenticated without hitting the backend.
+        if (isDev && !devName) {
           if (!cancelled) {
             setName("");
             setRole(null);
@@ -61,9 +79,12 @@ export function useAuth(): AuthState {
           return;
         }
 
-        const res = await fetch("/api/auth/role", {
-          headers: { "x-dev-user-name": devName },
-        });
+        const devEmail = isDev ? getDevUserEmail() : "";
+        const headers: Record<string, string> = {};
+        if (devName) headers["x-dev-user-name"] = devName;
+        if (devEmail) headers["x-dev-user-email"] = devEmail;
+
+        const res = await fetch("/api/auth/role", { headers });
 
         if (!res.ok) throw new Error(`Failed to fetch role: ${res.status}`);
         const data = await res.json();

@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { isAdminName } from "../config/auth.js";
+import { isAdminEmail } from "../config/auth.js";
 import {
   getRequestableCategoryIds,
   setRequestableCategoryIds,
@@ -12,8 +12,11 @@ import {
 const router = Router();
 
 function requireAdmin(req: Request, res: Response): boolean {
-  const rawName = (req.headers["x-dev-user-name"] as string | undefined) ?? "";
-  if (!isAdminName(rawName)) {
+  const email =
+    (req.headers["x-user-email"] as string | undefined)?.trim() ||
+    (req.headers["x-dev-user-email"] as string | undefined)?.trim() ||
+    "";
+  if (!isAdminEmail(email)) {
     res.status(403).json({ error: "Admins only" });
     return false;
   }
@@ -114,12 +117,12 @@ router.get("/skeleton-status", async (_req, res, next) => {
  
 router.put("/skeleton-status", async (req, res, next) => {
   try {
-    const actorName = (req.headers["x-dev-user-name"] as string | undefined)?.trim();
-    if (!actorName) {
-      return res.status(401).json({
-        success: false,
-        message: "Missing actor identity",
-      });
+    const actorEmail =
+      (req.headers["x-user-email"] as string | undefined)?.trim() ||
+      (req.headers["x-dev-user-email"] as string | undefined)?.trim() ||
+      "";
+    if (!isAdminEmail(actorEmail)) {
+      return res.status(403).json({ success: false, message: "Admins only" });
     }
  
     const body = req.body ?? {};
