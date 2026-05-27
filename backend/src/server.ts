@@ -1,6 +1,11 @@
 
 import express, { Request, Response, NextFunction } from 'express';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import routes from "./routes/index.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log("DATABASE_URL at startup:", process.env.DATABASE_URL);
 
@@ -19,6 +24,14 @@ app.use('/api', routes);
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
+
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.join(__dirname, '..', 'frontend');
+  app.use(express.static(frontendDist));
+  app.use((_req: Request, res: Response) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 interface AppError extends Error {
   statusCode?: number;

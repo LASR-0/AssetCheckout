@@ -1,4 +1,4 @@
-import type { RequestStatus, RequestType } from "@prisma/client";
+import type { RequestStatus, RequestType } from "../../generated/prisma_client/client.js";
 
 export const isValidRequestStatus = (value: any): value is RequestStatus => {
   return value === "PENDING" ||
