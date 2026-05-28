@@ -28,6 +28,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      node-cron:
+        specifier: ^4.2.1
+        version: 4.2.1
       prisma:
         specifier: ^7.8.0
         version: 7.8.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(better-sqlite3@12.10.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
@@ -38,6 +41,9 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.9.1
+      '@types/node-cron':
+        specifier: ^3.0.11
+        version: 3.0.11
       tsx:
         specifier: ^4.21.0
         version: 4.22.3
@@ -1712,6 +1718,9 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
+  '@types/node-cron@3.0.11':
+    resolution: {integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==}
+
   '@types/node@24.12.4':
     resolution: {integrity: sha512-GUUEShf+PBCGW2KaXwcIt3Yk+e3pkKwWKb9GSyM9WQVE+ep2jzmHdGsHzu4wgcZy5fN9FBdVzjpBQsYlpfpgLA==}
 
@@ -2977,6 +2986,10 @@ packages:
   node-abi@3.92.0:
     resolution: {integrity: sha512-KdHvFWZjEKDf0cakgFjebl371GPsISX2oZHcuyKqM7DtogIsHrqKeLTo8wBHxaXRAQlY2PsPlZmfo+9ZCxEREQ==}
     engines: {node: '>=10'}
+
+  node-cron@4.2.1:
+    resolution: {integrity: sha512-lgimEHPE/QDgFlywTd8yTR61ptugX3Qer29efeyWw2rv259HtGBNn1vZVmp8lB9uo9wC0t/AT4iGqXxia+CJFg==}
+    engines: {node: '>=6.0.0'}
 
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
@@ -5356,6 +5369,8 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
+  '@types/node-cron@3.0.11': {}
+
   '@types/node@24.12.4':
     dependencies:
       undici-types: 7.16.0
@@ -6564,6 +6579,8 @@ snapshots:
   node-abi@3.92.0:
     dependencies:
       semver: 7.8.1
+
+  node-cron@4.2.1: {}
 
   node-domexception@1.0.0: {}
 

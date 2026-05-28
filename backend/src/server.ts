@@ -4,6 +4,7 @@ import path from 'path';
 import routes from "./routes/index.js";
 import { prisma } from "./db/prisma.js";
 import { ensureDefaults } from "./services/settings.js";
+import { startJobs } from './jobs/Index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,6 +70,8 @@ async function start() {
   await configureDatabase();
   await ensureDefaults();
   console.log("Settings defaults ensured");
+
+  await startJobs();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(
