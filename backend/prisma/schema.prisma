@@ -72,6 +72,26 @@ model Setting {
   updatedBy   String?  // actor's email at time of last write
 }
 
+/* ===================== BACKGROUND JOBS ===================== */
+
+model BackgroundJob {
+  id            Int       @id @default(autoincrement())
+  type          JobType
+  status        JobStatus @default(Pending)
+  payload       String?   // JSON string
+  resultSummary String?   // JSON string
+  errorMessage  String?
+  scheduledAt   DateTime  @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(3)
+  createdAt     DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([type])
+}
+
 /* ===================== ENUMS ===================== */
 enum RequestType {
   STANDARD
@@ -89,4 +109,21 @@ enum ModelRequestStatus {
   PENDING
   APPROVED
   COMPLETED
+}
+
+enum JobType {
+  SEND_REQUEST_NOTIFICATION
+  SYNC_REQUEST_TO_SHAREPOINT
+  REFRESH_CATEGORIES_CACHE
+  REFRESH_PRICES_CACHE
+  CLEANUP_STALE_REQUESTS
+  CLEANUP_ORPHAN_SNIPE_MODELS
+  PURGE_OLD_JOB_HISTORY
+}
+
+enum JobStatus {
+  Pending
+  Running
+  Completed
+  Failed
 }
