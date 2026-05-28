@@ -65,9 +65,11 @@ model ModelRequest {
 
 /* ===================== SETTINGS ===================== */
 model Setting {
-  key       String   @id
-  value     String   // JSON-serialized
-  updatedAt DateTime @updatedAt
+  key         String   @id
+  value       String   // JSON-serialized or plain string depending on key
+  description String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?  // actor's email at time of last write
 }
 
 /* ===================== ENUMS ===================== */

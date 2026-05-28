@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { isAdminEmail } from "../config/auth.js";
+import { isAdminEmail, getActorEmail } from "../config/auth.js";
 import {
   getRequestableCategoryIds,
   setRequestableCategoryIds,
@@ -8,14 +8,13 @@ import {
   getSkeletonStatusId,
   setSkeletonStatusId
 } from "../services/settings.js";
+import { ADMIN_EMAILS } from "../config/auth.js";
 
 const router = Router();
 
 function requireAdmin(req: Request, res: Response): boolean {
-  const email =
-    (req.headers["x-user-email"] as string | undefined)?.trim() ||
-    (req.headers["x-dev-user-email"] as string | undefined)?.trim() ||
-    "";
+  const email = getActorEmail(req);
+  console.log("[requireAdmin] received email:", JSON.stringify(email), "admin list:", ADMIN_EMAILS);
   if (!isAdminEmail(email)) {
     res.status(403).json({ error: "Admins only" });
     return false;
@@ -45,7 +44,7 @@ router.put("/requestable-categories", async (req: Request, res: Response, next: 
       return res.status(400).json({ error: "Expected `ids` to be an array of numbers" });
     }
 
-    await setRequestableCategoryIds(ids);
+    await setRequestableCategoryIds(ids, getActorEmail(req));
     const saved = await getRequestableCategoryIds();
     res.json({ ids: saved });
   } catch (err) {
@@ -98,13 +97,17 @@ router.put("/standard-models", async (req: Request, res: Response, next: NextFun
       return res.status(400).json({ error: "backup must be a number or null" });
     }
 
-    await setStandardModelsForCategory(categoryId, primary, backup);
+    await setStandardModelsForCategory(categoryId, primary, backup, getActorEmail(req));
     const config = await getStandardModels();
     res.json({ config });
   } catch (err) {
     next(err);
   }
 });
+
+///  +-----------------------------------------------------------------+
+///  |                       SKELETON STATUS                           |
+///  +-----------------------------------------------------------------+
 
 router.get("/skeleton-status", async (_req, res, next) => {
   try {
@@ -114,20 +117,14 @@ router.get("/skeleton-status", async (_req, res, next) => {
     next(err);
   }
 });
- 
+
 router.put("/skeleton-status", async (req, res, next) => {
   try {
-    const actorEmail =
-      (req.headers["x-user-email"] as string | undefined)?.trim() ||
-      (req.headers["x-dev-user-email"] as string | undefined)?.trim() ||
-      "";
-    if (!isAdminEmail(actorEmail)) {
-      return res.status(403).json({ success: false, message: "Admins only" });
-    }
- 
+    if (!requireAdmin(req, res)) return;
+
     const body = req.body ?? {};
     const raw = body.statusId;
- 
+
     // Accept either a number (set), null (clear), or undefined (treat as clear).
     let parsed: number | null;
     if (raw === null || raw === undefined) {
@@ -140,8 +137,8 @@ router.put("/skeleton-status", async (req, res, next) => {
         message: "statusId must be a positive number, null, or omitted",
       });
     }
- 
-    await setSkeletonStatusId(parsed);
+
+    await setSkeletonStatusId(parsed, getActorEmail(req));
     res.json({ success: true, statusId: parsed });
   } catch (err) {
     next(err);
