@@ -4,7 +4,7 @@ import path from 'path';
 import routes from "./routes/index.js";
 import { prisma } from "./db/prisma.js";
 import { ensureDefaults } from "./services/settings.js";
-import { startJobs } from './jobs/Index.js';
+import { startJobs } from './jobs/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { enqueue } from "./JobQueue.js";
+import { enqueue } from "./jobQueue.js";
 import { getSetting } from "../services/settings.js";
 import type { JobType } from "../../generated/prisma_client/client.js";
 
