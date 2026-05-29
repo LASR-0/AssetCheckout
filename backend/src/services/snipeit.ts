@@ -71,8 +71,7 @@ function getHeaders(): HeadersInit {
 
 /**
  * Currently just checks that the asset has *some* non-empty Tier value. The
- * tierMatch param is reserved for future "must be tier X" filtering — for
- * now any tier counts as a match.
+ * tierMatch param is reserved for future "must be tier X" filtering
  */
 function assetMatchesTier(asset: Asset, _tierMatch: TierMatch): boolean {
   const rawTier = asset.custom_fields?.Tier?.value;
@@ -80,6 +79,120 @@ function assetMatchesTier(asset: Asset, _tierMatch: TierMatch): boolean {
 
   const normalized = rawTier.trim();
   return normalized.length > 0;
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       SNIPE-IT CACHES                           |
+///  +-----------------------------------------------------------------+
+//
+//  Two in-memory caches reduce load on Snipe-IT for data that's read often
+//  but changes rarely:
+//
+//    - Asset categories (the {id, name} list)
+//    - The raw /hardware rows (used to compute price averages per tier)
+//
+//  Each cache has a TTL that acts as a safety net: if the data is older than
+//  the TTL, the next read re-fetches lazily. 
+//
+//  Refresh-on-failure policy: the force-refresh functions fetch into a temp
+//  variable and only swap it into the cache on success. A failed refresh
+//  leaves the previous (stale) data in place rather than clearing it 
+//
+//  Caches live in process memory, so they reset on restart 
+///  +-----------------------------------------------------------------+
+
+type AssetCategory = { id: number; name: string };
+
+const CATEGORIES_TTL_MS = 60 * 60 * 1000;   // 1 hour
+const HARDWARE_TTL_MS = 10 * 60 * 1000;     // 10 minutes
+
+let categoriesCache: { data: AssetCategory[]; fetchedAt: number } | null = null;
+let hardwareCache: { rows: any[]; fetchedAt: number } | null = null;
+
+function isFresh(fetchedAt: number, ttlMs: number): boolean {
+  return Date.now() - fetchedAt < ttlMs;
+}
+
+/**
+ * Raw fetch of all asset categories from Snipe-IT. Private — callers use
+ * getAllAssetCategories() (cached) or refreshCategoriesCache() (forced).
+ */
+async function fetchAllAssetCategories(): Promise<AssetCategory[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/categories?category_type=asset&limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch categories, status: ${res.status}`, 500);
+  }
+
+  const data = await res.json();
+  const rows = data.rows ?? [];
+
+  return rows
+    .filter((c: any) => (c.category_type ?? "").toLowerCase() === "asset")
+    .map((c: any) => ({
+      id: c.id,
+      name: c.name,
+    }));
+}
+
+/**
+ * Force a re-fetch of asset categories and update the cache. Used by the
+ * REFRESH_CATEGORIES_CACHE job. On failure, the existing cache is left
+ * untouched (the error propagates so the job records a failure).
+ */
+export async function refreshCategoriesCache(): Promise<AssetCategory[]> {
+  const fresh = await fetchAllAssetCategories();
+  categoriesCache = { data: fresh, fetchedAt: Date.now() };
+  return fresh;
+}
+
+/**
+ * Raw fetch of the full /hardware list. Private — callers use the cached
+ * accessor below or refreshPricesCache() (forced).
+ */
+async function fetchAllHardware(): Promise<any[]> {
+  const res = await fetchWithTimeout(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/hardware`,
+    {
+      method: "GET",
+      headers: getHeaders(),
+    }
+  );
+
+  if (!res.ok) {
+    throw new AppError("Failed to fetch assets from Snipe-IT", 500);
+  }
+
+  const data = await res.json();
+  return data.rows || [];
+}
+
+/**
+ * Return the cached /hardware rows, fetching lazily if stale or absent.
+ */
+async function getCachedHardware(): Promise<any[]> {
+  if (hardwareCache && isFresh(hardwareCache.fetchedAt, HARDWARE_TTL_MS)) {
+    return hardwareCache.rows;
+  }
+  const rows = await fetchAllHardware();
+  hardwareCache = { rows, fetchedAt: Date.now() };
+  return rows;
+}
+
+/**
+ * Force a re-fetch of the /hardware list and update the cache. Used by the
+ * REFRESH_PRICES_CACHE job. On failure, the existing cache is left untouched
+ * (the error propagates so the job records a failure).
+ */
+export async function refreshPricesCache(): Promise<number> {
+  const rows = await fetchAllHardware();
+  hardwareCache = { rows, fetchedAt: Date.now() };
+  return rows.length;
 }
 
 ///  +-----------------------------------------------------------------+
@@ -162,28 +275,17 @@ export async function checkoutAsset(assetId: number, userId: number) {
  * Every asset category in Snipe-IT, regardless of whether it's allowed for
  * new requests. The admin settings page uses this to populate the
  * requestable-categories selector.
+ *
+ * Cached: returns the in-memory cache when fresh (TTL 1h), otherwise fetches
+ * lazily. The REFRESH_CATEGORIES_CACHE job refreshes this proactively. A
+ * category added in Snipe won't appear here until the cache expires or a
+ * refresh runs — use the admin "refresh now" action for immediate effect.
  */
-export async function getAllAssetCategories(): Promise<{ id: number; name: string }[]> {
-  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/categories?category_type=asset&limit=500`;
-
-  const res = await fetchWithTimeout(url, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new AppError(`Failed to fetch categories, status: ${res.status}`, 500);
+export async function getAllAssetCategories(): Promise<AssetCategory[]> {
+  if (categoriesCache && isFresh(categoriesCache.fetchedAt, CATEGORIES_TTL_MS)) {
+    return categoriesCache.data;
   }
-
-  const data = await res.json();
-  const rows = data.rows ?? [];
-
-  return rows
-    .filter((c: any) => (c.category_type ?? "").toLowerCase() === "asset")
-    .map((c: any) => ({
-      id: c.id,
-      name: c.name,
-    }));
+  return refreshCategoriesCache();
 }
 
 /**
@@ -191,7 +293,7 @@ export async function getAllAssetCategories(): Promise<{ id: number; name: strin
  * whitelist has been configured (returns null from settings), all asset
  * categories are considered requestable.
  */
-export async function getRequestableAssetCategories(): Promise<{ id: number; name: string }[]> {
+export async function getRequestableAssetCategories(): Promise<AssetCategory[]> {
   const all = await getAllAssetCategories();
   const allowedIds = await getRequestableCategoryIds();
   if (allowedIds === null) return all;
@@ -887,22 +989,14 @@ export async function getAllUsersCleaned(): Promise<User[]> {
  * requestable. If no whitelist is configured, ALL categories are included
  * — extra entries in the result are harmless because consumers only look
  * up the average for their own category.
+ *
+ * Reads the /hardware list from the in-memory cache (TTL 10m, refreshed
+ * proactively by REFRESH_PRICES_CACHE). The frontend calls this once per
+ * tier on page load; sharing the cached rows means those calls cost one
+ * Snipe fetch between them rather than one each.
  */
 export async function getAveragePricesFromSnipe(tier?: string) {
-  const res = await fetch(
-    `${baseUrl.replace(/\/$/, "")}/api/v1/hardware`,
-    {
-      method: "GET",
-      headers: getHeaders(),
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch assets from Snipe-IT");
-  }
-
-  const data = await res.json();
-  const allAssets = data.rows || [];
+  const allAssets = await getCachedHardware();
 
   const allowedIds = await getRequestableCategoryIds();
   // null = no whitelist configured = include every category.
