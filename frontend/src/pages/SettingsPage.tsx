@@ -1,20 +1,95 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ThemeSwitch from "@/components/nav/ThemeSwitch";
 import DevAuthToggle from "@/components/nav/DevAuthToggle";
 import RequestableCategoriesSelector from "@/components/settings/RequestableCategoriesSelector";
 import StandardModelsSelector from "@/components/settings/StandardModelsSelector";
 import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
+import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
+import JobHistoryTable from "@/components/settings/JobsHistoryTable";
 
 export default function SettingsPage() {
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
+  const isDev = import.meta.env.VITE_APP_ENV === "development";
+
+  // Bumped whenever a job is manually queued, so the history table refetches.
+  const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
+
+  // -- Left column: the vertically-stacked settings ------------------
+  const stackedSettings = (
+    <div className="space-y-8">
+      {/* Appearance -- visible to everyone */}
+      <SettingsSection icon="palette" title="Appearance">
+        <SettingsRow
+          title="Theme"
+          description="Switch between light and dark visual interfaces."
+        >
+          <ThemeSwitch />
+        </SettingsRow>
+      </SettingsSection>
+
+      {/* Asset Configuration -- admin-only */}
+      {isAdmin && (
+        <SettingsSection icon="inventory" title="Asset Configuration">
+          <div className="space-y-6">
+            <RequestableCategoriesSelector />
+            <StandardModelsSelector />
+          </div>
+        </SettingsSection>
+      )}
+
+      {/* Snipe-IT Configuration -- admin-only */}
+      {isAdmin && (
+        <SettingsSection icon="settings_applications" title="Snipe-IT Configuration">
+          <SkeletonStatusSelector />
+        </SettingsSection>
+      )}
+
+      {/* Dev Auth -- development-only */}
+      {isDev && (
+        <SettingsSection icon="science" title="Dev Auth">
+          <p className="text-sm text-info-light mb-4">
+            Developer-only control for impersonating users when running outside the SSO gateway.
+          </p>
+          <DevAuthToggle />
+        </SettingsSection>
+      )}
+    </div>
+  );
+
+  // -- Right column: the wide Background Jobs section (admin-only) ----
+  const jobsSection = (
+    <div className="min-w-0 space-y-8">
+      <SettingsSection icon="schedule" title="Background Jobs">
+        <div className="space-y-8">
+          <div>
+            <h3 className="font-semibold text-on-background mb-1">Scheduled Jobs</h3>
+            <p className="text-sm text-info-light mb-4">
+              Maintenance jobs that run on a schedule. Trigger any of them manually with "Run now".
+            </p>
+            <ScheduledJobsCard onQueued={() => setJobsRefreshKey((k) => k + 1)} />
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-on-background mb-1">Job History</h3>
+            <p className="text-sm text-info-light mb-4">
+              Recent job runs, newest first. Filter by status or type.
+            </p>
+            <JobHistoryTable refreshKey={jobsRefreshKey} />
+          </div>
+        </div>
+      </SettingsSection>
+    </div>
+  );
 
   return (
-    <main className="w-full h-screen bg-surface">
-      <div className="max-w-3xl py-12 px-6 mx-auto">
-
+    <main className="w-full min-h-[calc(100vh-4rem)] bg-surface">
+      <div
+        className={`${isAdmin ? "max-w-3xl lg:max-w-[1600px]" : "max-w-3xl"} py-12 px-6 mx-auto`}
+      >
         {/* Page header */}
-        <div className="mb-10 text-center md:text-left">
+        <div className="mb-10 text-center">
           <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-background mb-2">
             Settings
           </h1>
@@ -23,45 +98,19 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="space-y-8">
-
-          {/* Appearance — visible to everyone */}
-          <SettingsSection icon="palette" title="Appearance">
-            <SettingsRow
-              title="Theme"
-              description="Switch between light and dark visual interfaces."
-            >
-              <ThemeSwitch />
-            </SettingsRow>
-          </SettingsSection>
-
-          {/* Asset Configuration — admin-only */}
-          {isAdmin && (
-            <SettingsSection icon="inventory" title="Asset Configuration">
-              <div className="space-y-6">
-                <RequestableCategoriesSelector />
-                <StandardModelsSelector />
-              </div>
-            </SettingsSection>
-          )}
-
-          {/* Snipe-IT Configuration — admin-only */}
-          {isAdmin && (
-            <SettingsSection icon="settings_applications" title="Snipe-IT Configuration">
-              <SkeletonStatusSelector />
-            </SettingsSection>
-          )}
-
-          {import.meta.env.VITE_APP_ENV === "development" && (
-            <SettingsSection icon="science" title="Dev Auth">
-              <p className="text-sm text-info-light mb-4">
-                Developer-only control for impersonating users when running outside the SSO gateway.
-              </p>
-              <DevAuthToggle />
-            </SettingsSection>
-          )}
-
-        </div>
+        {isAdmin ? (
+          // Two columns on lg+: fixed-width settings stack on the left,
+          // flexible (wide) jobs section on the right. minmax(0,1fr) lets the
+          // right track shrink so JobHistoryTable's own overflow-x-auto can
+          // scroll on very narrow viewports instead of blowing out the grid.
+          // Collapses to a single stacked column below lg.
+          <div className="grid grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)] gap-8 lg:items-start">
+            {stackedSettings}
+            {jobsSection}
+          </div>
+        ) : (
+          stackedSettings
+        )}
       </div>
     </main>
   );
