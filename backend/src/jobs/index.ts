@@ -3,6 +3,8 @@ import { startScheduler } from "./scheduler.js";
 import { refreshCategoriesCacheHandler } from "./handlers/refreshCategoriesCache.js";
 import { refreshPricesCacheHandler } from "./handlers/refreshPricesCache.js";
 import { purgeOldJobHistoryHandler } from "./handlers/purgeOldJobHistory.js";
+import { cleanupStaleRequestsHandler } from "./handlers/cleanupStaleRequests.js";
+import { cleanupOrphanSnipeModelsHandler } from "./handlers/cleanupOrphanSnipeModels.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    JOB SYSTEM ENTRY POINT                       |
@@ -21,7 +23,9 @@ import { purgeOldJobHistoryHandler } from "./handlers/purgeOldJobHistory.js";
 export async function startJobs(): Promise<void> {
   registerHandler("REFRESH_CATEGORIES_CACHE", refreshCategoriesCacheHandler);
   registerHandler("REFRESH_PRICES_CACHE", refreshPricesCacheHandler);
-  registerHandler("PURGE_OLD_JOB_HISTORY", purgeOldJobHistoryHandler)
+  registerHandler("PURGE_OLD_JOB_HISTORY", purgeOldJobHistoryHandler);
+  registerHandler("CLEANUP_STALE_REQUESTS", cleanupStaleRequestsHandler);
+  registerHandler("CLEANUP_ORPHAN_SNIPE_MODELS", cleanupOrphanSnipeModelsHandler);
   // Not yet implemented (enqueueing these will fail with "no handler" until
   // their handlers land in later commits):
   //   SEND_REQUEST_NOTIFICATION

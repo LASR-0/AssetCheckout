@@ -703,3 +703,60 @@ export async function rejectRequest(
     message: "Request rejected successfully",
   };
 }
+
+///  +-----------------------------------------------------------------+
+///  |                      STALE DETECTION                            |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Returns non-terminal requests (PENDING / APPROVED) considered stale as of
+ * `cutoff` — used by the CLEANUP_STALE_REQUESTS job.
+ *
+ * Anchor: a request's updatedAt is its last activity. But once a non-standard
+ * request is approved, all subsequent work (admin approval, model creation,
+ * asset-detail fills) writes the ModelRequest row, not the Request row. So a
+ * request is stale only when the LATER of request.updatedAt and
+ * modelRequest.updatedAt is older than the cutoff.
+ *
+ * The DB pre-filter (request.updatedAt < cutoff) is a safe narrowing: anything
+ * touched more recently than the cutoff can't be stale regardless of its
+ * ModelRequest. The in-memory filter then spares approved requests whose
+ * ModelRequest is still fresh.
+ *
+ * To protect requests that already have an allocated asset, add:
+ *   r.modelRequest.linkedAssetId === null
+ * to the keep-condition below.
+ */
+export async function findStaleRequests(
+  cutoff: Date
+): Promise<(Request & { modelRequest: ModelRequest | null })[]> {
+  const candidates = await prisma.request.findMany({
+    where: {
+      status: { in: ["PENDING", "APPROVED"] },
+      updatedAt: { lt: cutoff },
+    },
+    include: { modelRequest: true },
+  });
+
+  return candidates.filter(
+    (r) => !r.modelRequest || r.modelRequest.updatedAt < cutoff
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |                   ORPHAN MODEL CANDIDATES                       |
+///  +-----------------------------------------------------------------+
+
+export async function findModelRequestsAwaitingCompletion(): Promise<
+  (ModelRequest & { request: Request })[]
+> {
+  return prisma.modelRequest.findMany({
+    where: {
+      status: "COMPLETED",
+      snipeModelId: { not: null },
+      linkedAssetId: { not: null },
+      request: { status: "APPROVED" },
+    },
+    include: { request: true },
+  });
+}

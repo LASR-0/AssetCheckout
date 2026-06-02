@@ -40,7 +40,7 @@ const SCHEDULED_JOBS: ScheduledJob[] = [
     type: "PURGE_OLD_JOB_HISTORY",
     label: "Purge Old Job History",
     description: "Deletes completed/failed job rows past the retention window.",
-    schedule: "Daily at 3am",
+    schedule: "Quarterly at 3am",
   },
 ];
 

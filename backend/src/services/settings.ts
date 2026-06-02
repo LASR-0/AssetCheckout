@@ -108,6 +108,27 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "0 3 * * *",
     description: "Cron expression for the BackgroundJob history purge (default: daily at 3am).",
   },
+  {
+    key: "jobs.staleRequestMonths",
+    envVar: "JOBS_STALE_REQUEST_MONTHS",
+    defaultValue: "6",
+    description:
+      "Non-terminal requests with no activity for this many months are auto-rejected by the stale-request cleanup job.",
+  },
+    {
+    key: "jobs.orphanCleanupDryRun",
+    envVar: "JOBS_ORPHAN_CLEANUP_DRY_RUN",
+    defaultValue: "true",
+    description:
+      "When 'true' (default), the orphan-model cleanup job only reports what it would delete without deleting. Set to 'false' to enable real deletion — review a dry-run result first.",
+  },
+  {
+    key: "jobs.orphanCleanupMaxDeletes",
+    envVar: "JOBS_ORPHAN_CLEANUP_MAX_DELETES",
+    defaultValue: "5",
+    description:
+      "Max orphaned models the cleanup job will delete in a single run, bounding the blast radius if detection misfires.",
+  },
 ];
 
 /**

@@ -304,6 +304,29 @@ export async function getRequestableAssetCategories(): Promise<AssetCategory[]> 
 ///  |                         MODELS — READ                           |
 ///  +-----------------------------------------------------------------+
 
+ /*
+ * Used by CLEANUP_ORPHAN_SNIPE_MODELS to confirm a model is empty before
+ * deletion. We create exactly one skeleton asset per model, so for a candidate
+ * whose linked asset is gone, this returning false is the expected confirm.
+ */
+
+export async function modelHasAnyAssets(modelId: number): Promise<boolean> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware?model_id=${modelId}&limit=1`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to check assets for model ${modelId}: status ${res.status}`, 500);
+  }
+
+  const data: { rows?: unknown[] } = await res.json();
+  return Array.isArray(data.rows) && data.rows.length > 0;
+}
+
+
 /**
  * Models in a category that currently have at least one unassigned asset.
  * Used by the standard-approval flow to find something to check out.
@@ -562,7 +585,7 @@ export async function createSkeletonAsset({
  * we'd rather complete the surrounding error path than mask the original
  * error with a cleanup error.
  */
-export async function deleteSnipeModel(modelId: number): Promise<void> {
+export async function deleteSnipeModel(modelId: number): Promise<boolean> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/models/${modelId}`;
 
   const res = await fetchWithTimeout(url, {
@@ -572,9 +595,20 @@ export async function deleteSnipeModel(modelId: number): Promise<void> {
 
   if (!res.ok) {
     console.error(
-      `Failed to roll back Snipe model ${modelId}: status ${res.status}. Manual cleanup may be needed.`
+      `Failed to delete Snipe model ${modelId}: status ${res.status}. Manual cleanup may be needed.`
     );
+    return false;
   }
+
+  const data = await res.json().catch(() => null);
+  if (data?.status === "error") {
+    console.error(
+      `Snipe refused to delete model ${modelId}: ${data?.messages ?? "unknown reason"}. Manual cleanup may be needed.`
+    );
+    return false;
+  }
+
+  return true;
 }
 
 ///  +-----------------------------------------------------------------+
@@ -639,6 +673,35 @@ export async function getSnipeAssetDetail(assetId: number): Promise<SnipeAssetDe
   }
 
   return (await res.json()) as SnipeAssetDetail;
+}
+
+/*
+ * Returns false if the asset is missing (404) OR soft-deleted; true only for
+ * a live asset. Used by CLEANUP_ORPHAN_SNIPE_MODELS: an admin deleting a
+ * skeleton asset in the UI soft-deletes it, which is exactly the orphan trigger.
+ */
+
+export async function isSnipeAssetLive(assetId: number): Promise<boolean> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware/${assetId}`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (res.status === 404) return false;
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch asset ${assetId}: status ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  // A Snipe error-shaped body (e.g. not found) also counts as not-live.
+  if (!data || data.status === "error") return false;
+
+  // Live only if deleted_at is null/absent. Snipe returns deleted_at as an
+  // object ({datetime, formatted}) when set, null when not.
+  return data.deleted_at == null;
 }
 
 /**
