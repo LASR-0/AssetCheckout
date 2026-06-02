@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { enqueue } from "./jobQueue.js";
 import { getSetting } from "../services/settings.js";
 import type { JobType } from "../../generated/prisma_client/client.js";
+import { maxAttemptsFor } from "./policy.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                         SCHEDULER                               |
@@ -28,18 +29,6 @@ const SCHEDULE_KEYS: Record<string, JobType> = {
   "jobs.purgeHistoryCron": "PURGE_OLD_JOB_HISTORY",
 };
 
-/**
- * Jobs that shouldn't be retried when they fail — they'll just run again on
- * their next scheduled tick, so retrying within the same window adds no
- * value. Cache refreshes and cleanups fall in this bucket.
- */
-const ONE_SHOT_JOBS: Set<JobType> = new Set([
-  "REFRESH_CATEGORIES_CACHE",
-  "REFRESH_PRICES_CACHE",
-  "CLEANUP_STALE_REQUESTS",
-  "CLEANUP_ORPHAN_SNIPE_MODELS",
-  "PURGE_OLD_JOB_HISTORY",
-]);
 
 export async function startScheduler(): Promise<void> {
   let registered = 0;
@@ -61,7 +50,7 @@ export async function startScheduler(): Promise<void> {
       continue;
     }
 
-    const maxAttempts = ONE_SHOT_JOBS.has(jobType) ? 1 : 3;
+    const maxAttempts = maxAttemptsFor(jobType);
 
     cron.schedule(expression, () => {
       enqueue(jobType, undefined, { maxAttempts }).catch((err) =>

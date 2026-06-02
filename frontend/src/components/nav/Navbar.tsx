@@ -28,7 +28,7 @@ export default function Navbar() {
     <header className="fixed top-0 z-50 w-full">
 
       {/* PRIMARY BAR */}
-      <div className="bg-nav shadow-md dark:bg-slate-900 flex justify-between items-center w-full px-8 h-16 dark:border-slate-800">
+      <div className="bg-nav shadow-md flex justify-between items-center w-full px-8 h-16">
 
         {/* Left side */}
         <div className="flex items-center gap-8">
@@ -54,7 +54,7 @@ export default function Navbar() {
               to="/"
               className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
                 isActive("/")
-                  ? "text-nav-tab-selected dark:text-white border-b-2 border-underline"
+                  ? "text-nav-tab-selected border-b-2 border-underline"
                   : "text-nav-tab hover:text-nav-tab-selected"
               }`}
             >
@@ -70,7 +70,7 @@ export default function Navbar() {
               to="/requests"
               className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
                 isActive("/requests")
-                  ? "text-nav-tab-selected dark:text-white border-b-2 border-underline"
+                  ? "text-nav-tab-selected border-b-2 border-underline"
                   : "text-nav-tab hover:text-nav-tab-selected"
               }`}
             >
@@ -112,7 +112,7 @@ export default function Navbar() {
             to="/settings"
             className={`material-symbols-outlined !text-3xl hover:cursor-pointer text-nav-tab hover:text-nav-tab-selected transition ${
               isActive("/settings")
-                ? "text-nav-tab-selected dark:text-white"
+                ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
             style={{ fontVariationSettings: `'FILL' 1` }}
@@ -127,14 +127,14 @@ export default function Navbar() {
       {/* SECONDARY BAR (mobile only) — slides in when burger is toggled.
           Hidden entirely on md+ regardless of state. */}
       {mobileNavOpen && (
-        <div className="md:hidden pb-1 bg-nav dark:bg-slate-900 border-t border-outline/20 px-8 h-10 flex items-center gap-8">
+        <div className="md:hidden pb-1 bg-nav border-t border-outline/20 px-8 h-10 flex items-center gap-8">
 
           <Link
             to="/"
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
               isActive("/")
-                ? "text-nav-tab-selected dark:text-white border-b-2 border-underline"
+                ? "text-nav-tab-selected border-b-2 border-underline"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
           >
@@ -152,7 +152,7 @@ export default function Navbar() {
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
               isActive("/requests")
-                ? "text-nav-tab-selected dark:text-white border-b-2 border-underline"
+                ? "text-nav-tab-selected border-b-2 border-underline"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
           >

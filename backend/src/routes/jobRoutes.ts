@@ -3,6 +3,8 @@ import { isAdminEmail, getActorEmail } from "../config/auth.js";
 import { prisma } from "../db/prisma.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import type { JobType, JobStatus } from "../../generated/prisma_client/client.js";
+import { maxAttemptsFor } from "../jobs/policy.js";
+import { getSetting } from "../services/settings.js";
 
 const router = Router();
 
@@ -35,6 +37,8 @@ const MANUALLY_TRIGGERABLE: Set<JobType> = new Set([
   "REFRESH_CATEGORIES_CACHE",
   "REFRESH_PRICES_CACHE",
   "PURGE_OLD_JOB_HISTORY",
+  "CLEANUP_STALE_REQUESTS",
+  "CLEANUP_ORPHAN_SNIPE_MODELS"
 ]);
 
 ///  +-----------------------------------------------------------------+
@@ -136,7 +140,10 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
       });
     }
 
-    const created = await enqueue(type as JobType, undefined, { priority: true });
+    const created = await enqueue(type as JobType, undefined, {
+      priority: true,
+      maxAttempts: maxAttemptsFor(type as JobType),
+    });
 
     if (!created) {
       return res.json({
@@ -151,6 +158,28 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
       enqueued: true,
       message: `${type} enqueued`,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                    ORPHAN DRY-RUN STATE                         |
+///  +-----------------------------------------------------------------+
+
+/**
+ * GET /api/jobs/orphan-dry-run
+ *
+ * Lightweight read so the UI can badge the orphan-cleanup "Run now" with
+ * whether a trigger will actually delete (live) or only report (dry-run).
+ * Admin-only. Defaults to dry-run=true if the setting is somehow unset.
+ */
+router.get("/orphan-dry-run", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const raw = await getSetting("jobs.orphanCleanupDryRun");
+    const dryRun = (raw ?? "true").toLowerCase() !== "false";
+    res.json({ dryRun });
   } catch (err) {
     next(err);
   }

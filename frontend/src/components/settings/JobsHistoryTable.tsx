@@ -152,10 +152,11 @@ export default function JobHistoryTable({ refreshKey = 0 }: JobHistoryTableProps
         <button
           onClick={fetchJobs}
           disabled={loading}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-surface border border-outline/30 hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-50 transition-all"
+          className="inline-flex items-center text-nav-tab-selected font-bold gap-1 px-3 py-1.5 text-xs rounded-md bg-surface-container-low border border-outline/30 hover:cursor-pointer disabled:opacity-50 transition-all"
         >
           <span
             className={`material-symbols-outlined !text-[16px] ${loading ? "animate-spin" : ""}`}
+            style={{ fontVariationSettings: "'wght' 900" }}
           >
             refresh
           </span>
@@ -228,7 +229,7 @@ export default function JobHistoryTable({ refreshKey = 0 }: JobHistoryTableProps
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1 text-xs rounded-md bg-surface border border-outline/30 hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="px-3 py-1 text-xs text-nav-tab-selected rounded-md bg-surface border border-outline/30 hover:brightness-95 hover:cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               Previous
             </button>
@@ -238,7 +239,7 @@ export default function JobHistoryTable({ refreshKey = 0 }: JobHistoryTableProps
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 text-xs rounded-md bg-surface border border-outline/30 hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="px-3 py-1 text-xs rounded-md text-nav-tab-selected bg-surface border border-outline/30 hover:brightness-95 hover:cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               Next
             </button>

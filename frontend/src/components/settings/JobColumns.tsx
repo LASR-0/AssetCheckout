@@ -96,7 +96,7 @@ function DetailCell({ job }: { job: BackgroundJob }) {
     <p
       onClick={() => setExpanded((p) => !p)}
       title={text}
-      className={`text-sm max-w-[280px] leading-relaxed cursor-pointer transition-all ${
+      className={`text-sm w-[280px] leading-relaxed cursor-pointer transition-all break-words whitespace-normal ${
         isError ? "text-red-600" : "text-info-light"
       } ${expanded ? "" : "line-clamp-2"}`}
     >

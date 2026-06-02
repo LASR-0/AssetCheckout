@@ -50,6 +50,8 @@ export type EnqueueResponse = {
   message: string;
 };
 
+export type OrphanDryRunResponse = { dryRun: boolean };
+
 ///  +-----------------------------------------------------------------+
 ///  |                           CALLS                                 |
 ///  +-----------------------------------------------------------------+
@@ -79,4 +81,8 @@ export async function enqueueJob(type: JobType): Promise<EnqueueResponse> {
     method: "POST",
     body: { type },
   });
+}
+
+export async function getOrphanDryRun(): Promise<OrphanDryRunResponse> {
+  return apiFetch<OrphanDryRunResponse>("/api/job/orphan-dry-run");
 }
