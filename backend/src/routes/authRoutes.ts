@@ -1,6 +1,6 @@
 import { Router, Request as ExpressRequest, Response, NextFunction } from "express";
 import { prisma } from "../db/prisma.js";  // or wherever the file above lives
-import { isAdminEmail, normalizeName } from "../config/auth.js";
+import { isAdminEmail, normalizeName, getActorName, getActorEmail } from "../config/auth.js";
 
 const router = Router();
 
@@ -8,14 +8,8 @@ router.get("/role", async (req: ExpressRequest, res: Response, next: NextFunctio
   try {
     // Production: Caddy injects X-User-Name/X-User-Email after validating the HRT session.
     // Development: fall back to x-dev-user-* headers set by DevAuthToggle.
-    const rawName =
-      (req.headers["x-user-name"] as string | undefined)?.trim() ||
-      (req.headers["x-dev-user-name"] as string | undefined)?.trim() ||
-      "";
-    const rawEmail =
-      (req.headers["x-user-email"] as string | undefined)?.trim() ||
-      (req.headers["x-dev-user-email"] as string | undefined)?.trim() ||
-      "";
+    const rawName = getActorName(req);
+    const rawEmail = getActorEmail(req);
 
     if (!rawName && !rawEmail) {
       return res.json({ role: null, name: "" });

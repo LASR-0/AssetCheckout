@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export default function NotFoundPage() {
   // Optional admin-provided watermark image. When set in the frontend .env as
   // VITE_CATCH_ALL_WATERMARK_LIGHT / _DARK, render it in place of the fallback icon.
-  const watermarkLight = import.meta.env.VITE_CATCH_ALL_WATERMARK;
+  const watermarkLight = import.meta.env.VITE_CATCH_ALL_WATERMARK_LIGHT;
   const watermarkDark = import.meta.env.VITE_CATCH_ALL_WATERMARK_DARK;
 
   const { resolvedTheme } = useTheme();
