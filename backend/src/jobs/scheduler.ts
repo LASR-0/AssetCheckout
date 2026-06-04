@@ -21,7 +21,7 @@ import { maxAttemptsFor } from "./policy.js";
  *
  * The job type → settings key mapping for the schedule of each job:
  */
-const SCHEDULE_KEYS: Record<string, JobType> = {
+export const SCHEDULE_KEYS: Record<string, JobType> = {
   "jobs.refreshCategoriesCron": "REFRESH_CATEGORIES_CACHE",
   "jobs.refreshPricesCron": "REFRESH_PRICES_CACHE",
   "jobs.cleanupStaleCron": "CLEANUP_STALE_REQUESTS",

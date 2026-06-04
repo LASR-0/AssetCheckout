@@ -21,6 +21,10 @@ export const ONE_SHOT_JOBS: Set<JobType> = new Set([
   "PURGE_OLD_JOB_HISTORY",
 ]);
 
+export const DRY_RUN_JOBS: Partial<Record<JobType, string>> = {
+  CLEANUP_ORPHAN_SNIPE_MODELS: "jobs.orphanCleanupDryRun",
+};
+
 /** maxAttempts for a job type: 1 for one-shots, 3 otherwise. */
 export function maxAttemptsFor(type: JobType): number {
   return ONE_SHOT_JOBS.has(type) ? 1 : 3;

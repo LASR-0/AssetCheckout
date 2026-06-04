@@ -3,8 +3,10 @@ import { isAdminEmail, getActorEmail } from "../config/auth.js";
 import { prisma } from "../db/prisma.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import type { JobType, JobStatus } from "../../generated/prisma_client/client.js";
-import { maxAttemptsFor } from "../jobs/policy.js";
-import { getSetting } from "../services/settings.js";
+import { maxAttemptsFor, DRY_RUN_JOBS } from "../jobs/policy.js";
+import { getSetting, setSetting } from "../services/settings.js";
+import { SCHEDULE_KEYS } from "../jobs/scheduler.js";
+import nodeCron from "node-cron";
 
 const router = Router();
 
@@ -164,22 +166,131 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
 });
 
 ///  +-----------------------------------------------------------------+
-///  |                    ORPHAN DRY-RUN STATE                         |
+///  |                       JOB SCHEDULES                             |
 ///  +-----------------------------------------------------------------+
 
 /**
- * GET /api/jobs/orphan-dry-run
+ * GET /api/job/schedules
  *
- * Lightweight read so the UI can badge the orphan-cleanup "Run now" with
- * whether a trigger will actually delete (live) or only report (dry-run).
- * Admin-only. Defaults to dry-run=true if the setting is somehow unset.
+ * Returns the current cron expression for each scheduled job, read live from
+ * the Setting table. Drives the schedule badges (and, later, the schedule
+ * editor) in the Background Jobs UI. Admin-only.
+ *
+ * Derived from SCHEDULE_KEYS so a newly-added scheduled job appears here
+ * automatically. Raw cron is returned; the frontend translates for display.
  */
-router.get("/orphan-dry-run", async (req: Request, res: Response, next: NextFunction) => {
+router.get("/schedules", async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!requireAdmin(req, res)) return;
-    const raw = await getSetting("jobs.orphanCleanupDryRun");
-    const dryRun = (raw ?? "true").toLowerCase() !== "false";
-    res.json({ dryRun });
+
+    const entries = await Promise.all(
+      Object.entries(SCHEDULE_KEYS).map(async ([settingKey, jobType]) => ({
+        jobType,
+        settingKey,
+        cron: (await getSetting(settingKey)) ?? "",
+      }))
+    );
+
+    res.json({ schedules: entries });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/job/schedule
+ * Body: { settingKey, cron }
+ *
+ * Updates a scheduled job's cron expression. Admin-only.
+ *
+ * NOTE: the new schedule takes effect on the next server restart — schedules
+ * are registered once at startup.
+ */
+
+router.post("/schedule", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { settingKey, cron: expression } = (req.body ?? {}) as {
+      settingKey?: string;
+      cron?: string;
+    };
+
+    if (!settingKey || !(settingKey in SCHEDULE_KEYS)) {
+      return res.status(400).json({ error: `Unknown schedule key: ${settingKey}` });
+    }
+
+    if (typeof expression !== "string" || !expression.trim()) {
+      return res.status(400).json({ error: "Missing cron expression" });
+    }
+
+    if (!nodeCron.validate(expression.trim())) {
+      return res.status(400).json({ error: `Invalid cron expression: ${expression}` });
+    }
+
+    await setSetting(settingKey, expression.trim(), getActorEmail(req));
+
+    res.json({
+      settingKey,
+      cron: expression.trim(),
+      note: "Schedule updated — takes effect after the next server restart.",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                    DRY-RUN STATES                               |
+///  +-----------------------------------------------------------------+
+
+/**
+ * GET /api/job/dry-run-states
+ *
+ * Current dry-run state for every job that supports it (from DRY_RUN_JOBS),
+ * read live from settings. Drives the dry-run/live badge + toggle in the UI.
+ * Defaults a missing/unset value to true (dry-run) — the safe default.
+ */
+router.get("/dry-run-states", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const entries = await Promise.all(
+      Object.entries(DRY_RUN_JOBS).map(async ([jobType, settingKey]) => {
+        const raw = await getSetting(settingKey as string);
+        const dryRun = (raw ?? "true").toLowerCase() !== "false";
+        return [jobType, dryRun] as const;
+      })
+    );
+
+    res.json({ states: Object.fromEntries(entries) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/job/dry-run
+ * Body: { jobType, dryRun }
+ **/
+
+router.post("/dry-run", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { jobType, dryRun } = (req.body ?? {}) as { jobType?: string; dryRun?: boolean };
+
+    if (typeof dryRun !== "boolean") {
+      return res.status(400).json({ error: "dryRun must be a boolean" });
+    }
+
+    const settingKey = jobType ? DRY_RUN_JOBS[jobType as JobType] : undefined;
+    if (!settingKey) {
+      return res.status(400).json({ error: `Job type ${jobType} has no dry-run setting` });
+    }
+
+    await setSetting(settingKey, dryRun ? "true" : "false", getActorEmail(req));
+    res.json({ jobType, dryRun });
   } catch (err) {
     next(err);
   }

@@ -1,5 +1,6 @@
 import { apiFetch } from "./client";
 
+
 ///  +-----------------------------------------------------------------+
 ///  |                          TYPES                                  |
 ///  +-----------------------------------------------------------------+
@@ -50,7 +51,11 @@ export type EnqueueResponse = {
   message: string;
 };
 
-export type OrphanDryRunResponse = { dryRun: boolean };
+export type DryRunStates = Record<string, boolean>;
+export type DryRunStatesResponse = { states: DryRunStates };
+
+export type JobSchedule = { jobType: JobType; settingKey: string; cron: string };
+export type SchedulesResponse = { schedules: JobSchedule[] };
 
 ///  +-----------------------------------------------------------------+
 ///  |                           CALLS                                 |
@@ -83,6 +88,21 @@ export async function enqueueJob(type: JobType): Promise<EnqueueResponse> {
   });
 }
 
-export async function getOrphanDryRun(): Promise<OrphanDryRunResponse> {
-  return apiFetch<OrphanDryRunResponse>("/api/job/orphan-dry-run");
+export async function getJobSchedules(): Promise<SchedulesResponse> {
+  return apiFetch<SchedulesResponse>("/api/job/schedules");
+}
+
+export async function saveJobSchedule(
+  settingKey: string,
+  cron: string
+): Promise<{ settingKey: string; cron: string; note?: string }> {
+  return apiFetch("/api/job/schedule", { method: "POST", body: { settingKey, cron } });
+}
+
+export async function getDryRunStates(): Promise<DryRunStatesResponse> {
+  return apiFetch<DryRunStatesResponse>("/api/job/dry-run-states");
+}
+
+export async function setDryRun(jobType: JobType, dryRun: boolean): Promise<{ jobType: JobType; dryRun: boolean }> {
+  return apiFetch("/api/job/dry-run", { method: "POST", body: { jobType, dryRun } });
 }
