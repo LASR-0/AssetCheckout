@@ -509,7 +509,7 @@ export default function CreateModelDialog({
             </button>
             <button
               onClick={() => setDialogState({ phase: "form" })}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-lg text-modal-text-secondary font-bold text-sm hover:bg-modal-surface-elevated hover:cursor-pointer transition-colors"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-lg text-modal-text-secondary hover:text-modal-error font-bold text-sm hover:bg-error/10 hover:cursor-pointer transition-colors"
             >
               Back to form
             </button>

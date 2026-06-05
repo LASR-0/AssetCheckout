@@ -21,8 +21,12 @@ export default function RejectionReasonDialog({
   const [reason, setReason] = useState("");
 
   useEffect(() => {
-    if (!open) setReason(""); 
+    if (!open) setReason("");
   }, [open]);
+
+  function submit() {
+    onConfirm(reason || "No reason provided");
+  }
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -36,10 +40,8 @@ export default function RejectionReasonDialog({
           md:min-w-lg
         "
       >
-
         {/* HEADER */}
         <ResponsiveDialogHeader className="px-8 pt-8 pb-4 text-center border-b border-modal-border-light/10">
-
           <div className="inline-flex items-center justify-center w-12 h-12 bg-modal-surface-accent rounded-full mb-4 mx-auto">
             <span className="material-symbols-outlined text-modal-text-accent">
               cancel
@@ -53,12 +55,17 @@ export default function RejectionReasonDialog({
           <p className="text-info-light text-sm mt-1 max-w-md mx-auto leading-relaxed">
             Please provide a reason for rejecting this request. This message will replace their reasoning for the asset. If left blank, your reason will be "No reason provided."
           </p>
-
         </ResponsiveDialogHeader>
 
         {/* CONTENT */}
-        <div className="p-8 space-y-6">
-
+        <form
+          id="rejection-reason-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="p-8 space-y-6"
+        >
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-modal-text-secondary mb-2 ml-1">
               Reason
@@ -68,6 +75,14 @@ export default function RejectionReasonDialog({
               rows={4}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter submits (managers type a short reason, not a paragraph).
+                // Shift+Enter still inserts a newline for the rare multi-line case.
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
               placeholder="Enter rejection reason..."
               className="
                 w-full
@@ -85,14 +100,13 @@ export default function RejectionReasonDialog({
               "
             />
           </div>
-
-        </div>
+        </form>
 
         {/* FOOTER */}
         <ResponsiveDialogFooter className="px-8 pb-8 pt-2 flex mx-auto border-modal-border/20 flex-col sm:flex-row-reverse gap-3">
-
           <button
-            onClick={() => onConfirm(reason || "No reason provided")}
+            type="submit"
+            form="rejection-reason-form"
             className="
               w-full sm:w-auto
               px-8 py-3.5
@@ -111,6 +125,7 @@ export default function RejectionReasonDialog({
           </button>
 
           <button
+            type="button"
             onClick={() => onOpenChange(false)}
             className="
               w-full sm:w-auto
@@ -126,12 +141,10 @@ export default function RejectionReasonDialog({
           >
             Cancel
           </button>
-
         </ResponsiveDialogFooter>
 
         {/* BOTTOM RIBBON */}
         <div className="h-1 twilight-gradient w-full" />
-
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   );
