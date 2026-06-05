@@ -28,6 +28,12 @@ import {
 //    - Per-item disabled support (for the "primary can't equal
 //      backup" use case).
 //
+//  Keyboard selection: base-ui fires an Item's `onClick` both on pointer
+//  click AND on Enter when that item is highlighted (per base-ui docs), so
+//  selection lives on each item's `onClick`. `autoHighlight` on the root
+//  highlights the first match so Enter has something to commit immediately.
+//  The input's onKeyDown stops Enter bubbling to a surrounding <form>.
+//
 //  Sizing: `size="compact"` matches the dense popover-inside-popover
 //  context; `size="normal"` matches the dialog form input.
 ///  +-----------------------------------------------------------------+
@@ -107,16 +113,17 @@ export default function ComboboxField({
       key={keyHint}
       items={fullItems}
       defaultValue={defaultValue}
+      autoHighlight
     >
       <ComboboxInput
         disabled={disabled}
         className={inputClass}
         placeholder={placeholder}
+        onKeyDown={(e) => {
+          if (e.key === "Enter", "ArrowDown", "ArrowUp", "Home", "End") e.stopPropagation();
+        }}
       />
-      <ComboboxContent
-        className={contentClass}
-        style={{ pointerEvents: "auto" }}
-      >
+      <ComboboxContent className={contentClass} style={{ pointerEvents: "auto" }}>
         <ComboboxEmpty>No results</ComboboxEmpty>
         <ComboboxList>
           {(name: string) => {

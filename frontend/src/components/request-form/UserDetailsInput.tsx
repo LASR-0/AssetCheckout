@@ -33,6 +33,7 @@ export default function UserDetailsInput({ users, onSelected }: Props) {
       <Combobox<User>
         items={users}
         itemToStringValue={(user) => user.name}
+        autoHighlight
       >
         <ComboboxInput className="text-on-surface-variant bg-surface-container/40 !ring-purple-900 p-2 h-12 border-1 !border-outline" placeholder="Who will use this device?" />
 

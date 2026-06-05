@@ -117,7 +117,8 @@ export default function RequestFormPage() {
           </div>
 
           <div className="bg-surface-container-lowest rounded-xl p-8 shadow-md">
-            <form onSubmit={handleSubmit} key={formKey} className="space-y-10">
+            <form onSubmit={handleSubmit} key={formKey} className="space-y-10"
+            >
 
               <AssetTypeSelector
                 value={formState.categoryId}
