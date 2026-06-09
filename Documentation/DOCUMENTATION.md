@@ -144,7 +144,7 @@ checked out, and assets without a Tier value are invisible to the matching logic
 
 ### Finding the Tier field in Snipe-IT
 
-![Navigating to custom fields in Snipe-IT](photos/Tier_navigation.png)
+![Navigating to custom fields in Snipe-IT](Photos/Tier_navigation.png)
 
 ### Example Tier field setup
 
@@ -152,7 +152,7 @@ The Tier field should be configured as a custom field with the spec bands you
 want to use as its values, then included in the fieldset(s) attached to the
 models you manage through AssetCheckout.
 
-![Example Tier custom field configuration](photos/Tier_Setup_Example.png)
+![Example Tier custom field configuration](Photos/Tier_Setup_Example.png)
 
 ---
 
@@ -170,7 +170,7 @@ to a chosen list — useful for hiding categories that shouldn't be
 self-requestable (printers, networking gear, etc.). An empty list means "all
 categories allowed."
 
-![Configuring requestable device categories](photos/Configure_Device_Categories.png)
+![Configuring requestable device categories](Photos/Configure_Device_Categories.png)
 
 ### Standard models (standard devices)
 
@@ -187,7 +187,7 @@ underlying assets must satisfy the same conditions the checkout flow enforces:
 - **A non-empty Tier value** on that asset — assets without a Tier are invisible
   to the matching logic.
 
-![Configuring standard devices](photos/Configure_Standard_Devices.png)
+![Configuring standard devices](Photos/Configure_Standard_Devices.png)
 
 ### Skeleton asset status
 
@@ -197,7 +197,7 @@ which status to use; if left unset, the app falls back to a status named
 "Pending". If neither is available, model creation fails with a message pointing
 back to this setting.
 
-![Configuring the skeleton asset status](photos/Configure_Skeleton_Status.png)
+![Configuring the skeleton asset status](Photos/Configure_Skeleton_Status.png)
 
 ---
 
