@@ -118,15 +118,29 @@ development the app provides an impersonation shortcut:
 
 ---
 
-## Snipe-IT bot setup
+#### Snipe-IT bot setup
 
-AssetCheckout acts on Snipe-IT through a service user's API token, set as
-`SNIPEIT_BOT_TOKEN`. The required Snipe-IT permission matrix — which operations
-the app performs against each permission category — is documented in the
-[README](../README.md#snipe-it-bot-setup), since it's needed to get the app
-running at all. In short: the bot needs broad **view** access, **create/edit**
-on assets, **create/delete** on models, **create** on manufacturers, **checkout**
-on hardware, and **manage** on API tokens.
+AssetCheckout acts on Snipe-IT through a service user's API token. Without it,
+the app can't read or write Snipe-IT data and will show connection errors, so
+this is required even for a local run to be meaningful.
+
+Create a Snipe-IT user with API access, generate a token from their profile
+page, and set it as `SNIPEIT_BOT_TOKEN`. The bot needs the following Snipe-IT
+permissions — the rows are the operations AssetCheckout performs against each
+permission category:
+
+| Category | View | Create | Edit | Delete | Checkout | Can Manage |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Assets (Hardware) | ✅ | ✅ | ✅ | – | ✅ | – |
+| Models | ✅ | ✅ | – | ✅ | – | – |
+| Manufacturers | ✅ | ✅ | – | – | – | – |
+| Categories | ✅ | – | – | – | – | – |
+| Status Labels | ✅ | – | – | – | – | – |
+| Custom Fields | ✅ | – | – | – | – | – |
+| Companies | ✅ | – | – | – | – | – |
+| Locations | ✅ | – | – | – | – | – |
+| Users | ✅ | – | – | – | – | – |
+| API Tokens | – | – | – | – | – | ✅ |
 
 Asset **checkout** is a distinct capability in Snipe-IT from editing an asset —
 ensure the bot can check out hardware.
@@ -142,15 +156,18 @@ define them itself. The Tier field is central to how assets are matched and
 checked out, and assets without a Tier value are invisible to the matching logic
 (see [Common configuration issues](#common-configuration-issues)).
 
-### Finding the Tier field in Snipe-IT
+### Finding Custom Fields in Snipe-IT
 
 ![Navigating to custom fields in Snipe-IT](Photos/Tier_navigation.png)
 
 ### Example Tier field setup
+Once you are in CustomFields, you will want to add a new custom field, orange plus icon under custom fields (do not get confused with field sets).
 
 The Tier field should be configured as a custom field with the spec bands you
 want to use as its values, then included in the fieldset(s) attached to the
 models you manage through AssetCheckout.
+
+Once you have configured the Tier custom Field, you should make a fieldSet for your assets that should have the custom Tier field and add the asset models to t he fieldSet. 
 
 ![Example Tier custom field configuration](Photos/Tier_Setup_Example.png)
 

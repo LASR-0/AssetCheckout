@@ -23,8 +23,8 @@ Snipe-IT itself.
 > **Security note:** AssetCheckout does **not** authenticate users itself. It
 > trusts identity headers injected by an authenticating reverse proxy in front
 > of it, and **must not** be exposed directly to users without one. See
-> [Deployment](documentation/DEPLOYMENT.md) and the
-> [Authentication](documentation/DOCUMENTATION.md#authentication) docs.
+> [Deployment](Documentation/DEPLOYMENT.md) and the
+> [Authentication](Documentation/DOCUMENTATION.md#authentication) docs.
 
 ## Features
 
@@ -50,8 +50,8 @@ Snipe-IT itself.
 
 - Node.js 20+ and [pnpm](https://pnpm.io/)
 - A running [Snipe-IT](https://snipeitapp.com/) instance you can reach over HTTP
-- A Snipe-IT service user with an API token (see [Snipe-IT bot setup](documentation/DOCUMENTATION.md#snipe-it-bot-setup))
-- **For production:** an authenticating reverse proxy in front of the app (see [Deployment](documentation/DEPLOYMENT.md)). Not required for local development.
+- A Snipe-IT service user with an API token (see [Snipe-IT bot setup](Documentation/DOCUMENTATION.md#snipe-it-bot-setup))
+- **For production:** an authenticating reverse proxy in front of the app (see [Deployment](Documentation/DEPLOYMENT.md)). Not required for local development.
 
 ## Quick start (local development)
 
@@ -121,7 +121,7 @@ permission category:
 Note that **asset checkout** is a distinct capability in Snipe-IT from editing an
 asset — ensure the bot can check out hardware. AssetCheckout also relies on a
 Snipe-IT custom field named **"Tier"**; see
-[The Tier custom field](documentation/DOCUMENTATION.md#the-tier-custom-field).
+[The Tier custom field](Documentation/DOCUMENTATION.md#the-tier-custom-field).
 
 ### 3. Set up the database
 
@@ -132,7 +132,7 @@ pnpm --filter @asset-checkout/backend exec prisma migrate dev
 
 The database starts empty. Once running, an admin configures requestable
 categories, standard models, and the skeleton asset status through the in-app
-`/settings` page — see the [Application settings](documentation/DOCUMENTATION.md#application-settings) docs.
+`/settings` page — see the [Application settings](Documentation/DOCUMENTATION.md#application-settings) docs.
 
 ### 4. Run the dev servers
 
@@ -149,14 +149,14 @@ pnpm dev:frontend
 
 In development (`NODE_ENV=development`), a DevAuthToggle in the settings page
 lets you impersonate users without standing up an auth proxy — see
-[Authentication](documentation/DOCUMENTATION.md#authentication).
+[Authentication](Documentation/DOCUMENTATION.md#authentication).
 
 ## Documentation
 
-- **[Documentation](documentation/DOCUMENTATION.md)** — how it works, the request
+- **[Documentation](Documentation/DOCUMENTATION.md)** — how it works, the request
   lifecycle, application settings, Snipe-IT bot setup, the Tier field, background
   jobs, common configuration issues, and the database schema.
-- **[Deployment](documentation/DEPLOYMENT.md)** — recommended production setup:
+- **[Deployment](Documentation/DEPLOYMENT.md)** — recommended production setup:
   running alongside Snipe-IT, centralised authentication via a forward-auth
   proxy, and Docker.
 
