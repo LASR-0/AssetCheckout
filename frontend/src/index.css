@@ -72,6 +72,11 @@
 
     --tooltip-bg: 43 29 32;
     --tooltip-text: 255 255 255;
+
+    --landing-bg: 245 243 249;
+    --landing-card: 255 255 255;
+    --landing-raised: 251 250 253;
+    --landing-border: 229 224 239;
   }
 
   .dark {
@@ -135,6 +140,11 @@
 
     --tooltip-bg: 13 8 30;
     --tooltip-text: 255 241 219;
+
+    --landing-bg: 14 10 33;
+    --landing-card: 27 20 48;
+    --landing-raised: 22 16 40;
+    --landing-border: 47 36 80;
   }
 
   input[type="checkbox"] {
@@ -209,6 +219,11 @@
 
    --color-tooltip-bg: rgb(var(--tooltip-bg));
    --color-tooltip-text: rgb(var(--tooltip-text));
+
+   --color-landing-bg: rgb(var(--landing-bg));
+   --color-landing-card: rgb(var(--landing-card));
+   --color-landing-raised: rgb(var(--landing-raised));
+   --color-landing-border: rgb(var(--landing-border));
 }
 
 @layer components {

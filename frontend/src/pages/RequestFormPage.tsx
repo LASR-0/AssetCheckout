@@ -21,6 +21,8 @@ const INITIAL_STATE = {
   managerId: "",
 };
 
+const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
+
 export default function RequestFormPage() {
   const [formState, setFormState] = useState(INITIAL_STATE);
   const [formKey, setFormKey] = useState(0);
@@ -45,10 +47,10 @@ export default function RequestFormPage() {
       setError("Please select an approver.");
       return;
     }
-    if (formState.userId === formState.managerId) {
-      setError("Requester cannot be the same as the approver.");
-      return;
-    }
+    // if (formState.userId === formState.managerId) {
+    //   setError("Requester cannot be the same as the approver.");
+    //   return;
+    // }
     if (formState.requestType === "NON_STANDARD" && !formState.reason.trim()) {
       setError("Please provide a reason for the non-standard request.");
       return;
@@ -103,7 +105,7 @@ export default function RequestFormPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-surface text-on-background flex flex-col">
+    <main className="min-h-screen bg-landing-bg text-on-background flex flex-col">
       <div className="flex-grow pt-24 pb-12 px-4 md:px-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-10">
@@ -205,7 +207,7 @@ export default function RequestFormPage() {
       </div>
 
       <footer className="w-full py-6 bg-nav px-8 font-semibold text-xs text-nav-tab">
-        © KSB Global
+        © {COMPANY}
       </footer>
     </main>
   );

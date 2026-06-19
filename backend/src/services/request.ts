@@ -19,6 +19,7 @@ import {
   getStandardModelsForCategory,
   getSkeletonStatusId
 } from "../services/settings.js";
+import { enqueue } from "../jobs/jobQueue.js";
 import { AppError } from "../utils/errors.js";
 import type {
   CreateNewModelInput,
@@ -27,13 +28,39 @@ import type {
   CompleteResponse,
   ModelCreationResponse,
   ApproveResponse,
-  StandardApproveResponse,
+  StandardManagerApproveResponse,
+  StandardAdminApproveResponse,
   NonStandardApproveResponse,
   AssetDetailsResponse,
-  RejectResponse
- } from "../types/requestTypes.js"
+  RejectResponse,
+  Actor
+} from "../types/requestTypes.js"
 
 const SKELETON_STATUS_NAME = "Pending";
+
+///  +-----------------------------------------------------------------+
+///  |                       NOTIFICATIONS                             |
+///  +-----------------------------------------------------------------+
+//
+//  Fire-and-forget enqueue of a SEND_REQUEST_NOTIFICATION job. Called after
+//  a state transition has committed. Deliberately swallows its own errors:
+//  a notification-enqueue failure must NEVER break the transition the user
+//  just performed — the request change has already succeeded and returned.
+//  The actual email send happens later in the job runner, fully decoupled.
+///  +-----------------------------------------------------------------+
+
+type NotificationKind =
+  | "MANAGER_APPROVAL_NEEDED"
+  | "ADMIN_APPROVAL_NEEDED"
+  | "DEVICE_ASSIGNED"
+  | "DEVICE_SHIPPED"
+  | "REQUEST_REJECTED";
+
+function notify(requestId: number, kind: NotificationKind): void {
+  enqueue("SEND_REQUEST_NOTIFICATION", { requestId, kind }).catch((err) =>
+    console.error(`[notify] enqueue failed (${kind} for request ${requestId}):`, err)
+  );
+}
 
 ///  +-----------------------------------------------------------------+
 ///  |                             CREATE                              |
@@ -53,6 +80,10 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
     throw new AppError("categoryId is required", 400);
   }
 
+  if (typeof input.managerId !== "number") {
+    throw new AppError("managerId is required", 400);
+  }
+
   if (!(await isCategoryRequestable(input.categoryId))) {
     throw new AppError(
       "This category is not currently available for new requests.",
@@ -69,11 +100,15 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
       requestType: input.requestType,
       reason: input.reason,
       manager: input.manager,
+      managerId: input.managerId,
       callText: input.callText ?? false,
       newNumber: input.newNumber ?? false,
       status: "PENDING",
     },
   });
+
+  // New request → the nominated manager needs to approve it.
+  notify(request.id, "MANAGER_APPROVAL_NEEDED");
 
   return {
     success: true,
@@ -97,7 +132,7 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
  */
 export async function approveRequest(
   requestId: number,
-  actorName: string
+  actor: Actor
 ): Promise<ApproveResponse> {
 
   const request = await prisma.request.findUnique({
@@ -111,19 +146,66 @@ export async function approveRequest(
 
   if (request.status === "PENDING") {
     if (request.requestType === "STANDARD") {
-      return handleStandardApproval(request, actorName);
+      return handleStandardApproval(request, actor.name);
     }
-    return handleNonStandardApproval(request, actorName);
+    return handleNonStandardApproval(request, actor.name);
+  }
+
+  // Admin-only stages from here down.
+  if (
+    request.status === "APPROVED" &&
+    request.requestType === "STANDARD" &&
+    request.adminApprovedAt === null
+  ) {
+    if (!actor.isAdmin) {
+      throw new AppError("IT admin sign-off required for this stage", 403);
+    }
+    return handleAdminStandardApproval(request, actor.name);
   }
 
   if (
     request.status === "APPROVED" &&
     request.modelRequest?.status === "PENDING"
   ) {
-    return handleAdminNonStandardApproval(request, actorName);
+    if (!actor.isAdmin) {
+      throw new AppError("IT admin sign-off required for this stage", 403);
+    }
+    return handleAdminNonStandardApproval(request, actor.name);
   }
 
   throw new AppError("Request is not in a state that can be approved", 400);
+}
+
+/**
+ * Manager approval for a STANDARD request. Records the decision and moves the
+ * request to APPROVED — fulfilment (asset selection + checkout) now happens at
+ * the IT-admin approval step (handleAdminStandardApproval), mirroring the
+ * non-standard flow's two-stage sign-off.
+ */
+async function handleStandardApproval(
+  request: Request,
+  actorName: string
+): Promise<StandardManagerApproveResponse> {
+
+  const updated = await prisma.request.update({
+    where: { id: request.id },
+    data: {
+      status: "APPROVED",
+      approvedBy: actorName,
+      approvedAt: new Date(),
+    },
+  });
+
+  // Manager approved → IT admins need to sign off + fulfil.
+  notify(updated.id, "ADMIN_APPROVAL_NEEDED");
+
+  return {
+    success: true,
+    type: "STANDARD",
+    stage: "MANAGER",
+    request: updated,
+    message: "Standard request approved — awaiting IT admin sign-off",
+  };
 }
 
 /**
@@ -135,10 +217,10 @@ export async function approveRequest(
  *
  * Throws if no available asset can be found through any of those paths.
  */
-async function handleStandardApproval(
+async function handleAdminStandardApproval(
   request: Request,
   actorName: string
-): Promise<StandardApproveResponse> {
+): Promise<StandardAdminApproveResponse> {
 
   const standards = await getStandardModelsForCategory(request.categoryId);
   const tierMatch = { mode: "any" as const };
@@ -152,10 +234,7 @@ async function handleStandardApproval(
     const models = await getModelsByCategory(request.categoryId);
     const model = models.find((m) => m.id === modelId);
 
-    return {
-      asset,
-      modelName: model?.name ?? `Model ${modelId}`,
-    };
+    return { asset, modelName: model?.name ?? `Model ${modelId}` };
   }
 
   let result: Awaited<ReturnType<typeof tryConfiguredModel>> = null;
@@ -163,17 +242,14 @@ async function handleStandardApproval(
   if (standards.primary !== null) {
     result = await tryConfiguredModel(standards.primary);
   }
-
   if (result === null && standards.backup !== null) {
     result = await tryConfiguredModel(standards.backup);
   }
-
   if (result === null && standards.primary === null && standards.backup === null) {
     const models = await getModelsByCategory(request.categoryId);
     if (!models.length) {
       throw new AppError("No models available for category", 404);
     }
-
     for (const model of models) {
       const asset = await getAvailableAssetFromModel(model.id, tierMatch);
       if (asset) {
@@ -196,21 +272,22 @@ async function handleStandardApproval(
     where: { id: request.id },
     data: {
       status: "COMPLETED",
-      approvedBy: actorName,
-      approvedAt: new Date(),
+      adminApprovedBy: actorName,
+      adminApprovedAt: new Date(),
     },
   });
+
+  // Admin signed off + asset checked out → tell the user it's assigned.
+  notify(updated.id, "DEVICE_ASSIGNED");
 
   return {
     success: true,
     type: "STANDARD",
+    stage: "ADMIN",
     request: updated,
-    asset: {
-      id: result.asset.id,
-      tag: result.asset.asset_tag,
-    },
+    asset: { id: result.asset.id, tag: result.asset.asset_tag },
     model: result.modelName,
-    message: "Standard request approved and asset assigned",
+    message: "Admin approval recorded — asset assigned and request completed",
   };
 }
 
@@ -254,6 +331,9 @@ async function handleNonStandardApproval(
     }),
   ]);
 
+  // Manager approved → IT admins need to review (model creation, etc.).
+  notify(updatedRequest.id, "ADMIN_APPROVAL_NEEDED");
+
   return {
     success: true,
     type: "NON_STANDARD",
@@ -279,19 +359,28 @@ async function handleAdminNonStandardApproval(
     );
   }
 
-  void actorName;
+  const [updatedRequest, updatedModelRequest] = await prisma.$transaction([
+    prisma.request.update({
+      where: { id: request.id },
+      data: {
+        adminApprovedBy: actorName,
+        adminApprovedAt: new Date(),
+      },
+    }),
+    prisma.modelRequest.update({
+      where: { id: request.modelRequest.id },
+      data: { status: "APPROVED" },
+    }),
+  ]);
 
-  const updatedModelRequest = await prisma.modelRequest.update({
-    where: { id: request.modelRequest.id },
-    data: {
-      status: "APPROVED",
-    },
-  });
+  // No user-facing notification here: the non-standard device isn't assigned
+  // until model creation + asset details + completeRequest. DEVICE_ASSIGNED
+  // fires from completeRequest, when the asset is actually checked out.
 
   return {
     success: true,
     type: "NON_STANDARD",
-    request,
+    request: updatedRequest,
     modelRequest: updatedModelRequest,
     message: "Admin approval recorded — ready for model creation",
   };
@@ -644,6 +733,9 @@ export async function completeRequest(
     },
   });
 
+  // Non-standard device is now actually checked out → tell the user.
+  notify(updated.id, "DEVICE_ASSIGNED");
+
   return {
     success: true,
     request: updated,
@@ -695,6 +787,11 @@ export async function rejectRequest(
       reason: reason ?? "No reason provided",
     },
   });
+
+  // Notify the requester their request was declined (reason read from the
+  // request row by the handler). Automated rejections (stale cleanup, orphan
+  // cleanup) also flow through here, so the requester is told either way.
+  notify(updated.id, "REQUEST_REJECTED");
 
   return {
     success: true,

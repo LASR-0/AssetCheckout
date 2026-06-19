@@ -10,6 +10,7 @@ import {
 import { searchModelsByManufacturer } from "../services/snipeit.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/errors.js";
+import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ function readActorName(req: express.Request): string | null {
 router.post("/:requestId/approve", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
 
     if (!actorName) {
       return res.status(401).json({
@@ -37,7 +38,10 @@ router.post("/:requestId/approve", async (req, res, next) => {
       });
     }
 
-    const result = await approveRequest(requestId, actorName);
+    const actorEmail = getActorEmail(req);
+    const isAdmin = isAdminEmail(actorEmail);
+
+    const result = await approveRequest(requestId, { name: actorName, isAdmin });
     res.json(result);
   } catch (err) {
     next(err);

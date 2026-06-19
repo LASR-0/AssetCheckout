@@ -1,5 +1,7 @@
 import type { Request, ModelRequest } from "../../generated/prisma_client/client.js";
 
+export type Actor = { name: string; isAdmin: boolean };
+
 export type CreateRequestInput = {
   userId: number;
   userName: string;
@@ -8,6 +10,7 @@ export type CreateRequestInput = {
   requestType: "STANDARD" | "NON_STANDARD";
   reason?: string;
   manager?: string;
+  managerId?: number;
   callText?: boolean;
   newNumber?: boolean;
 };
@@ -19,9 +22,24 @@ export type CreateResponse = {
   message: string;
 };
 
-export type StandardApproveResponse = {
+/**
+ * Standard approval is now two-stage, with different payloads per stage.
+ * `stage` is the discriminant: MANAGER approval performs no fulfilment (so no
+ * asset/model yet); ADMIN approval is where the asset is selected and checked
+ * out. Consumers narrow on `stage`.
+ */
+export type StandardManagerApproveResponse = {
   success: true;
   type: "STANDARD";
+  stage: "MANAGER";
+  request: Request;
+  message: string;
+};
+
+export type StandardAdminApproveResponse = {
+  success: true;
+  type: "STANDARD";
+  stage: "ADMIN";
   request: Request;
   asset: {
     id: number;
@@ -30,6 +48,10 @@ export type StandardApproveResponse = {
   model: string;
   message: string;
 };
+
+export type StandardApproveResponse =
+  | StandardManagerApproveResponse
+  | StandardAdminApproveResponse;
 
 export type NonStandardApproveResponse = {
   success: true;

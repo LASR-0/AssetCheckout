@@ -14,11 +14,15 @@ export interface Request {
 
   reason?: string;
   manager?: string;
+  managerId: number;
 
   callText?: boolean;
   newNumber?: boolean;
 
   createdAt: string;
+
+  adminApprovedBy?: string | null;
+  adminApprovedAt?: string | null;
 
   modelRequest?: {
     linkedAssetId: number;
@@ -27,5 +31,6 @@ export interface Request {
     modelNumber?: string;
     price?: number;
     status?: string;
+    assetReady?: boolean;
   };
 }

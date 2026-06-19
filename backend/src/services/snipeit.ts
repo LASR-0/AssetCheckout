@@ -17,7 +17,8 @@ import type {
   SnipeNamedRecord,
   AssetDetailsInput,
   SnipeAssetDetail,
-  CreateSkeletonAssetInput
+  CreateSkeletonAssetInput,
+  SnipeUserDetail
 } from '../types/snipeTypes.js';
 
 const BASE_URL = process.env.SNIPEIT_API_URL;
@@ -1112,6 +1113,77 @@ export async function getAveragePricesFromSnipe(tier?: string) {
   }
 
   return averages;
+}
+
+/**
+ * Full detail for one Snipe user by ID — email and location, which the
+ * trimmed getAllUsersCleaned() list omits. Used to resolve notification
+ * recipients and to compare a user's location against a device's location
+ * for the ship-vs-collect branch.
+ *
+ * Returns null on 404. email/location may be null even for a live user
+ * (Snipe allows users with no email or no location set), so callers must
+ * handle null rather than assume presence.
+ */
+export async function getSnipeUser(userId: number): Promise<SnipeUserDetail | null> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users/${userId}`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch user ${userId}: status ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!data || data.status === "error") return null;
+
+  return {
+    id: data.id,
+    name: data.name ?? "",
+    email: typeof data.email === "string" && data.email.trim() ? data.email.trim() : null,
+    location: data.location
+      ? { id: data.location.id, name: data.location.name }
+      : null,
+  };
+}
+
+/**
+ * Resolve a Snipe user's email, or null if the user is missing or has no
+ * email set. Notification handlers treat null as "skip, nothing to send"
+ * rather than an error.
+ */
+export async function resolveUserEmail(userId: number): Promise<string | null> {
+  const user = await getSnipeUser(userId);
+  return user?.email ?? null;
+}
+
+/**
+ * Compare the request user's Snipe location against the device's location to
+ * decide ship-vs-collect at fulfilment time. If either location is unknown,
+ * defaults to collect (needsShipping=false) and flags locationMissing so the
+ * row can be reviewed.
+ */
+export async function getLocationComparison(
+  userId: number,
+  assetId: number
+): Promise<{ needsShipping: boolean; locationMissing: boolean }> {
+  const [user, asset] = await Promise.all([
+    getSnipeUser(userId),
+    getSnipeAssetDetail(assetId),
+  ]);
+
+  const userLocId = user?.location?.id ?? null;
+  const assetLocId = asset?.location?.id ?? null;
+
+  if (userLocId === null || assetLocId === null) {
+    return { needsShipping: false, locationMissing: true };
+  }
+
+  return { needsShipping: userLocId !== assetLocId, locationMissing: false };
 }
 
 ///  +-----------------------------------------------------------------+

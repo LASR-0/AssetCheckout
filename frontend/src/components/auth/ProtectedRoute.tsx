@@ -6,10 +6,11 @@ interface Props {
   children: React.ReactNode;
   /** If set, only these roles can access. If omitted, any non-null role is allowed. */
   allowedRoles?: Exclude<Role, null>[];
+  requireRole?: boolean;
 }
 
-export default function ProtectedRoute({ children, allowedRoles }: Props) {
-  const { role, isLoading } = useAuth();
+export default function ProtectedRoute({ children, allowedRoles, requireRole = true }: Props) {
+  const { name, role, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -20,6 +21,13 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
         </div>
       </div>
     );
+  }
+
+  if (!requireRole) {
+    if (!name) {
+      return <Navigate to="/no-access" replace />;
+    }
+    return <>{children}</>;
   }
 
   if (role === null) {

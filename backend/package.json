@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "tsx --env-file=.env src/server.ts"
+    "dev": "NODE_EXTRA_CA_CERTS=./cert/ksb-relay-nodes.pem tsx --env-file=.env src/server.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,12 +19,14 @@
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.10",
     "prisma": "^7.8.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

@@ -17,7 +17,7 @@ export default function NoAccessPage() {
     resolvedTheme === "dark" ? watermarkDark : watermarkLight;
 
   return (
-    <main className="min-h-screen bg-surface flex flex-col items-center justify-center text-on-background gap-4 px-6">
+    <main className="min-h-screen bg-landing-bg flex flex-col items-center justify-center text-on-background gap-4 px-6">
       {mounted &&
         (watermark ? (
           <img

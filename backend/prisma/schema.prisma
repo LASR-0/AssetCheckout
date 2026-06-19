@@ -23,12 +23,15 @@ model Request {
 
   reason         String?
   manager        String?
+  managerId      Int
 
   callText       Boolean @default(false)
   newNumber      Boolean @default(false)
 
   approvedBy     String?
   approvedAt     DateTime?
+  adminApprovedBy   String?
+  adminApprovedAt   DateTime?
   rejectedBy        String?
   rejectedAt        DateTime?
 

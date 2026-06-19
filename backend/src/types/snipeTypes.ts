@@ -89,3 +89,10 @@ export type AssetDetailsInput = {
   price?: number;
   assetTag?: string;
 };
+
+export type SnipeUserDetail = {
+  id: number;
+  name: string;
+  email: string | null;
+  location: { id: number; name: string } | null;
+};

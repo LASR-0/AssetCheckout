@@ -32,6 +32,7 @@ export default function Navbar() {
 
         {/* Left side */}
         <div className="flex items-center gap-8">
+          <Link to="/">
           <div className="flex items-center gap-3">
             {/* Logo — hidden until mounted (to avoid flashing wrong theme),
                 then either shown or omitted depending on env config. */}
@@ -47,13 +48,14 @@ export default function Navbar() {
               {companyName ? `${companyName} ` : ""}Checkout Central
             </span>
           </div>
+          </Link>
 
           <nav className="hidden md:flex  gap-6">
 
             <Link
-              to="/"
+              to="/checkout"
               className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
-                isActive("/")
+                isActive("/checkout")
                   ? "text-nav-tab-selected border-b-2 border-underline"
                   : "text-nav-tab hover:text-nav-tab-selected"
               }`}
@@ -130,10 +132,10 @@ export default function Navbar() {
         <div className="md:hidden pb-1 bg-nav border-t border-outline/20 px-8 h-10 flex items-center gap-8">
 
           <Link
-            to="/"
+            to="/checkout"
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
-              isActive("/")
+              isActive("/checkout")
                 ? "text-nav-tab-selected border-b-2 border-underline"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}

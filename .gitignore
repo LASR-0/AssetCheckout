@@ -85,3 +85,13 @@ Thumbs.db
 # The misc/ folder is for project notes / drafts that probably shouldn't be
 # public. If you want to track specific subfolders, override with !misc/foo/.
 misc/
+
+#-----------------------------------------------------------------------------
+# CERTS - certs have been added to bypass SSL errors for SMTP testing
+#-----------------------------------------------------------------------------
+backend/cert/
+
+#-----------------------------------------------------------------------------
+# SCRIPTS - scripts excluded / dev only no use in production
+#-----------------------------------------------------------------------------
+backend/src/scripts

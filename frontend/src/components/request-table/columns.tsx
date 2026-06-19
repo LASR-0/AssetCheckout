@@ -122,6 +122,7 @@ function StatusBadge({ status }: { status: string }) {
     APPROVED: "Approved",
     REJECTED: "Rejected",
     COMPLETED: "Completed",
+    AWAITING_IT: "Awaiting IT"
   };
 
   const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
@@ -129,6 +130,7 @@ function StatusBadge({ status }: { status: string }) {
     COMPLETED: { bg: "bg-green-500/10", text: "text-green-600", icon: "Add_DIAMOND" },
     REJECTED: { bg: "bg-red-500/10", text: "text-red-600", icon: "cancel" },
     PENDING: { bg: "bg-yellow-500/10", text: "text-yellow-600", icon: "schedule" },
+    AWAITING_IT: { bg: "bg-purple-500/10", text: "text-purple-400", icon: "shield_person" },
   };
 
   const style = styleMap[status] ?? styleMap.PENDING;
@@ -144,9 +146,11 @@ function StatusBadge({ status }: { status: string }) {
 
 // --- Actions / Status cell ---
 function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> }) {
+  
   const meta = table.options.meta as RequestsTableMeta;
   const request = row.original;
   const role = meta.role;
+  if (request.id === 21) console.log("row 21:", request.status, request.requestType, request.adminApprovedAt, "role:", role);
 
   // Compute the visible state-machine row to know which actions to render
   const requestStatus = request.status;
@@ -162,6 +166,10 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     requestStatus === "APPROVED" &&
     modelRequestStatus === "COMPLETED" &&
     !!linkedAssetId;
+  const isStandardAwaitingIT =
+    requestStatus === "APPROVED" &&
+    request.requestType === "STANDARD" &&
+    !request.adminApprovedAt;
 
   // Terminal states render the status badge for everyone
   if (requestStatus === "COMPLETED" || requestStatus === "REJECTED") {
@@ -194,6 +202,11 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         </ActionRow>
       );
     }
+
+    if (isStandardAwaitingIT) {
+      return <StatusBadge status="AWAITING_IT" />;
+    }
+
     // All other states for manager: status badge
     return <StatusBadge status={requestStatus} />;
   }
@@ -202,7 +215,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   // ADMIN VIEW
   // ──────────────────────────────────────────────────
   if (role === "ADMIN") {
-    if (isPending || isApprovedAwaitingAdmin) {
+    if (isPending || isApprovedAwaitingAdmin ) {
       // Admin can approve/reject at first PENDING (override) or after manager approval (non-standard)
       return (
         <ActionRow>
@@ -212,6 +225,29 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             hoverBg="bg-green-600/10"
             border="hover:border-green-500/50 hover:border-1"
             title="Approve"
+            onClick={() => meta.onApprove(request)}
+          />
+          <ActionButton
+            icon="cancel"
+            color="text-error"
+            hoverBg="bg-red-600/10"
+            border="hover:border-red-500/50 hover:border-1"
+            title="Reject"
+            onClick={() => meta.onReject(request)}
+          />
+        </ActionRow>
+      );
+    }
+
+    if (isPending || isApprovedAwaitingAdmin || isStandardAwaitingIT) {
+      return (
+        <ActionRow>
+          <ActionButton
+            icon="check_circle"
+            color="text-green-500"
+            hoverBg="bg-green-600/10"
+            border="hover:border-green-500/50 hover:border-1"
+            title={isStandardAwaitingIT ? "Approve & assign asset" : "Approve"}
             onClick={() => meta.onApprove(request)}
           />
           <ActionButton

@@ -9,6 +9,7 @@ import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
 import { getColumnVisibility } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
+import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
 import CompleteResultDialog from "@/components/dialogs/CompleteResultDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
@@ -27,6 +28,8 @@ export default function RequestTablePage() {
   const [filteredCount, setFilteredCount] = useState(0);
 
   const [selectedTier, setSelectedTier] = useState<string>("STANDARD");
+
+  const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
 
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const { role, name: currentUserName } = useAuth();
@@ -107,60 +110,56 @@ export default function RequestTablePage() {
   // -----------------------------
   async function handleApprove(request: Request) {
     try {
-      const res = await fetch(`/api/approval/${request.id}/approve`, {
+      const data = await apiFetch<{
+        type: "STANDARD" | "NON_STANDARD";
+        stage?: "MANAGER" | "ADMIN";
+        asset?: { id: number; tag: string };
+        model?: string;
+        request?: { userName?: string };
+        message: string;
+      }>(`/api/approval/${request.id}/approve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-dev-user-name": currentUserName,
-        },
       });
-  
-      const data = await res.json();
-  
-      if (!res.ok) {
-        if (data?.type === "STANDARD" || request.requestType === "STANDARD") {
+
+      if (data.type === "STANDARD") {
+        if (data.stage === "ADMIN") {
+          loadRequests();
           setStandardResult({
-            type: "error",
-            message: data.message || data.error || "Approval failed.",
+            type: "success",
+            assetTag: data.asset?.tag ?? "—",
+            modelName: data.model ?? "Unknown model",
+            userName: data.request?.userName ?? request.userName,
           });
           setStandardResultOpen(true);
         } else {
-          console.error("Approval failed:", data);
-          alert(data.message || data.error || "Approval failed.");
+          // MANAGER stage — no fulfilment yet, no result modal.
+          await loadRequests();
         }
-        return;
-      }
-  
-      if (data.type === "STANDARD") {
-        loadRequests();
-  
-        setStandardResult({
-          type: "success",
-          assetTag: data?.asset?.tag ?? "—",
-          modelName: data?.model ?? "Unknown model",
-          userName: data?.request?.userName ?? request.userName,
-        });
-        setStandardResultOpen(true);
       } else {
         await loadRequests();
       }
     } catch (err: any) {
-      console.error("Approval error:", err);
-      alert("Failed to approve the request. " + (err.message ?? ""));
+      // apiFetch throws on non-2xx, carrying the server's error/message text.
+      if (request.requestType === "STANDARD") {
+        setStandardResult({
+          type: "error",
+          message: err.message || "Approval failed.",
+        });
+        setStandardResultOpen(true);
+      } else {
+        console.error("Approval failed:", err);
+        alert(err.message || "Approval failed.");
+      }
     }
   }
 
   async function handleReject(request: Request, reason: string) {
     try {
-      await fetch(`/api/approval/${request.id}/reject`, {
+      await apiFetch(`/api/approval/${request.id}/reject`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-dev-user-name": currentUserName,  
-        },
-        body: JSON.stringify({
+        body: {
           reason: "REJECTED: " + reason + "\n REQUEST: " + request.reason,
-        }),
+        },
       });
       await loadRequests();
     } catch (err) {
@@ -198,7 +197,7 @@ export default function RequestTablePage() {
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <div className="min-h-screen bg-landing-bg flex flex-col">
       <main className="mb-20 flex-1 text-on-background">
         {/* HEADER */}
         <div className="text-center mb-15 pt-28">
@@ -296,7 +295,7 @@ export default function RequestTablePage() {
       </main>
 
       <footer className="w-full py-6 bg-nav px-8 font-semibold text-xs text-nav-tab">
-        © KSB Global
+        © {COMPANY}
       </footer>
     </div>
   );
