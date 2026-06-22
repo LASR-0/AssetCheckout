@@ -28,6 +28,11 @@ model Request {
   callText       Boolean @default(false)
   newNumber      Boolean @default(false)
 
+  shippedAt        DateTime?
+  receivedAt       DateTime?
+  needsShipping    Boolean   @default(false)
+  locationMissing  Boolean   @default(false)
+
   approvedBy     String?
   approvedAt     DateTime?
   adminApprovedBy   String?

@@ -12,12 +12,14 @@ import {
   isSnipeAssetComplete,
   updateSnipeAsset,
   getSnipeAssetDetail,
+  getLocationComparison,
   type AssetDetailsInput,
 } from "../services/snipeit.js";
 import {
   isCategoryRequestable,
   getStandardModelsForCategory,
-  getSkeletonStatusId
+  getSkeletonStatusId,
+  getSetting
 } from "../services/settings.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import { AppError } from "../utils/errors.js";
@@ -33,7 +35,9 @@ import type {
   NonStandardApproveResponse,
   AssetDetailsResponse,
   RejectResponse,
-  Actor
+  Actor,
+  MarkReceivedResponse,
+  MarkShippedResponse,
 } from "../types/requestTypes.js"
 
 const SKELETON_STATUS_NAME = "Pending";
@@ -268,17 +272,23 @@ async function handleAdminStandardApproval(
 
   await checkoutAsset(result.asset.id, request.userId);
 
-  const updated = await prisma.request.update({
-    where: { id: request.id },
-    data: {
-      status: "COMPLETED",
-      adminApprovedBy: actorName,
-      adminApprovedAt: new Date(),
-    },
-  });
+    const { needsShipping, locationMissing } = await getLocationComparison(
+      request.userId,
+      result.asset.id
+    );
 
-  // Admin signed off + asset checked out → tell the user it's assigned.
-  notify(updated.id, "DEVICE_ASSIGNED");
+    const updated = await prisma.request.update({
+      where: { id: request.id },
+      data: {
+        status: "COMPLETED",
+        adminApprovedBy: actorName,
+        adminApprovedAt: new Date(),
+        needsShipping,
+        locationMissing,
+      },
+    });
+
+    notify(updated.id, "DEVICE_ASSIGNED");
 
   return {
     success: true,
@@ -726,14 +736,20 @@ export async function completeRequest(
 
   await checkoutAsset(linkedAssetId, request.userId);
 
+  const { needsShipping, locationMissing } = await getLocationComparison(
+    request.userId,
+    linkedAssetId
+  );
+
   const updated = await prisma.request.update({
     where: { id: request.id },
     data: {
       status: "COMPLETED",
+      needsShipping,
+      locationMissing,
     },
   });
 
-  // Non-standard device is now actually checked out → tell the user.
   notify(updated.id, "DEVICE_ASSIGNED");
 
   return {
@@ -746,6 +762,96 @@ export async function completeRequest(
     },
     userName: request.userName,
     message: "Asset checked out and request completed",
+  };
+}
+
+///  +-----------------------------------------------------------------+
+///  |                    SHIPPING / RECEIPT                           |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Admin marks a shipped-path request as dispatched. Valid only on a
+ * COMPLETED request that needs shipping and hasn't already been shipped.
+ * Stamps shippedAt and notifies the requester their device is on the way.
+ *
+ * Admin-only — enforced by the route (see approval-route guard pattern).
+ */
+export async function markRequestShipped(
+  requestId: number
+): Promise<MarkShippedResponse> {
+
+  const request = await prisma.request.findUnique({ where: { id: requestId } });
+
+  if (!request) {
+    throw new AppError("Request not found", 404);
+  }
+  if (request.status !== "COMPLETED") {
+    throw new AppError("Only a completed request can be marked shipped", 400);
+  }
+  if (!request.needsShipping) {
+    throw new AppError("This request is for collection, not shipping", 400);
+  }
+  if (request.shippedAt !== null) {
+    throw new AppError("Request is already marked shipped", 400);
+  }
+
+  const updated = await prisma.request.update({
+    where: { id: requestId },
+    data: { shippedAt: new Date() },
+  });
+
+  notify(updated.id, "DEVICE_SHIPPED");
+
+  return {
+    success: true,
+    request: updated,
+    message: "Request marked as shipped",
+  };
+}
+
+/**
+ * The requester (or an admin on their behalf) marks the device received or
+ * collected. Valid only on a COMPLETED request not already received; for a
+ * shipped-path request, it must have been shipped first.
+ *
+ * Ownership/role is enforced at the route: actor must be the request's user
+ * or an admin. Returns promptFeedback so the UI knows whether to show the
+ * feedback nudge (gated on the feedback_enabled setting).
+ */
+export async function markRequestReceived(
+  requestId: number
+): Promise<MarkReceivedResponse> {
+
+  const request = await prisma.request.findUnique({ where: { id: requestId } });
+
+  if (!request) {
+    throw new AppError("Request not found", 404);
+  }
+  if (request.status !== "COMPLETED") {
+    throw new AppError("Only a completed request can be marked received", 400);
+  }
+  if (request.receivedAt !== null) {
+    throw new AppError("Request is already marked received", 400);
+  }
+  if (request.needsShipping && request.shippedAt === null) {
+    throw new AppError("Device must be marked shipped before it can be received", 400);
+  }
+
+  const updated = await prisma.request.update({
+    where: { id: requestId },
+    data: { receivedAt: new Date() },
+  });
+
+  const feedbackEnabledRaw = await getSetting("feedback_enabled");
+  const promptFeedback = (feedbackEnabledRaw ?? "true").toLowerCase() !== "false";
+
+  return {
+    success: true,
+    request: updated,
+    promptFeedback,
+    message: request.needsShipping
+      ? "Device marked as received"
+      : "Device marked as collected",
   };
 }
 

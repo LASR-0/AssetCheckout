@@ -5,7 +5,9 @@ import {
   useExistingModelForRequest,
   createNewModelForRequest,
   fillAssetDetailsForRequest,
-  completeRequest
+  completeRequest,
+  markRequestShipped,
+  markRequestReceived
 } from "../services/request.js";
 import { searchModelsByManufacturer } from "../services/snipeit.js";
 import { prisma } from "../db/prisma.js";
@@ -341,6 +343,80 @@ router.post("/:requestId/asset-details", async (req, res, next) => {
       assetTag,
     });
  
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                   SHIPPING / RECEIPT ROUTES                     |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Admin marks a shipped-path request as dispatched. Admin-only: shipping is
+ * an IT/logistics action.
+ */
+router.post("/:requestId/ship", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    const isAdmin = isAdminEmail(getActorEmail(req));
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const result = await markRequestShipped(requestId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Mark a request received/collected. Ownership-gated: the actor must be the
+ * request's user, OR an admin acting on their behalf. This is the requester's
+ * confirmation that the device arrived; it gates the feedback nudge.
+ */
+router.post("/:requestId/receive", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    // Ownership check: load the request, confirm actor is its user or an admin.
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { userName: true },
+    });
+    if (!request) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    const isAdmin = isAdminEmail(getActorEmail(req));
+    const isOwner = request.userName === actorName;
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: "Only the request's owner or an admin can mark it received",
+      });
+    }
+
+    const result = await markRequestReceived(requestId);
     res.json(result);
   } catch (err) {
     next(err);

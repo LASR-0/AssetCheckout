@@ -101,3 +101,17 @@ export type AssetDetailsResponse = {
   modelRequest: ModelRequest;
   message: string;
 };
+
+export type MarkShippedResponse = {
+  success: true;
+  request: Request;
+  message: string;
+};
+
+export type MarkReceivedResponse = {
+  success: true;
+  request: Request;
+  /** Whether the frontend should prompt the feedback nudge (feedback_enabled). */
+  promptFeedback: boolean;
+  message: string;
+};
