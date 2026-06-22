@@ -8,6 +8,7 @@ import categoryRoutes from "./categoryRoutes.js";
 import settingsRoutes from "./settingsRoutes.js";
 import snipeRoutes from "./snipeRoutes.js";
 import jobRoutes from "./jobRoutes.js";
+import integrationsRoutes from "./integrationRoutes.js";
 
 
 
@@ -22,5 +23,6 @@ router.use("/", categoryRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/snipe", snipeRoutes);
 router.use("/job", jobRoutes);
+router.use("/integrations", integrationsRoutes);
 
 export default router;
