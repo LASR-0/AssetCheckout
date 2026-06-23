@@ -1177,13 +1177,18 @@ export async function getLocationComparison(
   ]);
 
   const userLocId = user?.location?.id ?? null;
-  const assetLocId = asset?.location?.id ?? null;
 
-  if (userLocId === null || assetLocId === null) {
+  // Prefer rtd_location (the device's home/default location, always set for
+  // stock) over location (null for un-checked-out assets, and overwritten to
+  // the user's location on checkout — useless for ship-vs-collect).
+  const deviceLocId =
+    asset?.rtd_location?.id ?? asset?.location?.id ?? null;
+
+  if (userLocId === null || deviceLocId === null) {
     return { needsShipping: false, locationMissing: true };
   }
 
-  return { needsShipping: userLocId !== assetLocId, locationMissing: false };
+  return { needsShipping: userLocId !== deviceLocId, locationMissing: false };
 }
 
 ///  +-----------------------------------------------------------------+

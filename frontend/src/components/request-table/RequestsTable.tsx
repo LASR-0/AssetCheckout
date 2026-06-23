@@ -21,12 +21,14 @@ type Props = {
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
   onAssetDetails: (request: Request) => void;
-  onComplete: (request: Request) => void;
+  onMarkShipped: (request: Request) => void;
+  onMarkReceived: (request: Request) => void;
   globalFilter: string;
-  page: number;       // 1-indexed (parent owns)
+  page: number;
   pageSize: number;
   onFilteredCountChange?: (count: number) => void;
   columnVisibility: Record<string, boolean>;
+  onMarkReadyForCollection: (request: Request) => void;
 };
 
 const globalFilterFn = (row: Row<Request>, _columnId: string, filterValue: string) => {
@@ -53,13 +55,14 @@ export default function RequestsTable({
   onReject,
   onCreateModel,
   onAssetDetails,
-  onComplete,
+  onMarkShipped,
+  onMarkReceived,
   globalFilter,
   page,
   pageSize,
   onFilteredCountChange,
   columnVisibility,
-  
+  onMarkReadyForCollection,
 }: Props) {
   // Default sort: newest first
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -86,7 +89,9 @@ export default function RequestsTable({
       onReject,
       onCreateModel,
       onAssetDetails,
-      onComplete,
+      onMarkShipped,
+      onMarkReceived,
+      onMarkReadyForCollection
     } as RequestsTableMeta,
   });
 

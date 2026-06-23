@@ -26,6 +26,7 @@ export type SnipeAssetDetail = {
   model?: { id: number; name: string } | null;
   company?: { id: number; name: string } | null;
   location?: { id: number; name: string } | null;
+  rtd_location?: { id: number; name: string } | null;
   status_label?: { id: number; name: string } | null;
   custom_fields?: Record<string, { value?: string | null }>;
 };

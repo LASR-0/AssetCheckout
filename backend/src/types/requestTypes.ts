@@ -63,18 +63,6 @@ export type NonStandardApproveResponse = {
 
 export type ApproveResponse = StandardApproveResponse | NonStandardApproveResponse;
 
-export type CompleteResponse = {
-  success: true;
-  request: Request;
-  asset: {
-    id: number;
-    tag: string;
-    modelName: string;
-  };
-  userName: string;
-  message: string;
-};
-
 export type RejectResponse = {
   success: true;
   type: "STANDARD" | "NON_STANDARD";
@@ -113,5 +101,11 @@ export type MarkReceivedResponse = {
   request: Request;
   /** Whether the frontend should prompt the feedback nudge (feedback_enabled). */
   promptFeedback: boolean;
+  message: string;
+};
+
+export type MarkReadyResponse = {
+  success: true;
+  request: Request;
   message: string;
 };

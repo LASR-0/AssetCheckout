@@ -1,6 +1,7 @@
 import { prisma } from "../../db/prisma.js";
 import { resolveUserEmail } from "../../services/snipeit.js";
 import { sendEmail } from "../../services/email.js";
+import { getSetting } from "../../services/settings.js";
 
 const APP_BASE_URL = (process.env.APP_BASE_URL ?? "").replace(/\/$/, "");
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
@@ -11,6 +12,7 @@ const KINDS = [
   "ADMIN_APPROVAL_NEEDED",
   "DEVICE_ASSIGNED",
   "DEVICE_SHIPPED",
+  "DEVICE_READY_FOR_COLLECTION",
   "REQUEST_REJECTED",
 ] as const;
 type NotificationKind = (typeof KINDS)[number];
@@ -92,12 +94,30 @@ export async function sendRequestNotificationHandler(
         `You'll be notified when it's ready to collect or has been shipped.`;
       break;
 
-    case "DEVICE_SHIPPED":
+    case "DEVICE_SHIPPED": {
       to = await resolveUserEmail(request.userId);
+      const estimateRaw = await getSetting("shipping_estimate_days");
+      const estimateDays = Number(estimateRaw) > 0 ? Number(estimateRaw) : 5;
+
+      const trackingLine = request.trackingCode
+        ? `\n\nTracking number: ${request.trackingCode}`
+        : "";
+
       subject = `Your ${request.categoryName} has shipped`;
       text =
         `Your ${request.categoryName} is on its way.\n\n` +
-        `Once it arrives, please mark it as received in AssetCheckout: ${reviewLink}`;
+        `You can expect it to arrive within approximately ${estimateDays} days.` +
+        trackingLine +
+        `\n\nOnce it arrives, please mark it as received in AssetCheckout.`;
+      break;
+    }
+
+    case "DEVICE_READY_FOR_COLLECTION":
+      to = await resolveUserEmail(request.userId);
+      subject = `Your ${request.categoryName} is ready for collection`;
+      text =
+        `Your ${request.categoryName} has been prepared and is ready to collect.\n\n` +
+        `Please collect it from IT, then mark it as collected in AssetCheckout.`;
       break;
 
     case "REQUEST_REJECTED":

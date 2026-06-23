@@ -5,9 +5,9 @@ import {
   useExistingModelForRequest,
   createNewModelForRequest,
   fillAssetDetailsForRequest,
-  completeRequest,
   markRequestShipped,
-  markRequestReceived
+  markReadyForCollection,
+  markRequestReceived 
 } from "../services/request.js";
 import { searchModelsByManufacturer } from "../services/snipeit.js";
 import { prisma } from "../db/prisma.js";
@@ -230,32 +230,6 @@ router.post("/:requestId/create-model", async (req, res, next) => {
   }
 });
 
-router.post("/:requestId/complete", async (req, res, next) => {
-  try {
-    const requestId = Number(req.params.requestId);
-    const actorName = readActorName(req);
- 
-    if (!actorName) {
-      return res.status(401).json({
-        success: false,
-        message: "Missing actor identity",
-      });
-    }
- 
-    if (Number.isNaN(requestId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid requestId",
-      });
-    }
- 
-    const result = await completeRequest(requestId, actorName);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
-
 ///  +-----------------------------------------------------------------+
 ///  |                     ASSET DETAILS ROUTE                         |
 ///  +-----------------------------------------------------------------+
@@ -368,13 +342,42 @@ router.post("/:requestId/ship", async (req, res, next) => {
     if (Number.isNaN(requestId)) {
       return res.status(400).json({ success: false, message: "Invalid requestId" });
     }
-
-    const isAdmin = isAdminEmail(getActorEmail(req));
-    if (!isAdmin) {
+    if (!isAdminEmail(getActorEmail(req))) {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }
 
-    const result = await markRequestShipped(requestId);
+    const rawTracking = req.body?.trackingCode;
+    const trackingCode =
+      typeof rawTracking === "string" && rawTracking.trim().length > 0
+        ? rawTracking.trim()
+        : undefined;
+
+    const result = await markRequestShipped(requestId, trackingCode);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Admin marks a collect-path request as ready for pickup. Admin-only.
+ */
+router.post("/:requestId/ready-for-collection", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const result = await markReadyForCollection(requestId);
     res.json(result);
   } catch (err) {
     next(err);

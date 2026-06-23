@@ -31,6 +31,7 @@ router.post("/hrt/request", requireApiToken, async (req, res, next) => {
       requestType: body.requestType,
       reason: body.reason,
       manager: body.manager,
+      managerId: body.managerId,
       callText: body.callText,
       newNumber: body.newNumber,
     });

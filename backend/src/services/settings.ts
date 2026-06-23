@@ -129,6 +129,9 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     description:
       "Max orphaned models the cleanup job will delete in a single run, bounding the blast radius if detection misfires.",
   },
+  { key: "shipping_estimate_days", 
+    defaultValue: "5", 
+    description: "Estimated delivery days shown in the 'your device has shipped' email" },
 ];
 
 /**

@@ -2,15 +2,15 @@ import {
   ResponsiveDialog,
   ResponsiveDialogContent,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
-import DeploymentSuccess from "@/components/dialogs/DeploymentSuccess";
+import PrepSuccess from "@/components/dialogs/PrepSuccess";
 import DeploymentError from "@/components/dialogs/DeploymentError";
 
 type Result =
   | {
       type: "success";
-      assetTag: string;
-      modelName: string;
+      stage: "SHIPPED" | "READY_FOR_COLLECTION";
       userName: string;
+      categoryName: string;
     }
   | { type: "error"; message: string };
 
@@ -34,10 +34,10 @@ export default function StandardApprovalResultDialog({
 
     if (result.type === "success") {
       return (
-        <DeploymentSuccess
-          assetTag={result.assetTag}
-          modelName={result.modelName}
+        <PrepSuccess
+          stage={result.stage}
           userName={result.userName}
+          categoryName={result.categoryName}
           onDismiss={close}
         />
       );
@@ -46,7 +46,7 @@ export default function StandardApprovalResultDialog({
     return (
       <DeploymentError
         message={result.message}
-        contextHint="The request remains pending — try approving again, or check Snipe-IT for any underlying issue."
+        contextHint="The request remains unchanged — try the action again, or check Snipe-IT for any underlying issue."
         onDismiss={close}
       />
     );

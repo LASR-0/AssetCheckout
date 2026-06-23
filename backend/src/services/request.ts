@@ -13,6 +13,7 @@ import {
   updateSnipeAsset,
   getSnipeAssetDetail,
   getLocationComparison,
+  getSnipeUser,
   type AssetDetailsInput,
 } from "../services/snipeit.js";
 import {
@@ -27,7 +28,6 @@ import type {
   CreateNewModelInput,
   CreateRequestInput,
   CreateResponse,
-  CompleteResponse,
   ModelCreationResponse,
   ApproveResponse,
   StandardManagerApproveResponse,
@@ -38,6 +38,7 @@ import type {
   Actor,
   MarkReceivedResponse,
   MarkShippedResponse,
+  MarkReadyResponse
 } from "../types/requestTypes.js"
 
 const SKELETON_STATUS_NAME = "Pending";
@@ -57,6 +58,7 @@ type NotificationKind =
   | "MANAGER_APPROVAL_NEEDED"
   | "ADMIN_APPROVAL_NEEDED"
   | "DEVICE_ASSIGNED"
+  | "DEVICE_READY_FOR_COLLECTION"
   | "DEVICE_SHIPPED"
   | "REQUEST_REJECTED";
 
@@ -270,12 +272,13 @@ async function handleAdminStandardApproval(
     );
   }
 
+  const { needsShipping, locationMissing } = await getLocationComparison(
+    request.userId,
+    result.asset.id
+  ); 
+
   await checkoutAsset(result.asset.id, request.userId);
 
-    const { needsShipping, locationMissing } = await getLocationComparison(
-      request.userId,
-      result.asset.id
-    );
 
     const updated = await prisma.request.update({
       where: { id: request.id },
@@ -394,6 +397,40 @@ async function handleAdminNonStandardApproval(
     modelRequest: updatedModelRequest,
     message: "Admin approval recorded — ready for model creation",
   };
+}
+
+/**
+ * Fulfils a non-standard request whose asset has become ready: checks the
+ * asset out to the user, computes ship-vs-collect from locations (device
+ * location read BEFORE checkout, since checkout overwrites it), marks the
+ * request COMPLETED, and notifies the user it's assigned.
+ *
+ * This is the non-standard equivalent of the standard flow's auto-checkout at
+ * admin approval. It's triggered by the asset-details submit that completes
+ * the asset — there is no separate "Complete" step.
+ */
+async function fulfilReadyAsset(
+  request: Request & { modelRequest: ModelRequest }
+): Promise<void> {
+  const linkedAssetId = request.modelRequest.linkedAssetId!;
+
+  const assetDetail = await getSnipeAssetDetail(linkedAssetId);
+  const deviceLocId =
+    assetDetail?.rtd_location?.id ?? assetDetail?.location?.id ?? null;
+
+  await checkoutAsset(linkedAssetId, request.userId);
+
+  const user = await getSnipeUser(request.userId);
+  const userLocId = user?.location?.id ?? null;
+  const locationMissing = deviceLocId === null || userLocId === null;
+  const needsShipping = !locationMissing && deviceLocId !== userLocId;
+
+  await prisma.request.update({
+    where: { id: request.id },
+    data: { status: "COMPLETED", needsShipping, locationMissing },
+  });
+
+  notify(request.id, "DEVICE_ASSIGNED");
 }
 
 ///  +-----------------------------------------------------------------+
@@ -652,13 +689,20 @@ export async function fillAssetDetailsForRequest(
     data: dbUpdate,
   });
 
+  // The completing submit — asset is now ready and the request hasn't already
+  // been fulfilled — checks out + computes shipping + marks COMPLETED. Partial
+  // submits (assetReady still false) just save and stay at this step.
+  if (assetReady && request.status !== "COMPLETED") {
+    await fulfilReadyAsset({ ...request, modelRequest: updatedModelRequest });
+  }
+
   return {
     success: true,
     request,
     modelRequest: updatedModelRequest,
     message: assetReady
-      ? "Asset details saved. Asset is ready to check out."
-      : "Partial save successful. Some required fields are still missing — the asset isn't ready for checkout yet.",
+      ? "Asset details saved and device assigned."
+      : "Partial save successful. Some required fields are still missing — the asset isn't ready yet.",
   };
 }
 
@@ -666,104 +710,7 @@ export async function fillAssetDetailsForRequest(
 ///  |                         COMPLETE                                |
 ///  +-----------------------------------------------------------------+
 
-/**
- * Guard that loads a request fully
- * ready to be checked out. Strictest of the guards: model exists, asset
- * exists, AND assetReady is true.
- */
-async function loadRequestReadyForCompletion(
-  requestId: number
-): Promise<Request & { modelRequest: ModelRequest }> {
 
-  const request = await prisma.request.findUnique({
-    where: { id: requestId },
-    include: { modelRequest: true },
-  });
-
-  if (!request) {
-    throw new AppError("Request not found", 404);
-  }
-
-  if (request.status !== "APPROVED") {
-    throw new AppError("Request is not in APPROVED state — cannot complete", 400);
-  }
-
-  if (!request.modelRequest) {
-    throw new AppError("Request has no ModelRequest — cannot complete", 500);
-  }
-
-  if (request.modelRequest.status !== "COMPLETED") {
-    throw new AppError(
-      "ModelRequest is not in COMPLETED state — model creation must happen first",
-      400
-    );
-  }
-
-  if (request.modelRequest.linkedAssetId === null) {
-    throw new AppError("ModelRequest has no linked asset — cannot complete", 400);
-  }
-
-  if (!request.modelRequest.assetReady) {
-    throw new AppError(
-      "Asset is not ready for checkout — please fill in remaining details first",
-      400
-    );
-  }
-
-  return request as Request & { modelRequest: ModelRequest };
-}
-
-/**
- * Fetches the asset detail from Snipe-IT (so we have a fresh asset_tag and
- * model name for the response payload), checks it out to the request's user,
- * and marks the request COMPLETED.
- */
-export async function completeRequest(
-  requestId: number,
-  _actorName: string
-): Promise<CompleteResponse> {
-
-  const request = await loadRequestReadyForCompletion(requestId);
-  const linkedAssetId = request.modelRequest.linkedAssetId!;
-
-  const assetDetail = await getSnipeAssetDetail(linkedAssetId);
-  if (!assetDetail) {
-    throw new AppError(
-      `Linked asset ${linkedAssetId} could not be loaded from Snipe — cannot complete`,
-      500
-    );
-  }
-
-  await checkoutAsset(linkedAssetId, request.userId);
-
-  const { needsShipping, locationMissing } = await getLocationComparison(
-    request.userId,
-    linkedAssetId
-  );
-
-  const updated = await prisma.request.update({
-    where: { id: request.id },
-    data: {
-      status: "COMPLETED",
-      needsShipping,
-      locationMissing,
-    },
-  });
-
-  notify(updated.id, "DEVICE_ASSIGNED");
-
-  return {
-    success: true,
-    request: updated,
-    asset: {
-      id: assetDetail.id,
-      tag: assetDetail.asset_tag,
-      modelName: assetDetail.model?.name ?? "Unknown model",
-    },
-    userName: request.userName,
-    message: "Asset checked out and request completed",
-  };
-}
 
 ///  +-----------------------------------------------------------------+
 ///  |                    SHIPPING / RECEIPT                           |
@@ -777,14 +724,13 @@ export async function completeRequest(
  * Admin-only — enforced by the route (see approval-route guard pattern).
  */
 export async function markRequestShipped(
-  requestId: number
+  requestId: number,
+  trackingCode?: string
 ): Promise<MarkShippedResponse> {
 
   const request = await prisma.request.findUnique({ where: { id: requestId } });
 
-  if (!request) {
-    throw new AppError("Request not found", 404);
-  }
+  if (!request) throw new AppError("Request not found", 404);
   if (request.status !== "COMPLETED") {
     throw new AppError("Only a completed request can be marked shipped", 400);
   }
@@ -795,9 +741,14 @@ export async function markRequestShipped(
     throw new AppError("Request is already marked shipped", 400);
   }
 
+  const trimmed = trackingCode?.trim();
+
   const updated = await prisma.request.update({
     where: { id: requestId },
-    data: { shippedAt: new Date() },
+    data: {
+      shippedAt: new Date(),
+      ...(trimmed ? { trackingCode: trimmed } : {}),
+    },
   });
 
   notify(updated.id, "DEVICE_SHIPPED");
@@ -806,6 +757,45 @@ export async function markRequestShipped(
     success: true,
     request: updated,
     message: "Request marked as shipped",
+  };
+}
+
+/**
+ * Admin marks a collect-path request as ready for pickup. The collect-path
+ * twin of markRequestShipped. Valid only on a COMPLETED request that does NOT
+ * need shipping and hasn't already been marked ready. Stamps collectionReadyAt
+ * and notifies the requester their device is ready to collect.
+ *
+ * Admin-only — enforced by the route.
+ */
+export async function markReadyForCollection(
+  requestId: number
+): Promise<MarkReadyResponse> {
+
+  const request = await prisma.request.findUnique({ where: { id: requestId } });
+
+  if (!request) throw new AppError("Request not found", 404);
+  if (request.status !== "COMPLETED") {
+    throw new AppError("Only a completed request can be marked ready for collection", 400);
+  }
+  if (request.needsShipping) {
+    throw new AppError("This request is for shipping, not collection", 400);
+  }
+  if (request.collectionReadyAt !== null) {
+    throw new AppError("Request is already marked ready for collection", 400);
+  }
+
+  const updated = await prisma.request.update({
+    where: { id: requestId },
+    data: { collectionReadyAt: new Date() },
+  });
+
+  notify(updated.id, "DEVICE_READY_FOR_COLLECTION");
+
+  return {
+    success: true,
+    request: updated,
+    message: "Request marked as ready for collection",
   };
 }
 

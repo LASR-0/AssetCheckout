@@ -28,13 +28,15 @@ model Request {
   callText       Boolean @default(false)
   newNumber      Boolean @default(false)
 
-  shippedAt        DateTime?
-  receivedAt       DateTime?
-  needsShipping    Boolean   @default(false)
-  locationMissing  Boolean   @default(false)
+  collectionReadyAt  DateTime?
+  shippedAt          DateTime?
+  receivedAt         DateTime?
+  needsShipping      Boolean   @default(false)
+  locationMissing    Boolean   @default(false)
+  trackingCode       String?
 
-  approvedBy     String?
-  approvedAt     DateTime?
+  approvedBy        String?
+  approvedAt        DateTime?
   adminApprovedBy   String?
   adminApprovedAt   DateTime?
   rejectedBy        String?

@@ -11,7 +11,6 @@ import { getColumnVisibility } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
-import CompleteResultDialog from "@/components/dialogs/CompleteResultDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
 
 export default function RequestTablePage() {
@@ -31,14 +30,13 @@ export default function RequestTablePage() {
 
   const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
 
-  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const { role, name: currentUserName } = useAuth();
   const columnVisibility = getColumnVisibility(role);
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
   const [standardResultOpen, setStandardResultOpen] = useState(false);
   const [standardResult, setStandardResult] = useState<
-    | { type: "success"; assetTag: string; modelName: string; userName: string }
+    | { type: "success"; stage: "SHIPPED" | "READY_FOR_COLLECTION"; userName: string; categoryName: string }
     | { type: "error"; message: string }
     | null
   >(null);
@@ -110,41 +108,18 @@ export default function RequestTablePage() {
   // -----------------------------
   async function handleApprove(request: Request) {
     try {
-      const data = await apiFetch<{
+      await apiFetch<{
         type: "STANDARD" | "NON_STANDARD";
         stage?: "MANAGER" | "ADMIN";
-        asset?: { id: number; tag: string };
-        model?: string;
-        request?: { userName?: string };
         message: string;
       }>(`/api/approval/${request.id}/approve`, {
         method: "POST",
       });
 
-      if (data.type === "STANDARD") {
-        if (data.stage === "ADMIN") {
-          loadRequests();
-          setStandardResult({
-            type: "success",
-            assetTag: data.asset?.tag ?? "—",
-            modelName: data.model ?? "Unknown model",
-            userName: data.request?.userName ?? request.userName,
-          });
-          setStandardResultOpen(true);
-        } else {
-          // MANAGER stage — no fulfilment yet, no result modal.
-          await loadRequests();
-        }
-      } else {
-        await loadRequests();
-      }
+      await loadRequests();
     } catch (err: any) {
-      // apiFetch throws on non-2xx, carrying the server's error/message text.
       if (request.requestType === "STANDARD") {
-        setStandardResult({
-          type: "error",
-          message: err.message || "Approval failed.",
-        });
+        setStandardResult({ type: "error", message: err.message || "Approval failed." });
         setStandardResultOpen(true);
       } else {
         console.error("Approval failed:", err);
@@ -164,6 +139,65 @@ export default function RequestTablePage() {
       await loadRequests();
     } catch (err) {
       console.error("Reject failed", err);
+    }
+  }
+
+  async function handleMarkShipped(request: Request) {
+    try {
+      await apiFetch(`/api/approval/${request.id}/ship`, {
+        method: "POST",
+      });
+      await loadRequests();
+      setStandardResult({
+        type: "success",
+        stage: "SHIPPED",
+        userName: request.userName,
+        categoryName: request.categoryName,
+      });
+      setStandardResultOpen(true);
+    } catch (err: any) {
+      console.error("Mark shipped failed:", err);
+      alert(err.message || "Failed to mark request as shipped.");
+    }
+  }
+
+  async function handleMarkReceived(request: Request) {
+    try {
+      const data = await apiFetch<{
+        promptFeedback: boolean;
+        message: string;
+      }>(`/api/approval/${request.id}/receive`, {
+        method: "POST",
+      });
+
+      await loadRequests();
+
+      if (data.promptFeedback) {
+        // TODO (step 5): open the anonymous feedback nudge dialog here.
+        // Placeholder until the feedback feature lands.
+      }
+    } catch (err: any) {
+      console.error("Mark received failed:", err);
+      alert(err.message || "Failed to mark request as received.");
+    }
+  }
+
+  async function handleMarkReadyForCollection(request: Request) {
+    try {
+      await apiFetch(`/api/approval/${request.id}/ready-for-collection`, {
+        method: "POST",
+      });
+      await loadRequests();
+      setStandardResult({
+        type: "success",
+        stage: "READY_FOR_COLLECTION",
+        userName: request.userName,
+        categoryName: request.categoryName,
+      });
+      setStandardResultOpen(true);
+    } catch (err: any) {
+      console.error("Mark ready for collection failed:", err);
+      alert(err.message || "Failed to mark request as ready for collection.");
     }
   }
 
@@ -187,11 +221,6 @@ export default function RequestTablePage() {
   function handleAssetDetails(request: Request) {
     setSelectedRequest(request);
     setAssetDetailsDialogOpen(true);
-  }
-
-  function handleComplete(request: Request) {
-    setSelectedRequest(request);
-    setCompleteDialogOpen(true);
   }
 
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
@@ -235,12 +264,14 @@ export default function RequestTablePage() {
             onReject={handleRejectClick}
             onCreateModel={handleCreateModel}
             onAssetDetails={handleAssetDetails}
-            onComplete={handleComplete}
+            onMarkShipped={handleMarkShipped}
+            onMarkReceived={handleMarkReceived}
             globalFilter={search}
             page={page}
             pageSize={pageSize}
             onFilteredCountChange={setFilteredCount}
             columnVisibility={columnVisibility}
+            onMarkReadyForCollection={handleMarkReadyForCollection}
           />
           {/* DIALOGS */}
           <RejectionReasonDialog
@@ -264,14 +295,6 @@ export default function RequestTablePage() {
             onSuccess={loadRequests}
             currentUserName={currentUserName}
             averages={averages}
-          />
-
-          <CompleteResultDialog
-            request={selectedRequest}
-            open={completeDialogOpen}
-            onOpenChange={setCompleteDialogOpen}
-            onSuccess={loadRequests}
-            currentUserName={currentUserName}
           />
 
           <StandardApprovalResultDialog

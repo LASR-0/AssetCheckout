@@ -19,6 +19,13 @@ export interface Request {
   callText?: boolean;
   newNumber?: boolean;
 
+  collectionReadyAt?: string | null;
+  trackingCode?: string | null
+  shippedAt?: string | null;
+  receivedAt?: string | null;
+  needsShipping?: boolean;
+  locationMissing?: boolean;
+
   createdAt: string;
 
   adminApprovedBy?: string | null;

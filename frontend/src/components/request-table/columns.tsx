@@ -20,7 +20,9 @@ export type RequestsTableMeta = {
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
   onAssetDetails: (request: Request) => void;
-  onComplete: (request: Request) => void;
+  onMarkShipped: (request: Request) => void;
+  onMarkReceived: (request: Request) => void;
+  onMarkReadyForCollection: (request: Request) => void;
 };
 
 // --- Sort indicator ---
@@ -122,7 +124,13 @@ function StatusBadge({ status }: { status: string }) {
     APPROVED: "Approved",
     REJECTED: "Rejected",
     COMPLETED: "Completed",
-    AWAITING_IT: "Awaiting IT"
+    AWAITING_IT: "Awaiting IT",
+    READY_TO_COLLECT: "Ready to collect",
+    READY_TO_SHIP: "Ready to ship",
+    SHIPPED: "Shipped",
+    COLLECTED: "Collected",
+    RECEIVED: "Received",
+    ASSIGNED: "Assigned"
   };
 
   const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
@@ -131,6 +139,12 @@ function StatusBadge({ status }: { status: string }) {
     REJECTED: { bg: "bg-red-500/10", text: "text-red-600", icon: "cancel" },
     PENDING: { bg: "bg-yellow-500/10", text: "text-yellow-600", icon: "schedule" },
     AWAITING_IT: { bg: "bg-purple-500/10", text: "text-purple-400", icon: "shield_person" },
+    READY_TO_COLLECT: { bg: "bg-teal-500/10", text: "text-teal-400", icon: "package_2" },
+    READY_TO_SHIP: { bg: "bg-amber-500/10", text: "text-amber-400", icon: "local_shipping" },
+    SHIPPED: { bg: "bg-sky-500/10", text: "text-sky-400", icon: "local_shipping" },
+    COLLECTED: { bg: "bg-green-500/10", text: "text-green-500", icon: "check_circle" },
+    RECEIVED: { bg: "bg-green-500/10", text: "text-green-500", icon: "check_circle" },
+    ASSIGNED: { bg: "bg-indigo-500/10", text: "text-indigo-400", icon: "assignment_ind" },
   };
 
   const style = styleMap[status] ?? styleMap.PENDING;
@@ -146,13 +160,10 @@ function StatusBadge({ status }: { status: string }) {
 
 // --- Actions / Status cell ---
 function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> }) {
-  
   const meta = table.options.meta as RequestsTableMeta;
   const request = row.original;
   const role = meta.role;
-  if (request.id === 21) console.log("row 21:", request.status, request.requestType, request.adminApprovedAt, "role:", role);
 
-  // Compute the visible state-machine row to know which actions to render
   const requestStatus = request.status;
   const modelRequestStatus = request.modelRequest?.status ?? null;
   const linkedAssetId = request.modelRequest?.linkedAssetId ?? null;
@@ -163,157 +174,178 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   const isAdminApprovedAwaitingModel =
     requestStatus === "APPROVED" && modelRequestStatus === "APPROVED" && !linkedAssetId;
   const isModelCreated =
-    requestStatus === "APPROVED" &&
-    modelRequestStatus === "COMPLETED" &&
-    !!linkedAssetId;
+    requestStatus === "APPROVED" && modelRequestStatus === "COMPLETED" && !!linkedAssetId;
   const isStandardAwaitingIT =
     requestStatus === "APPROVED" &&
     request.requestType === "STANDARD" &&
     !request.adminApprovedAt;
 
-  // Terminal states render the status badge for everyone
-  if (requestStatus === "COMPLETED" || requestStatus === "REJECTED") {
+
+  // ── Post-fulfilment shipping/receipt derivation (COMPLETED requests) ──
+  const needsShipping = request.needsShipping ?? false;
+  const shippedAt = request.shippedAt ?? null;
+  const collectionReadyAt = request.collectionReadyAt ?? null;
+  const receivedAt = request.receivedAt ?? null;
+  const isOwner = request.userName === meta.currentUserName;
+
+  const isCompleted = requestStatus === "COMPLETED";
+
+  // Collect path: assigned (awaiting prep) → ready to collect → collected
+  const isCollectAwaitingPrep =
+    isCompleted && !needsShipping && !collectionReadyAt && !receivedAt;
+  const isReadyToCollect =
+    isCompleted && !needsShipping && !!collectionReadyAt && !receivedAt;
+
+  // Ship path: assigned (awaiting dispatch) → shipped → received
+  const isShipAwaitingPrep =
+    isCompleted && needsShipping && !shippedAt && !receivedAt;
+  const isShipped =
+    isCompleted && needsShipping && !!shippedAt && !receivedAt;
+
+  const isReceivedOrCollected = isCompleted && !!receivedAt;
+
+  // Synthetic badge key for the completed states.
+  const completedBadgeKey =
+    isReceivedOrCollected
+      ? (needsShipping ? "RECEIVED" : "COLLECTED")
+      : isReadyToCollect
+      ? "READY_TO_COLLECT"
+      : isShipped
+      ? "SHIPPED"
+      : (isCollectAwaitingPrep || isShipAwaitingPrep)
+      ? "ASSIGNED"
+      : "COMPLETED";
+
+  if (requestStatus === "REJECTED") {
     return <StatusBadge status={requestStatus} />;
   }
 
   // ──────────────────────────────────────────────────
-  // MANAGER VIEW
+  // COMPLETED — post-fulfilment stage (all roles)
+  // ──────────────────────────────────────────────────
+  if (isCompleted) {
+    // Terminal: received/collected → badge only, everyone.
+    if (isReceivedOrCollected) {
+      return <StatusBadge status={completedBadgeKey} />;
+    }
+
+    // Owner receipt action takes precedence over role — an admin who is also
+    // the requester can still mark their own device collected/received.
+    if (isOwner && (isReadyToCollect || isShipped)) {
+      const collecting = !needsShipping;
+      return (
+        <ActionRow>
+          <ActionButton
+            icon="inventory_2"
+            color="text-green-500"
+            hoverBg="bg-green-600/10"
+            border="hover:border-green-500/50 hover:border-1"
+            title={collecting ? "Mark collected" : "Mark received"}
+            onClick={() => meta.onMarkReceived(request)}
+          />
+        </ActionRow>
+      );
+    }
+
+    // Admin prep actions: ship-path → Mark shipped; collect-path → Mark ready.
+    if (role === "ADMIN") {
+      if (isShipAwaitingPrep) {
+        return (
+          <ActionRow>
+            <ActionButton
+              icon="local_shipping"
+              color="text-amber-400"
+              hoverBg="bg-amber-500/10"
+              border="hover:border-amber-500/50 hover:border-1"
+              title="Mark shipped"
+              onClick={() => meta.onMarkShipped(request)}
+            />
+          </ActionRow>
+        );
+      }
+      if (isCollectAwaitingPrep) {
+        return (
+          <ActionRow>
+            <ActionButton
+              icon="package_2"
+              color="text-teal-400"
+              hoverBg="bg-teal-500/10"
+              border="hover:border-teal-500/50 hover:border-1"
+              title="Mark ready for collection"
+              onClick={() => meta.onMarkReadyForCollection(request)}
+            />
+          </ActionRow>
+        );
+      }
+      return <StatusBadge status={completedBadgeKey} />;
+    }
+
+    // Everyone else (manager, non-owner requester, owner at non-actionable
+    // stage): the stage badge.
+    return <StatusBadge status={completedBadgeKey} />;
+  }
+
+  // ──────────────────────────────────────────────────
+  // MANAGER VIEW (non-completed states)
   // ──────────────────────────────────────────────────
   if (role === "MANAGER") {
     if (isPending) {
       return (
         <ActionRow>
-          <ActionButton
-            icon="check_circle"
-            color="text-green-500"
-            hoverBg="bg-green-600/10"
-            border="hover:border-green-500/50 hover:border-1"
-            title="Approve"
-            onClick={() => meta.onApprove(request)}
-          />
-          <ActionButton
-            icon="cancel"
-            color="text-error"
-            hoverBg="bg-error/10"
-            border="hover:border-error/50 hover:border-1"
-            title="Reject"
-            onClick={() => meta.onReject(request)}
-          />
+          <ActionButton icon="check_circle" color="text-green-500" hoverBg="bg-green-600/10"
+            border="hover:border-green-500/50 hover:border-1" title="Approve"
+            onClick={() => meta.onApprove(request)} />
+          <ActionButton icon="cancel" color="text-error" hoverBg="bg-error/10"
+            border="hover:border-error/50 hover:border-1" title="Reject"
+            onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
     }
-
     if (isStandardAwaitingIT) {
       return <StatusBadge status="AWAITING_IT" />;
     }
-
-    // All other states for manager: status badge
     return <StatusBadge status={requestStatus} />;
   }
 
   // ──────────────────────────────────────────────────
-  // ADMIN VIEW
+  // ADMIN VIEW (non-completed states)
   // ──────────────────────────────────────────────────
   if (role === "ADMIN") {
-    if (isPending || isApprovedAwaitingAdmin ) {
-      // Admin can approve/reject at first PENDING (override) or after manager approval (non-standard)
-      return (
-        <ActionRow>
-          <ActionButton
-            icon="check_circle"
-            color="text-green-500"
-            hoverBg="bg-green-600/10"
-            border="hover:border-green-500/50 hover:border-1"
-            title="Approve"
-            onClick={() => meta.onApprove(request)}
-          />
-          <ActionButton
-            icon="cancel"
-            color="text-error"
-            hoverBg="bg-red-600/10"
-            border="hover:border-red-500/50 hover:border-1"
-            title="Reject"
-            onClick={() => meta.onReject(request)}
-          />
-        </ActionRow>
-      );
-    }
-
     if (isPending || isApprovedAwaitingAdmin || isStandardAwaitingIT) {
       return (
         <ActionRow>
-          <ActionButton
-            icon="check_circle"
-            color="text-green-500"
-            hoverBg="bg-green-600/10"
+          <ActionButton icon="check_circle" color="text-green-500" hoverBg="bg-green-600/10"
             border="hover:border-green-500/50 hover:border-1"
             title={isStandardAwaitingIT ? "Approve & assign asset" : "Approve"}
-            onClick={() => meta.onApprove(request)}
-          />
-          <ActionButton
-            icon="cancel"
-            color="text-error"
-            hoverBg="bg-red-600/10"
-            border="hover:border-red-500/50 hover:border-1"
-            title="Reject"
-            onClick={() => meta.onReject(request)}
-          />
+            onClick={() => meta.onApprove(request)} />
+          <ActionButton icon="cancel" color="text-error" hoverBg="bg-red-600/10"
+            border="hover:border-red-500/50 hover:border-1" title="Reject"
+            onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
     }
-
     if (isAdminApprovedAwaitingModel) {
       return (
         <ActionRow>
-          <ActionButton
-            icon="Add_Circle"
-            color="text-amber-400"
-            hoverBg="bg-amber-500/10"
-            border="hover:border-amber-500/50 hover:border-1"
-            title="Create Model"
-            onClick={() => meta.onCreateModel(request)}
-          />
+          <ActionButton icon="Add_Circle" color="text-amber-400" hoverBg="bg-amber-500/10"
+            border="hover:border-amber-500/50 hover:border-1" title="Create Model"
+            onClick={() => meta.onCreateModel(request)} />
         </ActionRow>
       );
     }
-
     if (isModelCreated) {
-      const assetReady = (request.modelRequest as any)?.assetReady ?? false;
-
-      if (assetReady) {
-        return (
-          <ActionRow>
-            <ActionButton
-              icon="add_DIAMOND"
-              color="text-green-500"
-              hoverBg="bg-green-600/10"
-              border="hover:border-green-500/50 hover:border-1"
-              title="Complete"
-              onClick={() => meta.onComplete(request)}
-            />
-          </ActionRow>
-        );
-      }
-
       return (
         <ActionRow>
-          <ActionButton
-            icon="info"
-            color="text-blue-400"
-            hoverBg="bg-blue-600/10"
-            border="hover:border-blue-500/50 hover:border-1"
-            title="Asset Details"
-            onClick={() => meta.onAssetDetails(request)}
-          />
+          <ActionButton icon="info" color="text-blue-400" hoverBg="bg-blue-600/10"
+            border="hover:border-blue-500/50 hover:border-1" title="Asset Details"
+            onClick={() => meta.onAssetDetails(request)} />
         </ActionRow>
       );
     }
-
-    // Fallback (shouldn't hit in practice)
     return <StatusBadge status={requestStatus} />;
   }
 
-  // REQUESTER role and others fall back to status badge (or render nothing — column is hidden anyway)
+  // REQUESTER and others on non-completed states: badge only.
   return <StatusBadge status={requestStatus} />;
 }
 
