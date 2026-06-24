@@ -18,7 +18,8 @@ import type {
   AssetDetailsInput,
   SnipeAssetDetail,
   CreateSkeletonAssetInput,
-  SnipeUserDetail
+  SnipeUserDetail,
+  ModelSearchResult
 } from '../types/snipeTypes.js';
 
 const BASE_URL = process.env.SNIPEIT_API_URL;
@@ -391,7 +392,7 @@ export async function searchModelsByManufacturer({
   manufacturer,
   modelName,
   categoryId,
-}: SearchModelsInput): Promise<Model[]> {
+}: SearchModelsInput): Promise<ModelSearchResult[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/models?limit=500`;
 
   const res = await fetchWithTimeout(url, {
@@ -429,13 +430,11 @@ export async function searchModelsByManufacturer({
   const availabilityChecks = await Promise.all(
     candidates.map(async (model) => {
       const asset = await getAvailableAssetFromModel(model.id, { mode: "any" });
-      return { model, hasAvailable: asset !== null };
+      return { ...model, hasAvailable: asset !== null };
     })
   );
 
-  return availabilityChecks
-    .filter((entry) => entry.hasAvailable)
-    .map((entry) => entry.model);
+  return availabilityChecks.sort((a, b) => Number(b.hasAvailable) - Number(a.hasAvailable));
 }
 
 ///  +-----------------------------------------------------------------+

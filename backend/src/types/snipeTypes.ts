@@ -97,3 +97,5 @@ export type SnipeUserDetail = {
   email: string | null;
   location: { id: number; name: string } | null;
 };
+
+export type ModelSearchResult = Model & { hasAvailable: boolean };

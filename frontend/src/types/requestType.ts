@@ -20,7 +20,8 @@ export interface Request {
   newNumber?: boolean;
 
   collectionReadyAt?: string | null;
-  trackingCode?: string | null
+  trackingCode?: string | null;
+  trackingUrl?: string | null;
   shippedAt?: string | null;
   receivedAt?: string | null;
   needsShipping?: boolean;

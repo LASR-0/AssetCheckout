@@ -498,22 +498,51 @@ export async function useExistingModelForRequest(
 
   const asset = await getAvailableAssetFromModel(snipeModelId, { mode: "any" });
 
-  if (!asset) {
-    throw new AppError(
-      "The chosen model no longer has an available asset. Please search again.",
-      409
-    );
+  if (asset) {
+    // Available stock → link the existing asset (original behaviour).
+    const assetReady = await isSnipeAssetComplete(asset.id);
+    const updatedModelRequest = await prisma.modelRequest.update({
+      where: { id: request.modelRequest.id },
+      data: {
+        snipeModelId,
+        linkedAssetId: asset.id,
+        status: "COMPLETED",
+        assetReady,
+      },
+    });
+    return {
+      success: true,
+      request,
+      modelRequest: updatedModelRequest,
+      message: assetReady
+        ? "Existing model assigned and asset is ready."
+        : "Existing model assigned — asset details still need filling in.",
+    };
   }
 
-  const assetReady = await isSnipeAssetComplete(asset.id);
+  // No available stock → create a skeleton under the EXISTING model, so we
+  // don't duplicate a model that already exists in Snipe. The admin chose a
+  // no-stock model deliberately (the UI flagged it); this is that path.
+  let statusId: number | null = await getSkeletonStatusId();
+  if (statusId === null) {
+    statusId = await getStatusIdByName(SKELETON_STATUS_NAME);
+    if (statusId === null) {
+      throw new AppError(
+        `Cannot create skeleton asset — no skeleton status configured, and fallback "${SKELETON_STATUS_NAME}" not found in Snipe-IT.`,
+        500
+      );
+    }
+  }
+
+  const newAssetId = await createSkeletonAsset({ modelId: snipeModelId, statusId });
 
   const updatedModelRequest = await prisma.modelRequest.update({
     where: { id: request.modelRequest.id },
     data: {
       snipeModelId,
-      linkedAssetId: asset.id,
+      linkedAssetId: newAssetId,
       status: "COMPLETED",
-      assetReady,
+      assetReady: false,  // skeleton is empty — must go through asset-details
     },
   });
 
@@ -521,9 +550,7 @@ export async function useExistingModelForRequest(
     success: true,
     request,
     modelRequest: updatedModelRequest,
-    message: assetReady
-      ? "Existing model assigned and asset is ready to check out"
-      : "Existing model assigned, but asset details still need to be filled in",
+    message: "Existing model selected — a skeleton asset was created. Fill in asset details when stock arrives.",
   };
 }
 
@@ -725,7 +752,8 @@ export async function fillAssetDetailsForRequest(
  */
 export async function markRequestShipped(
   requestId: number,
-  trackingCode?: string
+  trackingCode?: string,
+  trackingUrl?: string
 ): Promise<MarkShippedResponse> {
 
   const request = await prisma.request.findUnique({ where: { id: requestId } });
@@ -741,13 +769,15 @@ export async function markRequestShipped(
     throw new AppError("Request is already marked shipped", 400);
   }
 
-  const trimmed = trackingCode?.trim();
+  const code = trackingCode?.trim();
+  const url = trackingUrl?.trim();
 
   const updated = await prisma.request.update({
     where: { id: requestId },
     data: {
       shippedAt: new Date(),
-      ...(trimmed ? { trackingCode: trimmed } : {}),
+      ...(code ? { trackingCode: code } : {}),
+      ...(url ? { trackingUrl: url } : {}),
     },
   });
 

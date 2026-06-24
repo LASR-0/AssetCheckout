@@ -94,20 +94,23 @@ export async function sendRequestNotificationHandler(
         `You'll be notified when it's ready to collect or has been shipped.`;
       break;
 
-    case "DEVICE_SHIPPED": {
+case "DEVICE_SHIPPED": {
       to = await resolveUserEmail(request.userId);
       const estimateRaw = await getSetting("shipping_estimate_days");
       const estimateDays = Number(estimateRaw) > 0 ? Number(estimateRaw) : 5;
 
-      const trackingLine = request.trackingCode
-        ? `\n\nTracking number: ${request.trackingCode}`
-        : "";
+      let trackingBlock = "";
+      if (request.trackingCode || request.trackingUrl) {
+        trackingBlock = "\n\nTracking details:";
+        if (request.trackingCode) trackingBlock += `\nTracking number: ${request.trackingCode}`;
+        if (request.trackingUrl) trackingBlock += `\nTrack your delivery: ${request.trackingUrl}`;
+      }
 
       subject = `Your ${request.categoryName} has shipped`;
       text =
         `Your ${request.categoryName} is on its way.\n\n` +
         `You can expect it to arrive within approximately ${estimateDays} days.` +
-        trackingLine +
+        trackingBlock +
         `\n\nOnce it arrives, please mark it as received in AssetCheckout.`;
       break;
     }

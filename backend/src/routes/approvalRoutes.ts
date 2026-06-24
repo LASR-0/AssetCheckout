@@ -346,13 +346,12 @@ router.post("/:requestId/ship", async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }
 
-    const rawTracking = req.body?.trackingCode;
-    const trackingCode =
-      typeof rawTracking === "string" && rawTracking.trim().length > 0
-        ? rawTracking.trim()
-        : undefined;
-
-    const result = await markRequestShipped(requestId, trackingCode);
+    const rawCode = req.body?.trackingCode;
+    const rawUrl = req.body?.trackingUrl;
+    const trackingCode = typeof rawCode === "string" && rawCode.trim() ? rawCode.trim() : undefined;
+    const trackingUrl = typeof rawUrl === "string" && rawUrl.trim() ? rawUrl.trim() : undefined;
+    
+    const result = await markRequestShipped(requestId, trackingCode, trackingUrl);
     res.json(result);
   } catch (err) {
     next(err);

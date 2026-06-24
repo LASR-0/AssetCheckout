@@ -13,6 +13,7 @@ type SnipeMatch = {
   name: string;
   manufacturer?: { id: number; name: string };
   model_number?: string;
+  hasAvailable?: boolean;
 };
 
 type ErrorReturnPhase = "form" | "matches";
@@ -173,11 +174,12 @@ export default function CreateModelDialog({
         throw new Error(err.message || err.error || "Failed to link model");
       }
 
+      const data = await res.json().catch(() => ({}));
+
       setDialogState({
         phase: "success",
         kind: "use-existing",
-        message:
-          "Existing model assigned. The asset is ready to be checked out.",
+        message: data?.message ?? "Existing model assigned. The asset is ready to be checked out.",
       });
     } catch (err: any) {
       setDialogState({
@@ -381,35 +383,45 @@ export default function CreateModelDialog({
     );
   }
 
-  function renderMatchesTable(candidates: SnipeMatch[]) {
+function renderMatchesTable(candidates: SnipeMatch[]) {
     return (
       <div className="border border-modal-border/20 rounded-lg overflow-hidden">
         <div className="bg-modal-surface-elevated px-4 py-2 text-xs font-bold uppercase tracking-widest text-modal-text-secondary border-b border-modal-border/20">
           {candidates.length} match{candidates.length === 1 ? "" : "es"}
         </div>
         <div className="divide-y divide-modal-border/10">
-          {candidates.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center justify-between px-4 py-3 hover:bg-modal-surface-elevated/50 transition-colors"
-            >
-              <div className="flex-1">
-                <div className="text-sm font-medium text-modal-text-primary">
-                  {c.name}
-                </div>
-                <div className="text-xs text-modal-text-secondary mt-0.5">
-                  {c.manufacturer?.name ?? "—"}
-                  {c.model_number ? ` · ${c.model_number}` : ""}
-                </div>
-              </div>
-              <button
-                onClick={() => runUseExisting(c.id)}
-                className="px-4 py-2 rounded-md text-xs font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all"
+          {candidates.map((c) => {
+            const noStock = c.hasAvailable === false;
+            return (
+              <div
+                key={c.id}
+                className="flex items-center justify-between px-4 py-3 hover:bg-modal-surface-elevated/50 transition-colors"
               >
-                Select
-              </button>
-            </div>
-          ))}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-modal-text-primary">{c.name}</span>
+                    {noStock && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 border border-amber-500/30">
+                        <span className="material-symbols-outlined !text-[12px]">inventory_2</span>
+                        No stock
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-modal-text-secondary w-[80%] mt-0.5">
+                    {c.manufacturer?.name ?? "—"}
+                    {c.model_number ? ` · ${c.model_number}` : ""}
+                    {noStock && " · selecting creates an empty skeleton to fill once stock arrives"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => runUseExisting(c.id)}
+                  className="px-4 py-2 rounded-md text-xs font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all"
+                >
+                  Select
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     );

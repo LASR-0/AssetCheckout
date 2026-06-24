@@ -34,6 +34,7 @@ model Request {
   needsShipping      Boolean   @default(false)
   locationMissing    Boolean   @default(false)
   trackingCode       String?
+  trackingUrl        String?
 
   approvedBy        String?
   approvedAt        DateTime?

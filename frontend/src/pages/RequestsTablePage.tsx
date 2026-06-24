@@ -4,6 +4,7 @@ import RequestsPagination from "@/components/request-table/RequestPagination";
 import RequestsTable from "@/components/request-table/RequestsTable";
 import CreateModelDialog from "@/components/dialogs/CreateModelDialog";
 import RejectionReasonDialog from "@/components/dialogs/RejectRequestDialog";
+import ShipDialog from "@/components/dialogs/ShipDialog";
 import { getRequests } from "@/api/requests";
 import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
@@ -22,6 +23,7 @@ export default function RequestTablePage() {
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [shipDialogOpen, setShipDialogOpen] = useState(false);
   const [tiers, setTiers] = useState<string[]>([]);
 
   const [filteredCount, setFilteredCount] = useState(0);
@@ -142,17 +144,28 @@ export default function RequestTablePage() {
     }
   }
 
-  async function handleMarkShipped(request: Request) {
+  function handleMarkShipped(request: Request) {
+    setSelectedRequest(request);
+    setShipDialogOpen(true);
+  }
+
+  async function handleConfirmShip(trackingCode: string, trackingUrl: string) {
+    if (!selectedRequest) return;
     try {
-      await apiFetch(`/api/approval/${request.id}/ship`, {
+      await apiFetch(`/api/approval/${selectedRequest.id}/ship`, {
         method: "POST",
+        body: {
+          ...(trackingCode ? { trackingCode } : {}),
+          ...(trackingUrl ? { trackingUrl } : {}),
+        },
       });
+      setShipDialogOpen(false);
       await loadRequests();
       setStandardResult({
         type: "success",
         stage: "SHIPPED",
-        userName: request.userName,
-        categoryName: request.categoryName,
+        userName: selectedRequest.userName,
+        categoryName: selectedRequest.categoryName,
       });
       setStandardResultOpen(true);
     } catch (err: any) {
@@ -295,6 +308,13 @@ export default function RequestTablePage() {
             onSuccess={loadRequests}
             currentUserName={currentUserName}
             averages={averages}
+          />
+
+          <ShipDialog
+            request={selectedRequest}
+            open={shipDialogOpen}
+            onOpenChange={setShipDialogOpen}
+            onConfirm={handleConfirmShip}
           />
 
           <StandardApprovalResultDialog
