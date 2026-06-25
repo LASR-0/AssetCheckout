@@ -14,6 +14,8 @@ const KINDS = [
   "DEVICE_SHIPPED",
   "DEVICE_READY_FOR_COLLECTION",
   "REQUEST_REJECTED",
+  "SHIPMENT_REMINDER",
+  "SHIPMENT_OVERDUE",
 ] as const;
 type NotificationKind = (typeof KINDS)[number];
 
@@ -131,6 +133,30 @@ case "DEVICE_SHIPPED": {
         `Reason: ${parseRejectionReason(request.reason)}\n\n` +
         `If you have any questions, please follow up with IT.`;
       break;
+
+    case "SHIPMENT_REMINDER":
+      to = await resolveUserEmail(request.userId);
+      subject = `Have you received your ${request.categoryName}?`;
+      text =
+        `We're checking in on your ${request.categoryName}, which was shipped to you recently.\n\n` +
+        `If it has arrived, please mark it as received in AssetCheckout. ` +
+        `If it hasn't arrived yet, no action is needed — we'll check in again soon.`;
+      break;
+
+    case "SHIPMENT_OVERDUE": {
+      // Fans out to the user AND all admins.
+      const userEmail = await resolveUserEmail(request.userId);
+      to = [userEmail, ...ADMIN_EMAILS].filter((e): e is string => !!e);
+
+      subject = `Overdue: ${request.categoryName} not yet marked received`;
+      text =
+        `The ${request.categoryName} shipped to ${request.userName} has not been marked as received ` +
+        `after more than a month.\n\n` +
+        `If it doesn't arrive within another week, this will need to be investigated as a possible ` +
+        `postage issue. ${request.userName}: if you have received it, please mark it as received in ` +
+        `AssetCheckout. IT has been notified.`;
+      break;
+    }
   }
 
   if (!to || (Array.isArray(to) && to.length === 0)) {

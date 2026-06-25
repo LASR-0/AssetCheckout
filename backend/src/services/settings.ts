@@ -131,7 +131,24 @@ const SETTING_DEFAULTS: SettingDefault[] = [
   },
   { key: "shipping_estimate_days", 
     defaultValue: "5", 
-    description: "Estimated delivery days shown in the 'your device has shipped' email" },
+    description: "Estimated delivery days shown in the 'your device has shipped' email" 
+  },
+  { key: "jobs.shipmentReminderCron",
+    defaultValue: "0 10 * * *", 
+    description: "Schedule for the shipped-request reminder job" 
+  },
+ { key: "reminder_days_1",
+   defaultValue: "7",
+   description: "Days after shipping to send the first received-reminder to the user" 
+  },
+  { key: "reminder_days_2",
+   defaultValue: "14",
+   description: "Days after shipping to send the second received-reminder to the user" 
+  },
+  { key: "reminder_days_3",
+    defaultValue: "30",
+    description: "Days after shipping to escalate to the user and admins (overdue)" 
+  },
 ];
 
 /**

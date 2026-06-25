@@ -7,8 +7,10 @@ import {
   saveJobSchedule,
   type JobType,
   type DryRunStates,
+  type ReminderThresholds,
 } from "@/api/jobs";
 import ScheduledJobRow from "./ScheduledJobRow";
+import { getReminderThresholds, saveReminderThresholds } from "@/api/jobs";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     SCHEDULED JOBS CARD                         |
@@ -58,6 +60,11 @@ const SCHEDULED_JOBS: ScheduledJob[] = [
     label: "Purge Old Job History",
     description: "Deletes completed/failed job rows past the retention window.",
   },
+  {
+  type: "REMIND_SHIPPED_REQUESTS",
+  label: "Shipped Request Reminders",
+  description: "Reminds users to confirm receipt of shipped devices, escalating to IT if overdue.",
+},
 ];
 
 type Feedback = { text: string; ok: boolean };
@@ -77,6 +84,8 @@ export default function ScheduledJobsCard({ onQueued }: ScheduledJobsCardProps) 
     Record<string, { cron: string; settingKey: string }>
   >({});
   const [dryRunStates, setDryRunStates] = useState<DryRunStates>({});
+  const [reminderThresholds, setReminderThresholds] = useState<ReminderThresholds>({ d1: 7, d2: 14, d3: 30 });
+  const [savingThresholds, setSavingThresholds] = useState(false);
 
   useEffect(() => {
     getJobSchedules()
@@ -93,6 +102,12 @@ export default function ScheduledJobsCard({ onQueued }: ScheduledJobsCardProps) 
       .then((r) => setDryRunStates(r.states ?? {}))
       .catch(() => setDryRunStates({}));
   }, []);
+
+  useEffect(() => {
+  getReminderThresholds()  // or generic settings fetch for the three keys
+    .then((r) => setReminderThresholds(r))
+    .catch(() => { /* keep defaults */ });
+}, []);
 
   async function trigger(job: ScheduledJob) {
     setRunning(job.type);
@@ -158,6 +173,20 @@ export default function ScheduledJobsCard({ onQueued }: ScheduledJobsCardProps) 
     }
   }
 
+  async function saveThresholds(next: ReminderThresholds) {
+  setSavingThresholds(true);
+  setFeedback(null);
+  try {
+    const saved = await saveReminderThresholds(next);  // writes the three settings
+    setReminderThresholds(saved);
+    setFeedback({ text: "Reminder thresholds updated", ok: true });
+  } catch (err) {
+    setFeedback({ text: err instanceof Error ? err.message : "Failed to update thresholds", ok: false });
+  } finally {
+    setSavingThresholds(false);
+  }
+}
+
   return (
     <div className="space-y-3">
       {feedback && (
@@ -184,6 +213,15 @@ export default function ScheduledJobsCard({ onQueued }: ScheduledJobsCardProps) 
               onTrigger={() => trigger(job)}
               onSaveSchedule={(settingKey, cron) => saveSchedule(job, settingKey, cron)}
               onToggleDryRun={(next) => toggleDryRun(job, next)}
+              reminderConfig={
+                job.type === "REMIND_SHIPPED_REQUESTS"
+                  ? {
+                      thresholds: reminderThresholds,
+                      saving: savingThresholds,
+                      onSave: saveThresholds,
+                    }
+                  : undefined
+              }
             />
           );
         })}

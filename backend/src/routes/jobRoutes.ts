@@ -296,4 +296,72 @@ router.post("/dry-run", async (req: Request, res: Response, next: NextFunction) 
   }
 });
 
+///  +-----------------------------------------------------------------+
+///  |                  REMINDER THRESHOLDS                            |
+///  +-----------------------------------------------------------------+
+
+const REMINDER_KEYS = ["reminder_days_1", "reminder_days_2", "reminder_days_3"] as const;
+const REMINDER_DEFAULTS = { d1: 7, d2: 14, d3: 30 };
+
+router.get("/reminder-thresholds", async (req, res, next) => {
+  try {
+    // admin gate — match how /schedules / /dry-run-states guard
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const [r1, r2, r3] = await Promise.all(REMINDER_KEYS.map((k) => getSetting(k)));
+    const num = (raw: string | null, fallback: number) =>
+      Number(raw) > 0 ? Number(raw) : fallback;
+
+    res.json({
+      d1: num(r1, REMINDER_DEFAULTS.d1),
+      d2: num(r2, REMINDER_DEFAULTS.d2),
+      d3: num(r3, REMINDER_DEFAULTS.d3),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/reminder-thresholds", async (req, res, next) => {
+  try {
+    const actorEmail = getActorEmail(req);
+    if (!isAdminEmail(actorEmail)) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const { d1, d2, d3 } = req.body ?? {};
+
+    // Server-side validation — never trust the client. Mirror the GUI rules:
+    // positive integers, strictly ascending.
+    const ints = [d1, d2, d3].every((n) => Number.isInteger(n));
+    const positive = [d1, d2, d3].every((n) => typeof n === "number" && n > 0);
+    const ascending = d1 < d2 && d2 < d3;
+
+    if (!ints || !positive) {
+      return res.status(400).json({
+        success: false,
+        message: "All thresholds must be positive whole numbers.",
+      });
+    }
+    if (!ascending) {
+      return res.status(400).json({
+        success: false,
+        message: "Thresholds must strictly ascend (first < second < overdue).",
+      });
+    }
+
+    await Promise.all([
+      setSetting("reminder_days_1", String(d1), actorEmail),
+      setSetting("reminder_days_2", String(d2), actorEmail),
+      setSetting("reminder_days_3", String(d3), actorEmail),
+    ]);
+
+    res.json({ d1, d2, d3 });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

@@ -983,3 +983,29 @@ export async function findModelRequestsAwaitingCompletion(): Promise<
     include: { request: true },
   });
 }
+
+///  +-----------------------------------------------------------------+
+///  |                   SHIPPING REMINDERS                            |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Returns COMPLETED requests that have been shipped but not yet marked
+ * received — the candidates the shipped-reminder job escalates over time.
+ */
+export async function findShippedAwaitingReceipt(): Promise<Request[]> {
+  return prisma.request.findMany({
+    where: {
+      status: "COMPLETED",
+      shippedAt: { not: null },
+      receivedAt: null,
+    },
+  });
+}
+
+/** Records that a reminder stage has been sent for a shipped request. */
+export async function setReminderStage(requestId: number, stage: number): Promise<void> {
+  await prisma.request.update({
+    where: { id: requestId },
+    data: { reminderStage: stage },
+  });
+}

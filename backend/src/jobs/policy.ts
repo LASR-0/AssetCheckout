@@ -19,6 +19,7 @@ export const ONE_SHOT_JOBS: Set<JobType> = new Set([
   "CLEANUP_STALE_REQUESTS",
   "CLEANUP_ORPHAN_SNIPE_MODELS",
   "PURGE_OLD_JOB_HISTORY",
+  "REMIND_SHIPPED_REQUESTS",
 ]);
 
 export const DRY_RUN_JOBS: Partial<Record<JobType, string>> = {

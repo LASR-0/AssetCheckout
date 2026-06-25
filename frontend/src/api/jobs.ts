@@ -14,7 +14,8 @@ export type JobType =
   | "REFRESH_PRICES_CACHE"
   | "CLEANUP_STALE_REQUESTS"
   | "CLEANUP_ORPHAN_SNIPE_MODELS"
-  | "PURGE_OLD_JOB_HISTORY";
+  | "PURGE_OLD_JOB_HISTORY"
+  | "REMIND_SHIPPED_REQUESTS";
 
 export type BackgroundJob = {
   id: number;
@@ -56,6 +57,9 @@ export type DryRunStatesResponse = { states: DryRunStates };
 
 export type JobSchedule = { jobType: JobType; settingKey: string; cron: string };
 export type SchedulesResponse = { schedules: JobSchedule[] };
+
+export type ReminderThresholds = { d1: number; d2: number; d3: number };
+export type ReminderThresholdsResponse = ReminderThresholds;
 
 ///  +-----------------------------------------------------------------+
 ///  |                           CALLS                                 |
@@ -105,4 +109,17 @@ export async function getDryRunStates(): Promise<DryRunStatesResponse> {
 
 export async function setDryRun(jobType: JobType, dryRun: boolean): Promise<{ jobType: JobType; dryRun: boolean }> {
   return apiFetch("/api/job/dry-run", { method: "POST", body: { jobType, dryRun } });
+}
+
+export async function getReminderThresholds(): Promise<ReminderThresholds> {
+  return apiFetch<ReminderThresholds>("/api/job/reminder-thresholds");
+}
+
+export async function saveReminderThresholds(
+  thresholds: ReminderThresholds
+): Promise<ReminderThresholds> {
+  return apiFetch("/api/job/reminder-thresholds", {
+    method: "POST",
+    body: thresholds,
+  });
 }
