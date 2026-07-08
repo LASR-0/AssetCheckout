@@ -28,6 +28,7 @@ export const JOB_TYPE_LABELS: Record<JobType, string> = {
   CLEANUP_STALE_REQUESTS: "Cleanup Stale",
   CLEANUP_ORPHAN_SNIPE_MODELS: "Cleanup Orphans",
   PURGE_OLD_JOB_HISTORY: "Purge History",
+  REMIND_SHIPPED_REQUESTS: "Shipping Reminder",
 };
 
 function jobTypeLabel(type: string): string {
