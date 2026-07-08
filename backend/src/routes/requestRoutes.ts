@@ -54,42 +54,6 @@ router.post("/checkout", async (req, res, next) => {
 ///  |                       AVAILABLE ASSET                           |
 ///  +-----------------------------------------------------------------+
 
-router.get("/models/:id/available-asset", async (req, res) => {
-  try {
-    const modelId = Number(req.params.id);
-    
-
-    if (Number.isNaN(modelId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid model id",
-      });
-    }
-
-
-    const asset = null;
-
-    if (!asset) {
-      return res.status(404).json({
-        success: false,
-        message: "No available assets found",
-      });
-    }
-
-    res.json({
-      success: true,
-      asset,
-    });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch available asset",
-    });
-  }
-});
-
 router.get("/averages", async (req, res, next) => {
   try {
     const tier = req.query.tier as string | undefined;

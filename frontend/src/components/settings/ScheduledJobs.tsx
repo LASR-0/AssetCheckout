@@ -61,10 +61,15 @@ const SCHEDULED_JOBS: ScheduledJob[] = [
     description: "Deletes completed/failed job rows past the retention window.",
   },
   {
-  type: "REMIND_SHIPPED_REQUESTS",
-  label: "Shipped Request Reminders",
-  description: "Reminds users to confirm receipt of shipped devices, escalating to IT if overdue.",
-},
+    type: "REMIND_SHIPPED_REQUESTS",
+    label: "Shipped Request Reminders",
+    description: "Reminds users to confirm receipt of shipped devices, escalating to IT if overdue.",
+  },
+  {
+    type: "SYNC_REQUEST_TO_SHAREPOINT",
+    label: "SharePoint Request Sync",
+    description: "Sends new requests to the SharePoint ordering ledger nightly via Power Automate.",
+  },
 ];
 
 type Feedback = { text: string; ok: boolean };

@@ -9,6 +9,8 @@ import settingsRoutes from "./settingsRoutes.js";
 import snipeRoutes from "./snipeRoutes.js";
 import jobRoutes from "./jobRoutes.js";
 import integrationsRoutes from "./integrationRoutes.js";
+import feedbackRoutes from "./feedbackRoutes.js"
+import sharepointRoutes from "./sharepointRoutes.js";
 
 
 
@@ -24,5 +26,7 @@ router.use("/settings", settingsRoutes);
 router.use("/snipe", snipeRoutes);
 router.use("/job", jobRoutes);
 router.use("/integrations", integrationsRoutes);
+router.use("/feedback", feedbackRoutes);
+router.use("/sharepoint", sharepointRoutes);
 
 export default router;

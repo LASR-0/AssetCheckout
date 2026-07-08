@@ -16,11 +16,6 @@ import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
 
 const router = express.Router();
 
-function readActorName(req: express.Request): string | null {
-  const raw = (req.headers["x-dev-user-name"] as string | undefined)?.trim();
-  return raw && raw.length > 0 ? raw : null;
-}
-
 router.post("/:requestId/approve", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
@@ -71,7 +66,7 @@ router.post("/:requestId/reject", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
     const { reason } = req.body;
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
 
     if (!actorName) {
       return res.status(401).json({
@@ -101,7 +96,7 @@ router.post("/:requestId/reject", async (req, res, next) => {
 router.get("/:requestId/search-models", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
 
     if (!actorName) {
       return res.status(401).json({
@@ -157,7 +152,7 @@ router.get("/:requestId/search-models", async (req, res, next) => {
 router.post("/:requestId/use-existing-model", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
 
     if (!actorName) {
       return res.status(401).json({
@@ -191,7 +186,7 @@ router.post("/:requestId/use-existing-model", async (req, res, next) => {
 router.post("/:requestId/create-model", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
 
     if (!actorName) {
       return res.status(401).json({
@@ -238,7 +233,7 @@ router.post("/:requestId/create-model", async (req, res, next) => {
 router.post("/:requestId/asset-details", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
  
     if (!actorName) {
       return res.status(401).json({

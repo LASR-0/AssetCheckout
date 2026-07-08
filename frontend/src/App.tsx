@@ -8,6 +8,7 @@ import NoAccessPage from "./pages/NoAccessPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import LandingPage from "./pages/Home";
+import FeedbackPage from "./pages/FeedbackPage";
 
 function App() {
   return (
@@ -29,6 +30,9 @@ function App() {
             }
           />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/feedback" element={
+            <ProtectedRoute requireRole={false}><FeedbackPage /></ProtectedRoute>
+          } />
           <Route path="/no-access" element={<NoAccessPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

@@ -1,7 +1,7 @@
 
 const IS_DEV = import.meta.env.VITE_APP_ENV === "development";
 
-function getDevHeaders(): Record<string, string> {
+export function getDevHeaders(): Record<string, string> {
   if (!IS_DEV) return {};
 
   const headers: Record<string, string> = {};

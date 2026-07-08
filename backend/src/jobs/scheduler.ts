@@ -28,6 +28,7 @@ export const SCHEDULE_KEYS: Record<string, JobType> = {
   "jobs.cleanupOrphanCron": "CLEANUP_ORPHAN_SNIPE_MODELS",
   "jobs.purgeHistoryCron": "PURGE_OLD_JOB_HISTORY",
   "jobs.shipmentReminderCron": "REMIND_SHIPPED_REQUESTS",
+  "jobs.sharepointSyncCron": "SYNC_REQUEST_TO_SHAREPOINT"
 };
 
 

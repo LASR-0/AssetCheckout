@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "NODE_EXTRA_CA_CERTS=./cert/ksb-relay-nodes.pem tsx --env-file=.env src/server.ts"
+    "dev": "NODE_EXTRA_CA_CERTS=./cert/ksb-relay-nodes.pem tsx --env-file=.env src/server.ts",
+    "preview-emails": "NODE_EXTRA_CA_CERTS=./cert/ksb-relay-nodes.pem node --env-file=.env --import tsx src/scripts/previewNotifications.ts"
   },
   "keywords": [],
   "author": "",

@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { getFeedbackEnabled } from "@/api/feedback";
 
 ///  +-----------------------------------------------------------------+
 ///  |                        LANDING PAGE                             |
@@ -28,6 +30,7 @@ export default function LandingPage() {
         <Link className="hover:text-on-background transition-colors" to="/requests">
             Requests
         </Link>
+        <FeedbackNavLink />
         </nav>
     </div>
     </footer>
@@ -387,6 +390,24 @@ function CtaBand() {
         </Link>
       </div>
     </section>
+  );
+}
+
+function FeedbackNavLink() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    getFeedbackEnabled()
+      .then((r) => setEnabled(r.enabled))
+      .catch(() => setEnabled(false));
+  }, []);
+
+  if (!enabled) return null;
+
+  return (
+    <Link className="hover:text-on-background transition-colors" to="/feedback">
+      Feedback
+    </Link>
   );
 }
 

@@ -26,7 +26,11 @@ model Request {
   managerId      Int
 
   callText       Boolean @default(false)
-  newNumber      Boolean @default(false)
+  newNumber      Boolean @default(false) //this will be replaced after we clean out where the value is used on the frontend
+  needsData            Boolean       @default(false)
+  numberOption         NumberOption?
+  reuseNumberFromEmail String?
+  reuseNumberPhone     String?
 
   collectionReadyAt  DateTime?
   shippedAt          DateTime?
@@ -35,6 +39,8 @@ model Request {
   locationMissing    Boolean   @default(false)
   trackingCode       String?
   trackingUrl        String?
+
+  syncedToSharepointAt DateTime?
 
   reminderStage      Int       @default(0)
 
@@ -105,6 +111,16 @@ model BackgroundJob {
   @@index([type])
 }
 
+/* ===================== Feedback ===================== */
+
+model Feedback {
+  id                 Int      @id @default(autoincrement())
+  improvedRequesting String
+  improvesItOverall  String
+  comments           String?
+  createdAt          DateTime @default(now())
+}
+
 /* ===================== ENUMS ===================== */
 enum RequestType {
   STANDARD
@@ -122,6 +138,12 @@ enum ModelRequestStatus {
   PENDING
   APPROVED
   COMPLETED
+}
+
+enum NumberOption {
+  NEW
+  REUSE
+  NONE
 }
 
 enum JobType {

@@ -7,6 +7,7 @@ import { cleanupStaleRequestsHandler } from "./handlers/cleanupStaleRequests.js"
 import { cleanupOrphanSnipeModelsHandler } from "./handlers/cleanupOrphanSnipeModels.js";
 import { sendRequestNotificationHandler } from "./handlers/sendRequestNotification.js";
 import { remindShippedRequestsHandler } from "./handlers/remindShippedRequests.js";
+import { syncRequestsToSharepointHandler } from "./handlers/syncRequestsToSharepoint.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    JOB SYSTEM ENTRY POINT                       |
@@ -30,12 +31,7 @@ export async function startJobs(): Promise<void> {
   registerHandler("CLEANUP_ORPHAN_SNIPE_MODELS", cleanupOrphanSnipeModelsHandler);
   registerHandler("SEND_REQUEST_NOTIFICATION", sendRequestNotificationHandler);
   registerHandler("REMIND_SHIPPED_REQUESTS", remindShippedRequestsHandler);
-  // Not yet implemented (enqueueing these will fail with "no handler" until
-  // their handlers land in later commits):
-  //   SEND_REQUEST_NOTIFICATION
-  //   SYNC_REQUEST_TO_SHAREPOINT
-  //   CLEANUP_STALE_REQUESTS
-  //   CLEANUP_ORPHAN_SNIPE_MODELS
+  registerHandler("SYNC_REQUEST_TO_SHAREPOINT", syncRequestsToSharepointHandler );
 
   await startRunner();
   await startScheduler();

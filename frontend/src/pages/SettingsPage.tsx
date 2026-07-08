@@ -7,6 +7,9 @@ import StandardModelsSelector from "@/components/settings/StandardModelsSelector
 import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
 import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
 import JobHistoryTable from "@/components/settings/JobsHistoryTable";
+import FeedbackSettingsCard from "@/components/settings/FeedbackSettingsCard";
+import CollapsibleTableSection from "@/components/settings/CollapsibleTable";
+import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
 
 export default function SettingsPage() {
   const { role } = useAuth();
@@ -46,6 +49,16 @@ export default function SettingsPage() {
         </SettingsSection>
       )}
 
+      {isAdmin && (
+        <SettingsSection icon="sync" title="SharePoint Sync">
+          <p className="text-sm text-info-light mb-4">
+            Mirror tablet and phone requests to the SharePoint ordering ledger. The sync runs
+            nightly; adjust its schedule under Background Jobs.
+          </p>
+          <SharepointSyncCard />
+        </SettingsSection>
+      )}
+
       {/* Dev Auth -- development-only */}
       {isDev && (
         <SettingsSection icon="science" title="Dev Auth">
@@ -76,9 +89,18 @@ export default function SettingsPage() {
             <p className="text-sm text-info-light mb-4">
               Recent job runs, newest first. Filter by status or type.
             </p>
-            <JobHistoryTable refreshKey={jobsRefreshKey} />
+            <CollapsibleTableSection title="Jobs History Table">
+              <JobHistoryTable refreshKey={jobsRefreshKey} />
+            </CollapsibleTableSection>
           </div>
         </div>
+      </SettingsSection>
+      <SettingsSection icon="forum" title="Feedback">
+        <p className="text-sm text-info-light mb-4">
+          Anonymous staff feedback about Checkout. Toggle collection on or off, review
+          responses, and export them.
+        </p>
+        <FeedbackSettingsCard />
       </SettingsSection>
     </div>
   );

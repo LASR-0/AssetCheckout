@@ -5,17 +5,14 @@ import {
   getAllStatuses,
   getSnipeAssetDetail
 } from "../services/snipeit.js";
+import { getActorName } from "../config/auth.js";
  
 const router = express.Router();
- 
-function readActorName(req: express.Request): string | null {
-  const raw = (req.headers["x-dev-user-name"] as string | undefined)?.trim();
-  return raw && raw.length > 0 ? raw : null;
-}
+
 
 router.get("/asset/:id", async (req, res, next) => {
   try {
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
     if (!actorName) {
       return res.status(401).json({
         success: false,
@@ -48,7 +45,7 @@ router.get("/asset/:id", async (req, res, next) => {
  
 router.get("/companies", async (req, res, next) => {
   try {
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
     if (!actorName) {
       return res.status(401).json({
         success: false,
@@ -65,7 +62,7 @@ router.get("/companies", async (req, res, next) => {
  
 router.get("/locations", async (req, res, next) => {
   try {
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
     if (!actorName) {
       return res.status(401).json({
         success: false,
@@ -82,7 +79,7 @@ router.get("/locations", async (req, res, next) => {
  
 router.get("/statuses", async (req, res, next) => {
   try {
-    const actorName = readActorName(req);
+    const actorName = getActorName(req);
     if (!actorName) {
       return res.status(401).json({
         success: false,

@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
+import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
 
 export default function RequestTablePage() {
   const [requests, setRequests] = useState<Request[]>([]);
@@ -37,6 +38,7 @@ export default function RequestTablePage() {
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
   const [standardResultOpen, setStandardResultOpen] = useState(false);
+  const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
   const [standardResult, setStandardResult] = useState<
     | { type: "success"; stage: "SHIPPED" | "READY_FOR_COLLECTION"; userName: string; categoryName: string }
     | { type: "error"; message: string }
@@ -186,8 +188,7 @@ export default function RequestTablePage() {
       await loadRequests();
 
       if (data.promptFeedback) {
-        // TODO (step 5): open the anonymous feedback nudge dialog here.
-        // Placeholder until the feedback feature lands.
+        setFeedbackNudgeOpen(true);
       }
     } catch (err: any) {
       console.error("Mark received failed:", err);
@@ -324,6 +325,11 @@ export default function RequestTablePage() {
               if (!open) setStandardResult(null);
             }}
             result={standardResult}
+          />
+
+          <FeedbackNudgeDialog
+            open={feedbackNudgeOpen}
+            onOpenChange={setFeedbackNudgeOpen}
           />
 
           {/* PAGINATION */}

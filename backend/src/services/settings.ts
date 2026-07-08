@@ -149,6 +149,14 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "30",
     description: "Days after shipping to escalate to the user and admins (overdue)" 
   },
+  { key: "feedback_enabled", 
+    defaultValue: "true", 
+    description: "Whether the anonymous feedback feature is active (page, nudge, and CTA)" 
+  },
+  { key: "sharepoint_sync_enabled",
+    defaultValue: "false",
+    description: "Whether the nightly SharePoint request-ledger sync is active." 
+  },
 ];
 
 /**
