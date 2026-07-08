@@ -6,6 +6,7 @@ import {
   createSnipeUser,
   getUserAssets,
   offboardSnipeUser,
+  getRequestableAssetCategories,
 } from "../services/snipeit.js";
 import { AppError } from "../utils/errors.js";
 
@@ -48,6 +49,31 @@ router.post("/hrt/request", async (req, res, next) => {
     });
 
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |              HRT INTEGRATION — CATEGORY CATALOGUE               |
+///  +-----------------------------------------------------------------+
+//
+//  GET /api/integrations/hrt/categories
+//
+//  Lets HRT poll the requestable asset categories so an admin can seed /
+//  reconcile HRT's own hardware catalogue against what's actually
+//  requestable here. Same {id, name} shape the request payload keys on
+//  (categoryId), so HRT can map a category straight onto a hardware item.
+//
+//  Restricted to the categories admins have whitelisted as requestable (the
+//  REQUESTABLE_CATEGORIES setting) — non-requestable categories are never
+//  exposed to HRT.
+///  +-----------------------------------------------------------------+
+
+router.get("/hrt/categories", async (_req, res, next) => {
+  try {
+    const categories = await getRequestableAssetCategories();
+    res.json({ success: true, categories });
   } catch (err) {
     next(err);
   }
