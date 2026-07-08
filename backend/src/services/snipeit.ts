@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { AppError } from '../utils/errors.js';
 import { getMean, removeOutliers } from "../utils/statistics.js";
 import {
@@ -19,7 +20,11 @@ import type {
   SnipeAssetDetail,
   CreateSkeletonAssetInput,
   SnipeUserDetail,
-  ModelSearchResult
+  ModelSearchResult,
+  CreateSnipeUserInput,
+  SnipeUserAsset,
+  CheckinFailure,
+  OffboardResult
 } from '../types/snipeTypes.js';
 
 const BASE_URL = process.env.SNIPEIT_API_URL;
@@ -1191,7 +1196,240 @@ export async function getLocationComparison(
 }
 
 ///  +-----------------------------------------------------------------+
+///  |               USERS — LIFECYCLE (HRT INTEGRATION)               |
+///  +-----------------------------------------------------------------+
+//
+//  Create / find / offboard Snipe users on behalf of NextHRT. HRT drives
+//  these through /api/integrations/hrt/users/* when employees are onboarded
+//  (create their Snipe identity) and when they exit (check their assets
+//  back in and deactivate the account).
+///  +-----------------------------------------------------------------+
+
+/**
+ * Exact-match lookup of a Snipe user by email (case-insensitive). Snipe's
+ * ?email= filter does the heavy lifting; we re-check the rows because Snipe
+ * treats it as a search, not a strict equality filter.
+ *
+ * Deleted users are excluded (default Snipe behaviour), so an offboarded-
+ * then-rehired employee gets a fresh account rather than a soft-deleted one.
+ */
+export async function findSnipeUserByEmail(email: string): Promise<SnipeUserDetail | null> {
+  const target = email.trim().toLowerCase();
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users?email=${encodeURIComponent(target)}&limit=50`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to search users by email: status ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  const match = rows.find(
+    (u) => typeof u.email === "string" && u.email.trim().toLowerCase() === target
+  );
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    name: match.name ?? "",
+    email: match.email?.trim() ?? null,
+    location: match.location ? { id: match.location.id, name: match.location.name } : null,
+  };
+}
+
+/**
+ * Create a Snipe user for an employee. The account is a directory entry for
+ * asset assignment, not a login: activated=false, and the password (which
+ * Snipe's API insists on) is random and thrown away.
+ *
+ * Username is the email — unique in Snipe, stable for the employee, and the
+ * natural join key back to HRT.
+ */
+export async function createSnipeUser(input: CreateSnipeUserInput): Promise<SnipeUserDetail> {
+  const email = input.email.trim().toLowerCase();
+  const throwawayPassword = randomBytes(24).toString("base64url");
+
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({
+      first_name: input.firstName.trim(),
+      last_name: input.lastName.trim(),
+      username: email,
+      email,
+      password: throwawayPassword,
+      password_confirmation: throwawayPassword,
+      activated: false,
+      ...(input.jobTitle ? { jobtitle: input.jobTitle } : {}),
+      notes: input.notes ?? "Created via NextHRT integration",
+    }),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || data?.status === "error") {
+    throw new AppError(
+      `Failed to create Snipe user for ${email}: ${JSON.stringify(data?.messages) ?? res.statusText}`,
+      500
+    );
+  }
+
+  const payload = data?.payload;
+  if (typeof payload?.id !== "number") {
+    throw new AppError("Snipe user creation returned no ID", 500);
+  }
+
+  return {
+    id: payload.id,
+    name: payload.name ?? `${input.firstName} ${input.lastName}`.trim(),
+    email,
+    location: null,
+  };
+}
+
+/**
+ * Everything currently checked out to a user. Backs both the exit-review
+ * listing HRT shows before offboarding and the offboard checkin loop itself.
+ */
+export async function getUserAssets(userId: number): Promise<SnipeUserAsset[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users/${userId}/assets?limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (res.status === 404) {
+    throw new AppError(`Snipe user ${userId} not found`, 404);
+  }
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch assets for user ${userId}: status ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  return rows.map((asset) => ({
+    id: asset.id,
+    asset_tag: asset.asset_tag ?? "",
+    name: asset.name ?? "",
+    serial: asset.serial ?? null,
+    model: asset.model?.name ?? null,
+    category: asset.category?.name ?? null,
+  }));
+}
+
+/**
+ * Check a single asset back in. The note lands in Snipe's asset history so
+ * offboarding checkins are attributable to the HRT integration.
+ */
+export async function checkinAsset(assetId: number, note?: string): Promise<unknown> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware/${assetId}/checkin`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({
+      note: note ?? "Checked in via NextHRT offboarding",
+    }),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || data?.status === "error") {
+    throw new AppError(
+      `Checkin failed for asset ${assetId}: ${JSON.stringify(data?.messages) ?? res.statusText}`,
+      500
+    );
+  }
+
+  return data;
+}
+
+/**
+ * Deactivate (not delete) a Snipe user. Deactivation keeps their asset
+ * history intact while blocking any future checkout to them; deletion is
+ * left as a manual Snipe admin action once history is no longer needed.
+ */
+export async function deactivateSnipeUser(userId: number): Promise<void> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users/${userId}`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify({ activated: false }),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || data?.status === "error") {
+    throw new AppError(
+      `Failed to deactivate Snipe user ${userId}: ${JSON.stringify(data?.messages) ?? res.statusText}`,
+      500
+    );
+  }
+}
+
+/**
+ * Offboarding orchestrator: check in everything the user has out, then
+ * deactivate the account.
+ *
+ * Per-asset checkin failures are collected rather than thrown — one stuck
+ * asset shouldn't leave the rest checked out. Deactivation is attempted even
+ * with failures (a deactivated user with a stray asset is safer than an
+ * active one), and the caller gets the full picture in the result.
+ */
+export async function offboardSnipeUser(userId: number, note?: string): Promise<OffboardResult> {
+  const assets = await getUserAssets(userId);
+
+  const checkedIn: SnipeUserAsset[] = [];
+  const failed: CheckinFailure[] = [];
+
+  for (const asset of assets) {
+    try {
+      await checkinAsset(asset.id, note);
+      checkedIn.push(asset);
+    } catch (err) {
+      failed.push({
+        assetId: asset.id,
+        assetTag: asset.asset_tag,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  let userDeactivated = false;
+  try {
+    await deactivateSnipeUser(userId);
+    userDeactivated = true;
+  } catch (err) {
+    failed.push({
+      assetId: 0,
+      assetTag: "(user deactivation)",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { userId, checkedIn, failed, userDeactivated };
+}
+
+///  +-----------------------------------------------------------------+
 ///  |                         RE-EXPORTS                              |
 ///  +-----------------------------------------------------------------+
 
-export type { TierMatch, SnipeAssetDetail, AssetDetailsInput };
+export type {
+  TierMatch,
+  SnipeAssetDetail,
+  AssetDetailsInput,
+  CreateSnipeUserInput,
+  SnipeUserAsset,
+  CheckinFailure,
+  OffboardResult,
+};

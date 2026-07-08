@@ -99,3 +99,28 @@ export type SnipeUserDetail = {
 };
 
 export type ModelSearchResult = Model & { hasAvailable: boolean };
+export type CreateSnipeUserInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle?: string;
+  notes?: string;
+};
+
+export type SnipeUserAsset = {
+  id: number;
+  asset_tag: string;
+  name: string;
+  serial: string | null;
+  model: string | null;
+  category: string | null;
+};
+
+export type CheckinFailure = { assetId: number; assetTag: string; error: string };
+
+export type OffboardResult = {
+  userId: number;
+  checkedIn: SnipeUserAsset[];
+  failed: CheckinFailure[];
+  userDeactivated: boolean;
+};
