@@ -34,6 +34,9 @@ export type SnipeAssetDetail = {
 export type User = {
   id: number;
   name: string;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
 };
 
 export type StatusLabel = {

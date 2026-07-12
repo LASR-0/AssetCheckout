@@ -13,7 +13,7 @@ export default function Navbar() {
   const logoDark = import.meta.env.VITE_LOGO_PATH_DARK;
   const companyName = import.meta.env.VITE_COMPANY_NAME;
 
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -23,6 +23,13 @@ export default function Navbar() {
     if (resolvedTheme === "dark" && logoDark) return logoDark;
     return logoLight;
   })();
+
+  const isDark = resolvedTheme === "dark";
+
+  // FIXED: shared style for the square icon buttons (theme toggle + settings) —
+  // rounded-md square, outline border, house shadow, 22px icon (~¾ of the old 30px).
+  const ICON_BUTTON =
+    "w-10 h-10 grid place-items-center rounded-md border border-outline shadow-sm hover:cursor-pointer transition";
 
   return (
     <header className="fixed top-0 z-50 w-full">
@@ -44,7 +51,16 @@ export default function Navbar() {
               />
             )}
 
-            <span className="text-md font-bold md:text-xl text-on-background">
+            {/* FIXED: brand text now follows the tab colour states — selected
+                on the home route, nav-tab + hover elsewhere. Colour only (no
+                underline), matching the settings chip's active treatment. */}
+            <span
+              className={`text-md font-bold md:text-xl transition-colors ${
+                isActive("/")
+                  ? "text-nav-tab-selected"
+                  : "text-nav-tab hover:text-nav-tab-selected"
+              }`}
+            >
               {companyName ? `${companyName} ` : ""}Checkout Central
             </span>
           </div>
@@ -88,7 +104,7 @@ export default function Navbar() {
           </nav>
         </div>
 
-        {/* Right side — burger (mobile only) + settings (always) */}
+        {/* Right side — burger (mobile only) + theme toggle + settings */}
         <div className="flex items-center gap-4">
 
           <button
@@ -109,18 +125,42 @@ export default function Navbar() {
             </span>
           </button>
 
-          {/* Settings link */}
+          {/* Theme toggle — icon shows the CURRENT theme (sun = light,
+              moon = dark). Gated on mounted so the icon can't flash the
+              wrong theme before resolvedTheme is known. */}
+          {mounted && (
+            <button
+              type="button"
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              className={`${ICON_BUTTON} text-nav-tab hover:text-nav-tab-selected`}
+            >
+              <span
+                className="material-symbols-outlined !text-[22px]"
+                style={{ fontVariationSettings: `'FILL' 1` }}
+              >
+                {isDark ? "dark_mode" : "light_mode"}
+              </span>
+            </button>
+          )}
+
+          {/* Settings link — FIXED: restructured from a bare icon-Link into a
+              square chip wrapping the icon, matching the theme toggle. */}
           <Link
             to="/settings"
-            className={`material-symbols-outlined !text-3xl hover:cursor-pointer text-nav-tab hover:text-nav-tab-selected transition ${
+            aria-label="Settings"
+            className={`${ICON_BUTTON} ${
               isActive("/settings")
                 ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
-            style={{ fontVariationSettings: `'FILL' 1` }}
-            aria-label="Settings"
           >
-            settings
+            <span
+              className="material-symbols-outlined !text-[22px]"
+              style={{ fontVariationSettings: `'FILL' 1` }}
+            >
+              settings
+            </span>
           </Link>
 
         </div>

@@ -62,7 +62,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search Requests"
-            className="block w-full pl-10 pr-3 py-2 border-transparent bg-surface-container-lowest rounded-md focus:ring-primary focus:border-primary text-sm font-body outline-none transition-all"
+            className="block w-full pl-10 pr-3 py-2 border-transparent bg-surface-container-lowest rounded-full shadow-sm focus:ring-primary focus:border-primary text-sm font-body outline-none transition-all"
           />
         </div>
 
@@ -72,7 +72,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className="flex-1 !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
+                          <button className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
 
                             <span className="material-symbols-outlined !text-info-light mr-2 !text-sm">
                               tune
@@ -114,7 +114,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className="flex-1 !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
+                          <button className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
                             <span className="material-symbols-outlined !text-info-light mr-2 !text-sm">
                                 filter_list
                             </span>

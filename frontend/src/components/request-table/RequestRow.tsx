@@ -1,7 +1,7 @@
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
 import { useState } from "react";
-import { formatReason } from "@/components/request-table/FormatReason"
+import { ReasonCell } from "@/components/request-table/FormatReason"
 
 type Props = {
   request: Request;
@@ -87,7 +87,7 @@ export default function RequestRow({
             reasonExpanded ? "" : "line-clamp-2"
           }`}
         >
-          {formatReason(request.reason)}
+          <ReasonCell text={request.reason}/>
         </p>
       </td>
 

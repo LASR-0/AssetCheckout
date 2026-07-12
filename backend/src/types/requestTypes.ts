@@ -13,6 +13,10 @@ export type CreateRequestInput = {
   managerId?: number;
   callText?: boolean;
   newNumber?: boolean;
+  needsData?: boolean;
+  numberOption?: "NEW" | "REUSE" | "NONE";
+  reuseNumberFromEmail?: string | null;
+  reuseNumberPhone?: string | null;
 };
 
 export type CreateResponse = {

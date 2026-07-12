@@ -97,6 +97,8 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
     );
   }
 
+  const needsData = input.callText ? true : (input.needsData ?? false);
+
   const request = await prisma.request.create({
     data: {
       userId: input.userId,
@@ -109,6 +111,10 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
       managerId: input.managerId,
       callText: input.callText ?? false,
       newNumber: input.newNumber ?? false,
+      needsData,
+      numberOption: input.numberOption ?? null,
+      reuseNumberFromEmail: input.reuseNumberFromEmail ?? null,
+      reuseNumberPhone: input.reuseNumberPhone ?? null,
       status: "PENDING",
     },
   });

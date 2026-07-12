@@ -10,6 +10,7 @@ import JobHistoryTable from "@/components/settings/JobsHistoryTable";
 import FeedbackSettingsCard from "@/components/settings/FeedbackSettingsCard";
 import CollapsibleTableSection from "@/components/settings/CollapsibleTable";
 import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
+import MobileFilterCard from "@/components/settings/MobileFilterCard";
 
 export default function SettingsPage() {
   const { role } = useAuth();
@@ -46,6 +47,18 @@ export default function SettingsPage() {
       {isAdmin && (
         <SettingsSection icon="settings_applications" title="Snipe-IT Configuration">
           <SkeletonStatusSelector />
+        </SettingsSection>
+      )}
+
+      {/* FIXED: Mobile Number Filtering -- admin-only */}
+      {isAdmin && (
+        <SettingsSection icon="smartphone" title="Mobile Number Filtering">
+          <p className="text-sm text-info-light mb-4">
+            Which numbers count as mobiles when reusing an existing number on
+            checkout. Numbers not matching these patterns are treated as
+            landlines and hidden from the reuse picker.
+          </p>
+          <MobileFilterCard />
         </SettingsSection>
       )}
 
@@ -106,7 +119,7 @@ export default function SettingsPage() {
   );
 
   return (
-    <main className="w-full min-h-[calc(100vh-4rem)] bg-surface">
+    <main className="w-full min-h-[calc(100vh-4rem)] bg-landing-bg">
       <div
         className={`${isAdmin ? "max-w-3xl lg:max-w-[1600px]" : "max-w-3xl"} py-12 px-6 mx-auto`}
       >

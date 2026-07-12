@@ -6,9 +6,29 @@ import SpecLevelToggle from "@/components/request-form/SpecLevelToggle";
 import UserDetailsInput from "@/components/request-form/UserDetailsInput";
 import { fetchUsers } from "@/api/users";
 import { isPhoneCategory, isTabletCategory } from "@/lib/categoryIcon";
-import { useNavigate } from "react-router-dom";
+import { resolveMobileNumber } from "@/lib/mobileNumber";
+import { useMobileFilterConfig } from "@/hooks/useMobileFilterConfig";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import type { User } from "@/components/request-form/UserSelect";
+import { useAuth } from "@/hooks/useAuth";
 
-const INITIAL_STATE = {
+type FormState = {
+  userId: string;
+  userName: string;
+  categoryId: number;
+  categoryName: string;
+  requestType: "STANDARD" | "NON_STANDARD";
+  reason: string;
+  callText: boolean;
+  newNumber: boolean;
+  needsData: boolean;
+  numberOption: "NEW" | "REUSE" | "NONE" | null;
+  reuseUser: User | null;
+  manager: string;
+  managerId: string;
+};
+
+const INITIAL_STATE: FormState = {
   userId: "",
   userName: "",
   categoryId: 0,
@@ -17,6 +37,9 @@ const INITIAL_STATE = {
   reason: "",
   callText: false,
   newNumber: false,
+  needsData: false,
+  numberOption: null,
+  reuseUser: null,
   manager: "",
   managerId: "",
 };
@@ -24,12 +47,23 @@ const INITIAL_STATE = {
 const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
 
 export default function RequestFormPage() {
-  const [formState, setFormState] = useState(INITIAL_STATE);
+  const [formState, setFormState] = useState<FormState>(INITIAL_STATE);
   const [formKey, setFormKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
   const navigate = useNavigate();
+  const selectedRequester = users.find((u) => u.id === formState.userId) ?? null;
+  const selectedManager = users.find((u) => u.id === formState.managerId) ?? null;
+  const { email: authEmail } = useAuth();
+  // FIXED: admin-configured mobile filter (AU defaults until loaded) —
+  // used when resolving the reuse number for the payload.
+  const mobileConfig = useMobileFilterConfig();
+
+  // FIXED: home-page tiles link here with ?categoryId= — validated and
+  // applied by AssetTypeSelector once its category list has loaded.
+  const [searchParams] = useSearchParams();
+  const preselectId = Number(searchParams.get("categoryId")) || null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,13 +90,41 @@ export default function RequestFormPage() {
       return;
     }
 
+    const isPhone = isPhoneCategory(formState.categoryName ?? "");
+    const isTablet = isTabletCategory(formState.categoryName ?? "");
+    const numberDecisionRequired =
+      isPhone || (isTablet && (formState.callText || formState.needsData));
+
+    if (numberDecisionRequired && !formState.numberOption) {
+      setError("Please choose a phone number option.");
+      return;
+    }
+    if (formState.numberOption === "REUSE" && !formState.reuseUser) {
+      setError("Please select whose number is being reused.");
+      return;
+    }
+
     setIsSubmitting(true);
+
+    const payload = {
+    ...formState,
+    needsData: formState.callText || formState.needsData,        // effective (call&text implies data)
+    reuseNumberFromEmail: formState.reuseUser?.email ?? null,
+    // FIXED: ship the RESOLVED mobile (validated against the admin-configured
+    // mobile prefix rules, preferring the Mobile field) — never a raw landline.
+    reuseNumberPhone: formState.reuseUser
+      ? resolveMobileNumber(formState.reuseUser, mobileConfig)
+      : null,
+    newNumber: formState.numberOption === "NEW",                 // transitional bridge for the requests table
+  };
+  // don't ship the nested object the backend doesn't understand
+  delete (payload as any).reuseUser;
 
     try {
       const res = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formState),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -96,13 +158,27 @@ export default function RequestFormPage() {
 
   useEffect(() => {
     fetchUsers().then((data) => {
-      const formatted = data.map((u: any) => ({
+      const formatted = data.map((u) => ({
         id: u.id,
         name: u.name,
-      }));
+        email: u.email,
+        phone: u.phone,
+        // FIXED: carry Snipe-IT's Mobile field through alongside Phone
+        mobile: u.mobile,
+      })).sort((a, b) => a.name.localeCompare(b.name));
       setUsers(formatted);
     });
   }, []);
+
+  useEffect(() => {
+  if (!authEmail || users.length === 0 || formState.userId) return;
+  const me = users.find(
+    (u) => u.email?.toLowerCase() === authEmail.toLowerCase()
+  );
+  if (me) {
+    setFormState((prev) => ({ ...prev, userId: me.id, userName: me.name }));
+  }
+}, [authEmail, users, formState.userId]);
 
   return (
     <main className="min-h-screen bg-landing-bg text-on-background flex flex-col">
@@ -124,6 +200,7 @@ export default function RequestFormPage() {
 
               <AssetTypeSelector
                 value={formState.categoryId}
+                preselectId={preselectId}
                 onChange={(id, name) => {
                   setFormState((prev) => {
                     const next = { ...prev, categoryId: id, categoryName: name };
@@ -142,6 +219,7 @@ export default function RequestFormPage() {
 
               <UserDetailsInput
                 users={users}
+                value={selectedRequester}
                 onSelected={(userID, userName) => {
                   setFormState((prev) => ({ ...prev, userId: userID, userName }));
                 }}
@@ -149,6 +227,7 @@ export default function RequestFormPage() {
 
               <AssetOptionsSection
                 formState={formState}
+                users={users}
                 setFormState={setFormState}
               />
 
@@ -165,6 +244,7 @@ export default function RequestFormPage() {
 
               <ApprovalInput
                 users={users}
+                value={selectedManager}
                 onSelected={(managerID, manager) => {
                   setFormState((prev) => ({ ...prev, manager, managerId: managerID }));
                 }}

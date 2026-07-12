@@ -37,6 +37,9 @@ if (!BASE_URL || !API_TOKEN) {
 const baseUrl: string = BASE_URL;
 const apiToken: string = API_TOKEN;
 
+const cleanPhoneField = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value.trim() : null;
+
 ///  +-----------------------------------------------------------------+
 ///  |                            HELPERS                              |
 ///  +-----------------------------------------------------------------+
@@ -1041,6 +1044,9 @@ export async function getAllUsersCleaned(): Promise<User[]> {
     .map((user) => ({
       id: user.id,
       name: user.name,
+      email: user.email ?? null,
+      phone: cleanPhoneField(user.phone),
+      mobile: cleanPhoneField(user.mobile),
     }));
 }
 
@@ -1418,6 +1424,41 @@ export async function offboardSnipeUser(userId: number, note?: string): Promise<
   }
 
   return { userId, checkedIn, failed, userDeactivated };
+}
+
+/**
+ * Email + phone for every Snipe user — the data HRT's nightly phone-sync
+ * mirrors onto employees (for "reuse an existing number"). A sibling of
+ * getAllUsersCleaned that keeps email/phone instead of id/name.
+ *
+ * Uses ?limit=500 so the full user set comes back in one call (Snipe's
+ * default page size is small; without an explicit limit the list truncates).
+ * At KSB's ~300 users this is comfortably a single page; if the directory
+ * ever exceeds 500, this needs real pagination.
+ *
+ * phone is string | null — Snipe allows users with no number. Users with no
+ * email are dropped (HRT matches on email, so an emailless row is useless).
+ */
+export async function getAllUserPhones(): Promise<{ email: string; phone: string | null }[]> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/users?limit=500`;
+  const res = await fetchWithTimeout(url, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+ 
+  const data: { rows?: { email?: string; phone?: string | null }[] } = await res.json();
+  if (!data?.rows) {
+    throw new AppError('Failed to fetch users', 500);
+  }
+ 
+  return data.rows
+    .filter((u): u is { email: string; phone?: string | null } =>
+      typeof u.email === 'string' && u.email.trim().length > 0
+    )
+    .map((u) => ({
+      email: u.email.trim(),
+      phone: typeof u.phone === 'string' && u.phone.trim() ? u.phone.trim() : null,
+    }));
 }
 
 ///  +-----------------------------------------------------------------+

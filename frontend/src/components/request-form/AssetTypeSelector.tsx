@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAssetCategories } from "@/api/categories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import type { AssetCategory } from "@/types/categoriesType";
@@ -6,12 +6,17 @@ import type { AssetCategory } from "@/types/categoriesType";
 type Props = {
   value: number;
   onChange: (categoryId: number, categoryName: string) => void;
+  // FIXED: optional preselect (from ?categoryId= on the home page tiles).
+  // Applied once after categories load, only if the id actually exists,
+  // and never over a selection the user has already made.
+  preselectId?: number | null;
 };
 
-export default function AssetTypeSelector({ value, onChange }: Props) {
+export default function AssetTypeSelector({ value, onChange, preselectId }: Props) {
   const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const preselectAttempted = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +42,18 @@ export default function AssetTypeSelector({ value, onChange }: Props) {
       cancelled = true;
     };
   }, []);
+
+  // FIXED: apply the preselect through the normal onChange path so all
+  // downstream category logic behaves exactly as if the tile was clicked.
+  useEffect(() => {
+    if (preselectAttempted.current) return;
+    if (!preselectId || categories.length === 0) return;
+    preselectAttempted.current = true; // one attempt only, match or not
+    if (value) return; // user already picked something — don't override
+    const match = categories.find((c) => c.id === preselectId);
+    if (match) onChange(match.id, match.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, preselectId, value]);
 
   return (
     <section>

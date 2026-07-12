@@ -1,8 +1,7 @@
-import { useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
-import { formatReason } from "@/components/request-table/FormatReason";
+import { ReasonCell } from "@/components/request-table/FormatReason";
 import type { Role } from "@/types/authType";
 
 declare module "@tanstack/react-table" {
@@ -72,20 +71,6 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
   );
 }
 
-// --- Reason cell with own expand state ---
-function ReasonCell({ reason }: { reason?: string }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <p
-      onClick={() => setExpanded((p) => !p)}
-      className={`bg-surface-container-low/50 rounded-lg text-center py-1 px-2 m-1 text-sm font-sans text-info-light max-w-[200px] leading-relaxed transition-all cursor-pointer ${
-        expanded ? "" : "line-clamp-2"
-      }`}
-    >
-      {formatReason(reason ?? "")}
-    </p>
-  );
-}
   function ActionRow({ children }: { children: React.ReactNode }) {
     return <div className="flex justify-center gap-2">{children}</div>;
   }
@@ -379,6 +364,10 @@ export const columns: ColumnDef<Request>[] = [
     header: ({ column }) => <SortableHeader column={column} icon="Devices" label="Request Type" />,
     cell: ({ row }) => {
       const r = row.original;
+      // FIXED: numberOption is authoritative where present; newNumber remains
+      // the legacy bridge for records created before the enum existed.
+      const isNewNumber = r.numberOption ? r.numberOption === "NEW" : !!r.newNumber;
+      const isReuse = r.numberOption === "REUSE" || !!r.reuseNumberPhone;
       return (
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-on-surface-variant">
@@ -387,13 +376,20 @@ export const columns: ColumnDef<Request>[] = [
           {r.callText && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">
               <span className="material-symbols-outlined !text-[14px] text-green-500">check</span>
-              Call & text
+              Call &amp; text
             </span>
           )}
-          {r.newNumber && (
+          {isNewNumber && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">
               <span className="material-symbols-outlined !text-[14px] text-green-500">check</span>
               New number
+            </span>
+          )}
+          {/* FIXED: reuse decision surfaced, with the number itself when known */}
+          {isReuse && (
+            <span className="inline-flex items-center gap-1 text-xs text-info-light">
+              <span className="material-symbols-outlined !text-[14px] text-green-500">check</span>
+              Existing number:{r.reuseNumberPhone ? ` ${r.reuseNumberPhone}` : ""}
             </span>
           )}
         </div>
@@ -405,7 +401,7 @@ export const columns: ColumnDef<Request>[] = [
     id: "reason",
     enableSorting: false,
     header: () => <StaticHeader icon="text_snippet" label="Reason" />,
-    cell: ({ row }) => <ReasonCell reason={row.original.reason} />,
+    cell: ({ row }) => <ReasonCell text={row.original.reason} />,
   },
   {
     accessorKey: "manager",

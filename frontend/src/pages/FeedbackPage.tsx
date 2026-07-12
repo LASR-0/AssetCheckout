@@ -12,10 +12,12 @@ const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
 type Phase = "loading" | "form" | "submitting" | "success" | "disabled";
 
 const OPTIONS: { value: FeedbackResponse; label: string }[] = [
-  { value: "improved", label: "Yes, it improved" },
+  { value: "improved", label: "Yes, it has improved" },
   { value: "no_change", label: "No or negligible improvement" },
   { value: "worse", label: "Worse than before" },
 ];
+
+const commentsPlaceholder = "Tell us how we can improve this service or provide suggetions on how we can improve KSB Australia's IT as a whole.";
 
 export default function FeedbackPage() {
   const navigate = useNavigate();
@@ -183,7 +185,7 @@ export default function FeedbackPage() {
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
                     rows={5}
-                    placeholder="Tell us anything else you'd like us to know..."
+                    placeholder={commentsPlaceholder}
                     className="w-full text-on-surface-variant bg-surface-container/40 ring-purple-900 p-3 border-1 border-outline rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-900/30 resize-y"
                   />
                 </div>

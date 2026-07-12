@@ -19,6 +19,15 @@ export default function SuccessRedirect() {
   const isStandard = request.requestType === "STANDARD";
   const specLabel = isStandard ? "Standard" : "Non-standard";
 
+  // FIXED: reuse decision — numberOption is authoritative, with the reuse
+  // fields as a fallback signal for records that predate the enum.
+  const isReuse =
+    request.numberOption === "REUSE" ||
+    !!request.reuseNumberPhone ||
+    !!request.reuseNumberFromEmail;
+  const reusedNumberLabel =
+    request.reuseNumberPhone ?? request.reuseNumberFromEmail ?? null;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface p-6">
       <div className="max-w-xl w-full bg-success-form rounded-xl p-10 text-center shadow-sm">
@@ -98,6 +107,20 @@ export default function SuccessRedirect() {
           {request.newNumber && (
             <DetailRow label="New number">
               <YesPill />
+            </DetailRow>
+          )}
+
+          {/* FIXED: existing-number reuse — shows WHICH number where known,
+              otherwise falls back to a plain Yes pill */}
+          {isReuse && (
+            <DetailRow label="Existing number">
+              {reusedNumberLabel ? (
+                <span className="text-on-surface-variant font-semibold">
+                  {reusedNumberLabel}
+                </span>
+              ) : (
+                <YesPill />
+              )}
             </DetailRow>
           )}
 

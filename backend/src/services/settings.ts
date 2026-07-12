@@ -11,6 +11,12 @@ export type CategoryStandardModels = {
 
 export type StandardModelsConfig = Record<string, CategoryStandardModels>;
 
+// FIXED: mobile-filter config shape — mirrors MobileNumberConfig on the frontend
+export type MobileFilterConfig = {
+  countryCode: string;        // digits only, e.g. "61"
+  mobileLeadingDigit: string; // single digit, e.g. "4"
+};
+
 const EMPTY_CONFIG: StandardModelsConfig = {};
 
 ///  +-----------------------------------------------------------------+
@@ -20,6 +26,9 @@ const EMPTY_CONFIG: StandardModelsConfig = {};
 const REQUESTABLE_CATEGORIES_KEY = "requestable_categories";
 const STANDARD_MODELS_KEY = "standard_models";
 const SKELETON_STATUS_KEY = "skeleton_status_id";
+// FIXED: mobile number filter keys
+const MOBILE_COUNTRY_CODE_KEY = "mobile_country_code";
+const MOBILE_LEADING_DIGIT_KEY = "mobile_leading_digit";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DEFAULTS REGISTRY + SEEDING                    |
@@ -41,27 +50,101 @@ type SettingDefault = {
   envVar?: string;        // optional override from process.env
   defaultValue: string;
   description: string;
+  // FIXED: optional validation/canonicalisation for env-seeded values.
+  // Returns the canonical stored string, or null if the env value is
+  // invalid (→ fall back to defaultValue, with a startup warning).
+  normalize?: (raw: string) => string | null;
 };
+
+// FIXED: env normaliser for requestable categories. Accepts JSON ([1,2,5])
+// or comma-separated ("1, 2, 5"); canonicalises to the JSON array string
+// that getRequestableCategoryIds expects. Empty string = all allowed.
+function normalizeCategoryIdsEnv(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+
+  let ids: number[];
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed)) return null;
+    if (!parsed.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+    ids = parsed;
+  } catch {
+    const parts = trimmed.split(",").map((p) => Number(p.trim()));
+    if (parts.length === 0 || parts.some((n) => !Number.isFinite(n))) return null;
+    ids = parts;
+  }
+  return JSON.stringify(Array.from(new Set(ids)));
+}
+
+// FIXED: env normaliser for standard models. JSON object only, cleaned
+// through the same shape rules as getStandardModels (numeric-string keys,
+// { primary, backup } entries, non-numbers → null).
+function normalizeStandardModelsEnv(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const cleaned: StandardModelsConfig = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!/^\d+$/.test(key)) continue;
+      if (typeof value !== "object" || value === null) continue;
+      const v = value as Record<string, unknown>;
+      cleaned[key] = {
+        primary: typeof v.primary === "number" ? v.primary : null,
+        backup: typeof v.backup === "number" ? v.backup : null,
+      };
+    }
+    return JSON.stringify(cleaned);
+  } catch {
+    return null;
+  }
+}
 
 const SETTING_DEFAULTS: SettingDefault[] = [
   // ---- Existing settings ----
   {
     key: REQUESTABLE_CATEGORIES_KEY,
+    envVar: "REQUESTABLE_CATEGORY_IDS",
+    normalize: normalizeCategoryIdsEnv,
     defaultValue: "",
     description:
       "JSON array of Snipe-IT category IDs that are allowed for new requests. Empty string means all categories allowed.",
   },
   {
     key: STANDARD_MODELS_KEY,
+    envVar: "STANDARD_MODELS_JSON",
+    normalize: normalizeStandardModelsEnv,
     defaultValue: "",
     description:
       "JSON object mapping categoryId → { primary, backup } model IDs for standard request fulfilment.",
   },
   {
     key: SKELETON_STATUS_KEY,
+    envVar: "SKELETON_STATUS_ID",
     defaultValue: "",
     description:
       "Snipe-IT status ID assigned to newly-created skeleton assets. Empty string falls back to looking up the 'Pending' status by name.",
+  },
+
+  // ---- Mobile number filtering ----
+  // FIXED: seeded from env on fresh installs (MOBILE_COUNTRY_CODE /
+  // MOBILE_LEADING_DIGIT), admin-editable thereafter. AU defaults.
+  {
+    key: MOBILE_COUNTRY_CODE_KEY,
+    envVar: "MOBILE_COUNTRY_CODE",
+    defaultValue: "61",
+    description:
+      "Country calling code (digits only) used to recognise mobile numbers, e.g. 61 for Australia. Mobiles match +{code}{digit}... or 0{digit}...",
+  },
+  {
+    key: MOBILE_LEADING_DIGIT_KEY,
+    envVar: "MOBILE_LEADING_DIGIT",
+    defaultValue: "4",
+    description:
+      "The first digit after the prefix that marks a number as a mobile — 4 for Australia (+61 4xx / 04xx). Single digit.",
   },
 
   // ---- Background jobs ----
@@ -129,31 +212,38 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     description:
       "Max orphaned models the cleanup job will delete in a single run, bounding the blast radius if detection misfires.",
   },
-  { key: "shipping_estimate_days", 
+  { key: "shipping_estimate_days",
+    envVar: "SHIPPING_ESTIMATE_DAYS",
     defaultValue: "5", 
     description: "Estimated delivery days shown in the 'your device has shipped' email" 
   },
   { key: "jobs.shipmentReminderCron",
+    envVar: "JOBS_SHIPMENT_REMINDER_CRON",
     defaultValue: "0 10 * * *", 
     description: "Schedule for the shipped-request reminder job" 
   },
  { key: "reminder_days_1",
+   envVar: "REMINDER_DAYS_1",
    defaultValue: "7",
    description: "Days after shipping to send the first received-reminder to the user" 
   },
   { key: "reminder_days_2",
+   envVar: "REMINDER_DAYS_2",
    defaultValue: "14",
    description: "Days after shipping to send the second received-reminder to the user" 
   },
   { key: "reminder_days_3",
+    envVar: "REMINDER_DAYS_3",
     defaultValue: "30",
     description: "Days after shipping to escalate to the user and admins (overdue)" 
   },
   { key: "feedback_enabled", 
+    envVar: "FEEDBACK_ENABLED",
     defaultValue: "true", 
     description: "Whether the anonymous feedback feature is active (page, nudge, and CTA)" 
   },
   { key: "sharepoint_sync_enabled",
+    envVar: "SHAREPOINT_SYNC_ENABLED",
     defaultValue: "false",
     description: "Whether the nightly SharePoint request-ledger sync is active." 
   },
@@ -169,7 +259,26 @@ const SETTING_DEFAULTS: SettingDefault[] = [
 export async function ensureDefaults(): Promise<void> {
   await Promise.all(
     SETTING_DEFAULTS.map((s) => {
-      const value = s.envVar ? process.env[s.envVar] ?? s.defaultValue : s.defaultValue;
+      // FIXED: env values pass through the setting's normalize hook when one
+      // is declared — invalid values fall back to the default with a warning
+      // instead of seeding garbage (or silently behaving like "unset").
+      let value = s.defaultValue;
+      const raw = s.envVar ? process.env[s.envVar] : undefined;
+      if (raw !== undefined) {
+        if (s.normalize) {
+          const normalized = s.normalize(raw);
+          if (normalized !== null) {
+            value = normalized;
+          } else {
+            console.warn(
+              `[settings] Invalid value for ${s.envVar} — falling back to default for "${s.key}"`
+            );
+          }
+        } else {
+          value = raw;
+        }
+      }
+
       return prisma.setting.upsert({
         where: { key: s.key },
         create: { key: s.key, value, description: s.description },
@@ -368,4 +477,55 @@ export async function setSkeletonStatusId(
 ): Promise<void> {
   const value = statusId === null ? "" : String(statusId);
   await setSetting(SKELETON_STATUS_KEY, value, actorEmail);
+}
+
+///  +-----------------------------------------------------------------+
+///  |                    MOBILE NUMBER FILTERING                      |
+///  +-----------------------------------------------------------------+
+
+// FIXED: hardcoded safety net — reads fall back here if a stored value is
+// missing or malformed, so a bad row can never break number resolution.
+const MOBILE_FILTER_FALLBACK: MobileFilterConfig = {
+  countryCode: "61",
+  mobileLeadingDigit: "4",
+};
+
+const COUNTRY_CODE_RE = /^\d{1,3}$/;
+const LEADING_DIGIT_RE = /^\d$/;
+
+/**
+ * The active mobile-filter config. Each field is validated independently
+ * and falls back to the AU default if the stored value is empty or invalid.
+ */
+export async function getMobileFilterConfig(): Promise<MobileFilterConfig> {
+  const [cc, digit] = await Promise.all([
+    getSetting(MOBILE_COUNTRY_CODE_KEY),
+    getSetting(MOBILE_LEADING_DIGIT_KEY),
+  ]);
+
+  return {
+    countryCode:
+      cc && COUNTRY_CODE_RE.test(cc.trim())
+        ? cc.trim()
+        : MOBILE_FILTER_FALLBACK.countryCode,
+    mobileLeadingDigit:
+      digit && LEADING_DIGIT_RE.test(digit.trim())
+        ? digit.trim()
+        : MOBILE_FILTER_FALLBACK.mobileLeadingDigit,
+  };
+}
+
+/**
+ * Persist the mobile-filter config. Values are expected pre-validated by
+ * the route (digits only); this trims defensively and writes both keys.
+ */
+export async function setMobileFilterConfig(
+  countryCode: string,
+  mobileLeadingDigit: string,
+  actorEmail: string
+): Promise<void> {
+  await Promise.all([
+    setSetting(MOBILE_COUNTRY_CODE_KEY, countryCode.trim(), actorEmail),
+    setSetting(MOBILE_LEADING_DIGIT_KEY, mobileLeadingDigit.trim(), actorEmail),
+  ]);
 }

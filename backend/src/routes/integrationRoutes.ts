@@ -7,6 +7,7 @@ import {
   getUserAssets,
   offboardSnipeUser,
   getRequestableAssetCategories,
+  getAllUserPhones,
 } from "../services/snipeit.js";
 import { AppError } from "../utils/errors.js";
 
@@ -45,7 +46,10 @@ router.post("/hrt/request", async (req, res, next) => {
       manager: body.manager,
       managerId: body.managerId,
       callText: body.callText,
-      newNumber: body.newNumber,
+      needsData: body.needsData,
+      numberOption: body.numberOption,
+      reuseNumberFromEmail: body.reuseNumberFromEmail,
+      reuseNumberPhone: body.reuseNumberPhone,
     });
 
     res.json(result);
@@ -173,6 +177,15 @@ router.post("/hrt/users/:id/offboard", async (req, res, next) => {
 
     const result = await offboardSnipeUser(userId, note);
     res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/hrt/users/phones", async (_req, res, next) => {
+  try {
+    const users = await getAllUserPhones();
+    res.json({ success: true, users });
   } catch (err) {
     next(err);
   }

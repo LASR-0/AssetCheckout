@@ -1,8 +1,8 @@
 type Props = {
-  value: string;
+  value: "STANDARD" | "NON_STANDARD";
   reason: string;
-  onChange: (value: string) => void;
-  onReasonChange: (value: string) => void;
+  onChange: (val: "STANDARD" | "NON_STANDARD") => void;
+  onReasonChange: (val: string) => void;
 };
 
 export default function SpecLevelToggle({

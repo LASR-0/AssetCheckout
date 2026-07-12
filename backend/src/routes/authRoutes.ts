@@ -12,18 +12,18 @@ router.get("/role", async (req: ExpressRequest, res: Response, next: NextFunctio
     const rawEmail = getActorEmail(req);
 
     if (!rawName && !rawEmail) {
-      return res.json({ role: null, name: "" });
+      return res.json({ role: null, name: "", email: "" });
     }
 
     // 1. Admin check — keyed on email so it's stable across display name changes
     if (rawEmail && isAdminEmail(rawEmail)) {
-      return res.json({ role: "ADMIN", name: rawName || rawEmail });
+      return res.json({ role: "ADMIN", name: rawName || rawEmail, email: rawEmail });
     }
 
     // Manager/requester checks require a name — if there's only an email and
     // it didn't match admin, there's nothing left to resolve.
     if (!rawName) {
-      return res.json({ role: null, name: rawEmail });
+      return res.json({ role: null, name: rawEmail, email: rawEmail });
     }
 
     const target = normalizeName(rawName);
@@ -38,7 +38,7 @@ router.get("/role", async (req: ExpressRequest, res: Response, next: NextFunctio
       (r) => r.manager && normalizeName(r.manager) === target
     );
     if (isManager) {
-      return res.json({ role: "MANAGER", name: rawName });
+      return res.json({ role: "MANAGER", name: rawName, email: rawEmail });
     }
 
     // 3. Requester check — appears as `userName` on at least one request
@@ -50,11 +50,11 @@ router.get("/role", async (req: ExpressRequest, res: Response, next: NextFunctio
       (r) => normalizeName(r.userName) === target
     );
     if (isRequester) {
-      return res.json({ role: "REQUESTER", name: rawName });
+      return res.json({ role: "REQUESTER", name: rawName, email: rawEmail });
     }
 
     // 4. Default — no access
-    return res.json({ role: null, name: rawName });
+    return res.json({ role: null, name: rawName, email: rawEmail });
   } catch (err) {
     next(err);
   }

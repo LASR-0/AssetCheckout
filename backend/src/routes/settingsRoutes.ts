@@ -6,7 +6,9 @@ import {
   getStandardModels,
   setStandardModelsForCategory,
   getSkeletonStatusId,
-  setSkeletonStatusId
+  setSkeletonStatusId,
+  getMobileFilterConfig,
+  setMobileFilterConfig,
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 
@@ -140,6 +142,71 @@ router.put("/skeleton-status", async (req, res, next) => {
 
     await setSkeletonStatusId(parsed, getActorEmail(req));
     res.json({ success: true, statusId: parsed });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                    MOBILE NUMBER FILTERING                      |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Returns the active mobile-filter config:
+ *   { countryCode: string, mobileLeadingDigit: string }
+ *
+ * FIXED: deliberately NOT admin-gated — the request form resolves reuse
+ * numbers for every user, so all roles need to read this. Invalid stored
+ * values are already normalised to defaults by the service.
+ */
+router.get("/mobile-filter", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = await getMobileFilterConfig();
+    res.json(config);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Update the mobile-filter config.
+ * Body: { countryCode: string, mobileLeadingDigit: string }
+ *
+ * countryCode: 1-3 digits (a pasted leading "+" and any spaces are
+ * stripped before validation). mobileLeadingDigit: exactly one digit.
+ *
+ * Admin-only.
+ */
+router.put("/mobile-filter", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const body = req.body ?? {};
+
+    // Normalise: tolerate "+61" or "61 " from a paste.
+    const countryCode =
+      typeof body.countryCode === "string"
+        ? body.countryCode.replace(/[+\s]/g, "")
+        : "";
+    const mobileLeadingDigit =
+      typeof body.mobileLeadingDigit === "string"
+        ? body.mobileLeadingDigit.trim()
+        : "";
+
+    if (!/^\d{1,3}$/.test(countryCode)) {
+      return res.status(400).json({
+        error: "countryCode must be 1-3 digits (e.g. 61 for Australia)",
+      });
+    }
+    if (!/^\d$/.test(mobileLeadingDigit)) {
+      return res.status(400).json({
+        error: "mobileLeadingDigit must be a single digit (e.g. 4 for Australia)",
+      });
+    }
+
+    await setMobileFilterConfig(countryCode, mobileLeadingDigit, getActorEmail(req));
+    const saved = await getMobileFilterConfig();
+    res.json(saved);
   } catch (err) {
     next(err);
   }

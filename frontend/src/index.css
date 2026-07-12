@@ -77,6 +77,9 @@
     --landing-card: 255 255 255;
     --landing-raised: 251 250 253;
     --landing-border: 229 224 239;
+
+    /* FIXED: footer bg derives from nav — darker by 0.1 lightness in light theme */
+    --footer-bg: oklch(from rgb(var(--landing-bg)) calc(l - 0.03) c h);
   }
 
   .dark {
@@ -145,6 +148,9 @@
     --landing-card: 27 20 48;
     --landing-raised: 22 16 40;
     --landing-border: 47 36 80;
+
+    /* FIXED: footer bg derives from nav — brighter by 0.1 lightness in dark theme */
+    --footer-bg: oklch(from rgb(var(--nav)) calc(l + 0.1) c h);
   }
 
   input[type="checkbox"] {
@@ -224,6 +230,9 @@
    --color-landing-card: rgb(var(--landing-card));
    --color-landing-raised: rgb(var(--landing-raised));
    --color-landing-border: rgb(var(--landing-border));
+
+   /* FIXED: no rgb() wrapper — --footer-bg is already a complete colour value */
+   --color-footer-bg: var(--footer-bg);
 }
 
 @layer components {
@@ -287,5 +296,3 @@
   }
 
 }
-
-

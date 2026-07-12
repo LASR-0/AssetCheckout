@@ -46,29 +46,7 @@ function getTransporter(): Transporter {
       ...(SMTP_USER && SMTP_PASS
         ? { auth: { user: SMTP_USER, pass: SMTP_PASS } }
         : {}),
-      tls: { minVersion: "TLSv1.2",
-        ...(IS_DEV //Server Identity check is only required for development enviroment
-        ? {
-          checkServerIdentity: (hostname, cert) => {
-            const ok = /^ksb00exc\d{4}(\.EMEA\.KSB\.intern)?$/i;
-
-            const cn = cert.subject?.CN;
-            const cnNames = Array.isArray(cn) ? cn : cn ? [cn] : [];
-
-            const sanNames = String(cert.subjectaltname ?? "")
-              .split(",")
-              .map((s) => s.trim().replace(/^DNS:/i, ""));
-
-            const names = [...cnNames, ...sanNames].filter(Boolean);
-
-            if (names.some((n) => ok.test(n))) {
-              return undefined; // accept — it's one of our relay nodes
-            }
-            return tls.checkServerIdentity(hostname, cert);
-          },
-        }
-      : {} ),
-      }
+      tls: { rejectUnauthorized: false }
     });
   }
 

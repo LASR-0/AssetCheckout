@@ -4,6 +4,7 @@ import type { Role } from "@/types/authType";
 
 export interface AuthState {
   name: string;
+  email: string;
   role: Role;
   isLoading: boolean;
   refresh: () => void;
@@ -45,6 +46,7 @@ export function setDevUserEmail(email: string): void {
 
 export function useAuth(): AuthState {
   const [name, setName] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const [role, setRole] = useState<Role>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [tick, setTick] = useState(0);
@@ -73,6 +75,7 @@ export function useAuth(): AuthState {
         if (isDev && !devName) {
           if (!cancelled) {
             setName("");
+            setEmail("");
             setRole(null);
             setIsLoading(false);
           }
@@ -91,6 +94,7 @@ export function useAuth(): AuthState {
 
         if (!cancelled) {
           setName(data.name ?? devName);
+          setEmail(data.email ?? devEmail);
           setRole(data.role);
           setIsLoading(false);
         }
@@ -109,5 +113,5 @@ export function useAuth(): AuthState {
     };
   }, [tick]);
 
-  return { name, role, isLoading, refresh };
+  return { name, email, role, isLoading, refresh };
 }
