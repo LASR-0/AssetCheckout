@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Role } from "@/types/authType";
 
-
 export interface AuthState {
   name: string;
   email: string;
@@ -13,6 +12,18 @@ export interface AuthState {
 const STORAGE_KEY = "dev-user-name";
 const STORAGE_KEY_EMAIL = "dev-user-email";
 const CHANGE_EVENT = "dev-user-changed";
+
+
+function normalizeDisplayName(raw: string): string {
+  const trimmed = raw.trim();
+  const commaIdx = trimmed.indexOf(",");
+  if (commaIdx !== -1) {
+    const last = trimmed.slice(0, commaIdx).trim();
+    const first = trimmed.slice(commaIdx + 1).trim();
+    if (first && last) return `${first} ${last}`;
+  }
+  return trimmed;
+}
 
 export function getDevUserName(): string {
   if (typeof window === "undefined") return "";
@@ -70,8 +81,6 @@ export function useAuth(): AuthState {
         const isDev = import.meta.env.VITE_APP_ENV === "development";
         const devName = isDev ? getDevUserName() : "";
 
-        // In dev mode, if no identity has been picked in DevAuthToggle,
-        // treat as unauthenticated without hitting the backend.
         if (isDev && !devName) {
           if (!cancelled) {
             setName("");
@@ -93,7 +102,7 @@ export function useAuth(): AuthState {
         const data = await res.json();
 
         if (!cancelled) {
-          setName(data.name ?? devName);
+          setName(normalizeDisplayName(data.name ?? devName));
           setEmail(data.email ?? devEmail);
           setRole(data.role);
           setIsLoading(false);
