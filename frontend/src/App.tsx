@@ -9,6 +9,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import LandingPage from "./pages/Home";
 import FeedbackPage from "./pages/FeedbackPage";
+import Footer from "./components/footer/Footer";
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
+      <Footer />
     </>
   );
 }

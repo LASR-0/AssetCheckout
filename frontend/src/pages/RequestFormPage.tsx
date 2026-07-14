@@ -81,10 +81,10 @@ export default function RequestFormPage() {
       setError("Please select an approver.");
       return;
     }
-    if (formState.userId === formState.managerId) {
-      setError("Requester cannot be the same as the approver.");
-      return;
-    }
+    // if (formState.userId === formState.managerId) {
+    //   setError("Requester cannot be the same as the approver.");
+    //   return;
+    // }
     if (formState.requestType === "NON_STANDARD" && !formState.reason.trim()) {
       setError("Please provide a reason for the non-standard request.");
       return;
@@ -285,10 +285,6 @@ export default function RequestFormPage() {
           </div>
         </div>
       </div>
-
-      <footer className="w-full py-6 bg-nav px-8 font-semibold text-xs text-nav-tab">
-        © {COMPANY}
-      </footer>
     </main>
   );
 }

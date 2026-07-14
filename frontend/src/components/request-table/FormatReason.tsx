@@ -48,10 +48,10 @@ export const ReasonCell = ({ text }: { text?: string }) => {
           <p className="text-sm leading-snug">{parsed.plain}</p>
         )}
         {parsed.rejected && (
-          <p className="text-sm leading-snug text-error/60 mb-1.5">
+          <p className="text-sm leading-snug text-status-error/60 mb-1.5">
             {/* FIXED: added "Rejected:" label after the icon */}
-            <Ban className="inline size-3.5 text-error mr-1.5 -mt-0.5" aria-hidden="true" />
-            <span className="font-medium text-error mr-1">Rejected:</span>
+            <Ban className="inline size-3.5 text-status-error mr-1.5 -mt-0.5" aria-hidden="true" />
+            <span className="font-medium text-status-error mr-1">Rejected:</span>
             {parsed.rejected}
           </p>
         )}

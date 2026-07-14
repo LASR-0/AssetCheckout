@@ -342,10 +342,6 @@ export default function RequestTablePage() {
           />
         </div>
       </main>
-
-      <footer className="w-full py-6 bg-nav px-8 font-semibold text-xs text-nav-tab">
-        © {COMPANY}
-      </footer>
     </div>
   );
 }

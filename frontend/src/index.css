@@ -52,6 +52,17 @@
     /* Misc */
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.144);
 
+    --status-success:     #16a34a; /* green-600  — completed/collected/received/approve */
+    --status-error:       #dc2626; /* red-600    — rejected/reject */
+    --status-pending:     #ca8a04; /* yellow-600 — pending */
+    --status-approved:    #60a5fa; /* blue-400   — approved badge, asset details */
+    --status-awaiting-it: #c084fc; /* purple-400 — awaiting IT */
+    --status-collect:     #2dd4bf; /* teal-400   — ready to collect / mark ready */
+    --status-ship:        #fbbf24; /* amber-400  — ready to ship / mark shipped */
+    --status-shipped:     #38bdf8; /* sky-400    — shipped */
+    --status-assigned:    #818cf8; /* indigo-400 — assigned */
+    --status-model:       #fbbf24; /* amber-400  — create model */
+
     /* modals */
     --modal-text-primary: 52 50 52;
     --modal-text-secondary: 92 92 92;
@@ -123,6 +134,17 @@
     --loading: 235 218 183;
 
     --shadow-md: 0 0 0 2px rgba(161, 138, 222, 0.14), 0 4px 18px rgba(238, 181, 255, 0.231);
+
+    --status-success:     #34d399; /* emerald-400 */
+    --status-error:       #fb7185; /* rose-400 */
+    --status-pending:     #fcd34d; /* amber-300 */
+    --status-approved:    #38bdf8; /* sky-400 */
+    --status-awaiting-it: #a78bfa; /* violet-400 */
+    --status-collect:     #5eead4; /* teal-300 */
+    --status-ship:        #fdba74; /* orange-300 */
+    --status-shipped:     #22d3ee; /* cyan-400 */
+    --status-assigned:    #a5b4fc; /* indigo-300 */
+    --status-model:       #fcd34d; /* amber-300 */
 
     --modal-text-primary: 255 228 189;
     --modal-text-secondary: 255 241 219;
@@ -222,6 +244,17 @@
   --color-modal-error: rgb(var(--modal-error));
   --color-twilight-gradient: rgb(var(--twilight-gradient));
   --color-not-found: rgb(var(--not-found));
+
+  --color-status-success:     var(--status-success);
+  --color-status-error:       var(--status-error);
+  --color-status-pending:     var(--status-pending);
+  --color-status-approved:    var(--status-approved);
+  --color-status-awaiting-it: var(--status-awaiting-it);
+  --color-status-collect:     var(--status-collect);
+  --color-status-ship:        var(--status-ship);
+  --color-status-shipped:     var(--status-shipped);
+  --color-status-assigned:    var(--status-assigned);
+  --color-status-model:       var(--status-model);
 
    --color-tooltip-bg: rgb(var(--tooltip-bg));
    --color-tooltip-text: rgb(var(--tooltip-text));

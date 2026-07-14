@@ -2,6 +2,7 @@ import { prisma } from "../../db/prisma.js";
 import { resolveUserEmail } from "../../services/snipeit.js";
 import { sendEmail } from "../../services/email.js";
 import { getSetting } from "../../services/settings.js";
+import { appLink } from "../handlers/AppLinks.js";
 import {
   renderEmail,
   esc,
@@ -10,7 +11,6 @@ import {
   type EmailContent,
 } from "./emailTemplate.js";
 
-const APP_BASE_URL = (process.env.APP_BASE_URL ?? "").replace(/\/$/, "");
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -71,7 +71,9 @@ export async function sendRequestNotificationHandler(
     return { skipped: true, reason: "request_not_found", requestId, kind };
   }
 
-  const reviewLink = `${APP_BASE_URL}/requests`;
+  // Absolute link into the app — appLink() picks the production or dev base
+  // URL from the environment, so localhost never leaks into real emails.
+  const reviewLink = appLink("/requests");
   const userFirst = firstNameFromDisplayName(request.userName);
   const category = esc(request.categoryName);
   const userName = esc(request.userName);

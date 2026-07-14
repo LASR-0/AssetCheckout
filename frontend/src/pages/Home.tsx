@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getFeedbackEnabled } from "@/api/feedback";
 import { fetchUsers } from "@/api/users";
 import { getRequests } from "@/api/requests";
 import { getAssetCategories } from "@/api/categories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { useAuth } from "@/hooks/useAuth";
+import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
 import type { AssetCategory } from "@/types/categoriesType";
 
 ///  +-----------------------------------------------------------------+
@@ -15,14 +15,18 @@ import type { AssetCategory } from "@/types/categoriesType";
 //  Redesign: the old marketing-style landing (Hero/Features/Lifecycle/CTA)
 //  is replaced with an internal-tool home — greeting + status snapshot,
 //  start-a-request tiles, recent requests, and quick links.
-//  Footer is unchanged from the previous page.
+//
+//  The footer now lives in its own component (components/Footer.tsx) and
+//  is rendered app-wide from App.tsx, so this page no longer owns the
+//  min-h-screen flex column — App.tsx does. The root here is flex-grow
+//  so the page background fills the space between nav and footer.
 
 const CARD = "bg-landing-card border border-landing-border rounded-xl";
 const RAISED = "bg-landing-raised border border-landing-border rounded-lg";
 
-const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
-
 // Minimal structural type for what this page reads off a request.
+// Fulfilment timestamps included so the shared StatusBadge can derive
+// post-completion stages (Assigned / Shipped / Ready to collect / …).
 // TODO: swap for the real `Request` import from your types file.
 type HomeRequest = {
   id: number;
@@ -30,6 +34,10 @@ type HomeRequest = {
   categoryName: string;
   status: "PENDING" | "COMPLETED" | "REJECTED" | "APPROVED";
   createdAt: string;
+  needsShipping?: boolean | null;
+  shippedAt?: string | null;
+  collectionReadyAt?: string | null;
+  receivedAt?: string | null;
   modelRequest?: {
     modelName: string;
   };
@@ -89,30 +97,13 @@ export default function LandingPage() {
   const { requests, loading } = useMyRequests();
 
   return (
-    <div className="bg-landing-bg text-on-background min-h-screen flex flex-col">
-      <main className="w-full max-w-[1160px] mx-auto px-6 md:px-8 flex-grow pb-16">
+    <div className="bg-landing-bg text-on-background flex-grow">
+      <main className="w-full max-w-[1160px] mx-auto px-6 md:px-8 pb-16">
         <HomeHead requests={requests} loading={loading} />
         <QuickStart />
         <RecentRequests requests={requests} loading={loading} />
         <QuickLinks />
       </main>
-
-      {/* FIXED: bg-nav-bg had no token in theme.css (silently no-op) — now uses
-          the derived footer token: nav lightness +0.1 in dark, -0.1 in light */}
-      <footer className="mt-16 border-t border-outline shadow-md bg-footer-bg">
-        <div className="max-w-[1160px] mx-auto px-8 py-8 flex items-center gap-6 text-sm text-info-light">
-          <span>{COMPANY}</span>
-          <nav className="ml-auto flex gap-5 font-semibold">
-            <Link className="hover:text-on-background transition-colors" to="/request">
-              Checkouts
-            </Link>
-            <Link className="hover:text-on-background transition-colors" to="/requests">
-              Requests
-            </Link>
-            <FeedbackNavLink />
-          </nav>
-        </div>
-      </footer>
     </div>
   );
 }
@@ -202,12 +193,12 @@ function Stat({
   return (
     <div
       className={`${CARD} flex flex-col items-center justify-center gap-1 px-5 py-4 min-w-[110px] ${
-        attention ? "!border-red-500/50" : ""
+        attention ? "!border-status-error/50" : ""
       }`}
     >
       <span
         className={`font-headline font-extrabold text-2xl ${
-          attention ? "text-red-500" : ""
+          attention ? "text-status-error" : ""
         }`}
       >
         {loading ? "–" : num}
@@ -309,28 +300,11 @@ function QuickStart() {
 ///  +-----------------------------------------------------------------+
 ///  |                    YOUR RECENT REQUESTS                         |
 ///  +-----------------------------------------------------------------+
-
-const STATUS_PILL: Record<
-  HomeRequest["status"],
-  { label: string; className: string }
-> = {
-  PENDING: {
-    label: "Pending approval",
-    className: "bg-blue-500/10 text-blue-400 border border-blue-400",
-  },
-  APPROVED: {
-    label: "Approved",
-    className: "bg-purple-500/10 text-purple-400 border border-purple-400",
-  },
-  COMPLETED: {
-    label: "Completed",
-    className: "bg-green-500/10 text-green-600 border border-green-600",
-  },
-  REJECTED: {
-    label: "Rejected",
-    className: "bg-red-500/10 text-red-600 border border-red-600",
-  },
-};
+//
+//  Status column renders the shared StatusBadge (same component as the
+//  requests table) with the derived fulfilment stage, so colours, icons,
+//  labels, and post-completion states (Assigned / Shipped / Ready to
+//  collect / Collected / Received) are identical site-wide.
 
 function shortDate(iso: string): string {
   const d = new Date(iso);
@@ -403,11 +377,7 @@ function RecentRequests({
                 {r.userName === name ? "Yourself" : r.userName}
               </span>
               <span>
-                <span
-                  className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full ${STATUS_PILL[r.status].className}`}
-                >
-                  {STATUS_PILL[r.status].label}
-                </span>
+                <StatusBadge status={deriveFulfilment(r).badgeKey} />
               </span>
             </Link>
           ))}
@@ -478,27 +448,5 @@ function QuickLinks() {
         ))}
       </div>
     </section>
-  );
-}
-
-///  +-----------------------------------------------------------------+
-///  |                      FEEDBACK NAV LINK                          |
-///  +-----------------------------------------------------------------+
-
-function FeedbackNavLink() {
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    getFeedbackEnabled()
-      .then((r) => setEnabled(r.enabled))
-      .catch(() => setEnabled(false));
-  }, []);
-
-  if (!enabled) return null;
-
-  return (
-    <Link className="hover:text-on-background transition-colors" to="/feedback">
-      Feedback
-    </Link>
   );
 }

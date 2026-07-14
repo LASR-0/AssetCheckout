@@ -6,6 +6,13 @@
 //  layout, inline styles only, with Outlook (MSO) fallbacks — gradients
 //  degrade to solid colour, the CTA uses the bulletproof-button pattern.
 //
+//  Dark-mode hardening: the template declares itself light-only via
+//  color-scheme / supported-color-schemes (meta + :root) and doubles up
+//  key surfaces with bgcolor attributes. Clients that honour the scheme
+//  (Apple Mail, iOS Mail) will stop inverting the palette; clients that
+//  force their own transform (Outlook, Gmail apps) at least transform
+//  from consistent anchors, so all notification kinds shift the same way.
+//
 //  Every notification kind builds its plain-text body as before (kept for
 //  multipart fallback) AND calls renderEmail() for the HTML alternative.
 ///  +-----------------------------------------------------------------+
@@ -87,7 +94,7 @@ function renderDetailBlock(rows: EmailDetailRow[]): string {
 
   return `
     <tr><td style="padding:24px 44px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#faf9fc; border:1px solid #ececf1; border-radius:8px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#faf9fc" style="background:#faf9fc; border:1px solid #ececf1; border-radius:8px;">
         ${cells}
       </table>
     </td></tr>`;
@@ -103,7 +110,7 @@ function renderHighlight(h: { heading: string; lines: string[] }): string {
 
   return `
     <tr><td style="padding:24px 44px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#faf9fc; border:1px solid #ececf1; border-left:3px solid ${PURPLE}; border-radius:8px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#faf9fc" style="background:#faf9fc; border:1px solid #ececf1; border-left:3px solid ${PURPLE}; border-radius:8px;">
         <tr><td style="padding:18px 20px 8px; font:600 11px/1 ${FONT}; letter-spacing:.07em; text-transform:uppercase; color:#8b8794;">${h.heading}</td></tr>
         ${lines}
         <tr><td style="height:6px; font-size:0; line-height:0;">&nbsp;</td></tr>
@@ -124,7 +131,7 @@ function renderCta(cta: { label: string; url: string }): string {
       <![endif]-->
       <!--[if !mso]><!-->
       <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="border-radius:8px; background:${PURPLE};">
+        <tr><td bgcolor="${PURPLE}" style="border-radius:8px; background:${PURPLE};">
           <a href="${cta.url}" style="display:inline-block; padding:14px 30px; font:600 15px/1 ${FONT}; color:#ffffff; border-radius:8px;">${cta.label}</a>
         </td></tr>
       </table>
@@ -162,14 +169,22 @@ export function renderEmail(content: EmailContent): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<style>
+  :root {
+    color-scheme: light;
+    supported-color-schemes: light;
+  }
+</style>
 <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
 <title>${esc(content.title)}</title>
 </head>
-<body style="margin:0; padding:0; background:#f1f0f4;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f1f0f4;">
+<body style="margin:0; padding:0; background:#f1f0f4;" bgcolor="#f1f0f4">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f1f0f4" style="background:#f1f0f4;">
   <tr><td align="center" style="padding:40px 16px;">
 
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px; max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e7e5ee; border-radius:8px; font-family:${FONT}; color:#27242e;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" style="width:600px; max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e7e5ee; border-radius:8px; font-family:${FONT}; color:#27242e;">
 
       <!-- accent bar: solid for Outlook, gradient elsewhere -->
       <tr><td style="height:4px; background:${PURPLE}; background:linear-gradient(90deg,${PURPLE},${PURPLE_LIGHT}); border-radius:8px 8px 0 0; font-size:0; line-height:0;">&nbsp;</td></tr>

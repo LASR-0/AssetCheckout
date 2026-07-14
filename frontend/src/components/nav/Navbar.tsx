@@ -117,7 +117,7 @@ export default function Navbar() {
             }`}
           >
             <span
-              className="material-symbols-outlined mt-1 !text-3xl"
+              className={` ${ICON_BUTTON} material-symbols-outlined !text-3xl`}
               style={{ fontVariationSettings: `'FILL' 1` }}
             >
               menu

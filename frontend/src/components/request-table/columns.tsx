@@ -2,6 +2,7 @@ import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-tab
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
 import { ReasonCell } from "@/components/request-table/FormatReason";
+import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
 import type { Role } from "@/types/authType";
 
 declare module "@tanstack/react-table" {
@@ -106,46 +107,6 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     );
   }
 
-function StatusBadge({ status }: { status: string }) {
-  const labelMap: Record<string, string> = {
-    PENDING: "Pending",
-    APPROVED: "Approved",
-    REJECTED: "Rejected",
-    COMPLETED: "Completed",
-    AWAITING_IT: "Awaiting IT",
-    READY_TO_COLLECT: "Ready to collect",
-    READY_TO_SHIP: "Ready to ship",
-    SHIPPED: "Shipped",
-    COLLECTED: "Collected",
-    RECEIVED: "Received",
-    ASSIGNED: "Assigned"
-  };
-
-  const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
-    APPROVED: { bg: "bg-blue-500/10", text: "text-blue-400", icon: "schedule" },
-    COMPLETED: { bg: "bg-green-500/10", text: "text-green-600", icon: "check_circle" },
-    REJECTED: { bg: "bg-red-500/10", text: "text-red-600", icon: "cancel" },
-    PENDING: { bg: "bg-yellow-500/10", text: "text-yellow-600", icon: "schedule" },
-    AWAITING_IT: { bg: "bg-purple-500/10", text: "text-purple-400", icon: "shield_person" },
-    READY_TO_COLLECT: { bg: "bg-teal-500/10", text: "text-teal-400", icon: "package_2" },
-    READY_TO_SHIP: { bg: "bg-amber-500/10", text: "text-amber-400", icon: "local_shipping" },
-    SHIPPED: { bg: "bg-sky-500/10", text: "text-sky-400", icon: "local_shipping" },
-    COLLECTED: { bg: "bg-green-500/10", text: "text-green-500", icon: "check_circle" },
-    RECEIVED: { bg: "bg-green-500/10", text: "text-green-500", icon: "check_circle" },
-    ASSIGNED: { bg: "bg-indigo-500/10", text: "text-indigo-400", icon: "assignment_ind" },
-  };
-
-  const style = styleMap[status] ?? styleMap.PENDING;
-  const label = labelMap[status] ?? status;
-
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold border-1 rounded-full ${style.bg} ${style.text}`}>
-      <span className="material-symbols-outlined !text-sm">{style.icon}</span>
-      {label}
-    </span>
-  );
-}
-
 // --- Actions / Status cell ---
 function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> }) {
   const meta = table.options.meta as RequestsTableMeta;
@@ -168,41 +129,20 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     request.requestType === "STANDARD" &&
     !request.adminApprovedAt;
 
-
   // ── Post-fulfilment shipping/receipt derivation (COMPLETED requests) ──
+  // Shared with the home page — see components/StatusBadge.tsx.
+  const {
+    isCompleted,
+    isCollectAwaitingPrep,
+    isReadyToCollect,
+    isShipAwaitingPrep,
+    isShipped,
+    isReceivedOrCollected,
+    badgeKey: completedBadgeKey,
+  } = deriveFulfilment(request);
+
   const needsShipping = request.needsShipping ?? false;
-  const shippedAt = request.shippedAt ?? null;
-  const collectionReadyAt = request.collectionReadyAt ?? null;
-  const receivedAt = request.receivedAt ?? null;
   const isOwner = request.userName === meta.currentUserName;
-
-  const isCompleted = requestStatus === "COMPLETED";
-
-  // Collect path: assigned (awaiting prep) → ready to collect → collected
-  const isCollectAwaitingPrep =
-    isCompleted && !needsShipping && !collectionReadyAt && !receivedAt;
-  const isReadyToCollect =
-    isCompleted && !needsShipping && !!collectionReadyAt && !receivedAt;
-
-  // Ship path: assigned (awaiting dispatch) → shipped → received
-  const isShipAwaitingPrep =
-    isCompleted && needsShipping && !shippedAt && !receivedAt;
-  const isShipped =
-    isCompleted && needsShipping && !!shippedAt && !receivedAt;
-
-  const isReceivedOrCollected = isCompleted && !!receivedAt;
-
-  // Synthetic badge key for the completed states.
-  const completedBadgeKey =
-    isReceivedOrCollected
-      ? (needsShipping ? "RECEIVED" : "COLLECTED")
-      : isReadyToCollect
-      ? "READY_TO_COLLECT"
-      : isShipped
-      ? "SHIPPED"
-      : (isCollectAwaitingPrep || isShipAwaitingPrep)
-      ? "ASSIGNED"
-      : "COMPLETED";
 
   if (requestStatus === "REJECTED") {
     return <StatusBadge status={requestStatus} />;
@@ -226,9 +166,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionButton
             icon="inventory_2"
             label={collecting ? "Mark collected" : "Mark received"}
-            color="text-green-500"
-            hoverBg="hover:bg-green-600/10"
-            border="border-green-500/50"
+            color="text-status-success"
+            hoverBg="hover:bg-status-success/10"
+            border="border-status-success/40"
             title={collecting ? "Mark collected" : "Mark received"}
             onClick={() => meta.onMarkReceived(request)}
           />
@@ -244,9 +184,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             <ActionButton
               icon="local_shipping"
               label="Mark shipped"
-              color="text-amber-400"
-              hoverBg="hover:bg-amber-500/10"
-              border="border-amber-500/50"
+              color="text-status-ship"
+              hoverBg="hover:bg-status-ship/10"
+              border="border-status-ship/40"
               title="Mark shipped"
               onClick={() => meta.onMarkShipped(request)}
             />
@@ -259,9 +199,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             <ActionButton
               icon="package_2"
               label="Mark ready"
-              color="text-teal-400"
-              hoverBg="hover:bg-teal-500/10"
-              border="border-teal-500/50"
+              color="text-status-collect"
+              hoverBg="hover:bg-status-collect/10"
+              border="border-status-collect/40"
               title="Mark ready for collection"
               onClick={() => meta.onMarkReadyForCollection(request)}
             />
@@ -283,11 +223,11 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isPending) {
       return (
         <ActionRow>
-          <ActionButton icon="check_circle" label="Approve" color="text-green-500" hoverBg="hover:bg-green-600/10"
-            border="border-green-500/50" title="Approve"
+          <ActionButton icon="check_circle" label="Approve" color="text-status-success" hoverBg="hover:bg-status-success/10"
+            border="border-status-success/40" title="Approve"
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" label="Reject" color="text-error" hoverBg="hover:bg-error/10"
-            border="border-error/50" title="Reject"
+          <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
+            border="border-status-error/40" title="Reject"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -305,12 +245,12 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isPending || isApprovedAwaitingAdmin || isStandardAwaitingIT) {
       return (
         <ActionRow>
-          <ActionButton icon="check_circle" label="Approve" color="text-green-500" hoverBg="hover:bg-green-600/10"
-            border="border-green-500/50"
+          <ActionButton icon="check_circle" label="Approve" color="text-status-success" hoverBg="hover:bg-status-success/10"
+            border="border-status-success/40"
             title={isStandardAwaitingIT ? "Approve & assign asset" : "Approve"}
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" label="Reject" color="text-error" hoverBg="hover:bg-red-600/10"
-            border="border-red-500/50" title="Reject"
+          <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
+            border="border-status-error/40" title="Reject"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -318,8 +258,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAdminApprovedAwaitingModel) {
       return (
         <ActionRow>
-          <ActionButton icon="add_circle" label="Create model" color="text-amber-400" hoverBg="hover:bg-amber-500/10"
-            border="border-amber-500/50" title="Create Model"
+          <ActionButton icon="add_circle" label="Create model" color="text-status-model" hoverBg="hover:bg-status-model/10"
+            border="border-status-model/40" title="Create Model"
             onClick={() => meta.onCreateModel(request)} />
         </ActionRow>
       );
@@ -327,8 +267,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isModelCreated) {
       return (
         <ActionRow>
-          <ActionButton icon="info" label="Asset details" color="text-blue-400" hoverBg="hover:bg-blue-600/10"
-            border="border-blue-500/50" title="Asset Details"
+          <ActionButton icon="info" label="Asset details" color="text-status-approved" hoverBg="hover:bg-status-approved/10"
+            border="border-status-approved/40" title="Asset Details"
             onClick={() => meta.onAssetDetails(request)} />
         </ActionRow>
       );
@@ -381,20 +321,20 @@ export const columns: ColumnDef<Request>[] = [
           </span>
           {r.callText && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">
-              <span className="material-symbols-outlined !text-[14px] text-green-500">check</span>
+              <span className="material-symbols-outlined !text-[14px] text-status-success">check</span>
               Call &amp; text
             </span>
           )}
           {isNewNumber && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">
-              <span className="material-symbols-outlined !text-[14px] text-green-500">check</span>
+              <span className="material-symbols-outlined !text-[14px] text-status-success">check</span>
               New number
             </span>
           )}
           {/* FIXED: reuse decision surfaced, with the number itself when known */}
           {isReuse && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">
-              <span className="material-symbols-outlined !text-[14px] text-green-500">check</span>
+              <span className="material-symbols-outlined !text-[14px] text-status-success">check</span>
               Existing number:{r.reuseNumberPhone ? ` ${r.reuseNumberPhone}` : ""}
             </span>
           )}
