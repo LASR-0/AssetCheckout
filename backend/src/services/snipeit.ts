@@ -1439,26 +1439,16 @@ export async function offboardSnipeUser(userId: number, note?: string): Promise<
  * phone is string | null — Snipe allows users with no number. Users with no
  * email are dropped (HRT matches on email, so an emailless row is useless).
  */
-export async function getAllUserPhones(): Promise<{ email: string; phone: string | null }[]> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/v1/users?limit=500`;
-  const res = await fetchWithTimeout(url, {
-    method: 'GET',
-    headers: getHeaders(),
-  });
- 
-  const data: { rows?: { email?: string; phone?: string | null }[] } = await res.json();
-  if (!data?.rows) {
-    throw new AppError('Failed to fetch users', 500);
-  }
- 
-  return data.rows
-    .filter((u): u is { email: string; phone?: string | null } =>
-      typeof u.email === 'string' && u.email.trim().length > 0
-    )
-    .map((u) => ({
-      email: u.email.trim(),
-      phone: typeof u.phone === 'string' && u.phone.trim() ? u.phone.trim() : null,
-    }));
+export async function getAllUserPhones(): Promise<
+  { id: number; phone: string | null; mobile: string | null }[]
+> {
+  const users = await getAllUsersCleaned();
+
+  return users.map((u) => ({
+    id: u.id,
+    phone: u.phone,
+    mobile: u.mobile,
+  }));
 }
 
 ///  +-----------------------------------------------------------------+
