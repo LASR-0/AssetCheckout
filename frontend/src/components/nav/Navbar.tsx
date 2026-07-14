@@ -26,8 +26,8 @@ export default function Navbar() {
 
   const isDark = resolvedTheme === "dark";
 
-  // FIXED: shared style for the square icon buttons (theme toggle + settings) —
-  // rounded-md square, outline border, house shadow, 22px icon (~¾ of the old 30px).
+  // Shared style for the square icon buttons (theme toggle + settings) —
+  // rounded-md square, outline border, house shadow, 22px icon.
   const ICON_BUTTON =
     "w-10 h-10 grid place-items-center rounded-md border border-outline shadow-sm hover:cursor-pointer transition";
 
@@ -51,11 +51,10 @@ export default function Navbar() {
               />
             )}
 
-            {/* FIXED: brand text now follows the tab colour states — selected
-                on the home route, nav-tab + hover elsewhere. Colour only (no
-                underline), matching the settings chip's active treatment. */}
+            {/* Brand text — hidden on mobile (it lives in the burger panel
+                there); the logo remains as the mobile home tap-target. */}
             <span
-              className={`text-md font-bold md:text-xl transition-colors ${
+              className={`hidden md:inline text-xl font-bold transition-colors ${
                 isActive("/")
                   ? "text-nav-tab-selected"
                   : "text-nav-tab hover:text-nav-tab-selected"
@@ -144,8 +143,8 @@ export default function Navbar() {
             </button>
           )}
 
-          {/* Settings link — FIXED: restructured from a bare icon-Link into a
-              square chip wrapping the icon, matching the theme toggle. */}
+          {/* Settings link — square chip wrapping the icon, matching the
+              theme toggle. */}
           <Link
             to="/settings"
             aria-label="Settings"
@@ -166,10 +165,30 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* SECONDARY BAR (mobile only) — slides in when burger is toggled.
-          Hidden entirely on md+ regardless of state. */}
-      {mobileNavOpen && (
-        <div className="md:hidden pb-1 bg-nav border-t border-outline/20 px-8 h-10 flex items-center gap-8">
+      {/* MOBILE PANEL — always mounted so it can animate; slides open/closed
+          via max-height + opacity. Background is the nav colour mixed 10%
+          toward black so it reads a step darker than the primary bar. */}
+      <div
+        className={`md:hidden overflow-hidden bg-[color-mix(in_srgb,var(--color-nav),black_1%)] shadow-md transition-all duration-300 ease-in-out ${
+          mobileNavOpen
+            ? "max-h-56 opacity-100 border-t border-outline/20"
+            : "max-h-0 opacity-0 border-t-0"
+        }`}
+      >
+        <nav className="px-8 py-3 flex flex-col gap-3">
+
+          {/* Title — now lives here on mobile */}
+          <Link
+            to="/"
+            onClick={() => setMobileNavOpen(false)}
+            className={`text-md font-bold transition-colors ${
+              isActive("/")
+                ? "text-nav-tab-selected"
+                : "text-nav-tab hover:text-nav-tab-selected"
+            }`}
+          >
+            {companyName ? `${companyName} ` : ""}Checkout Central
+          </Link>
 
           <Link
             to="/checkout"
@@ -207,8 +226,8 @@ export default function Navbar() {
             Requests
           </Link>
 
-        </div>
-      )}
+        </nav>
+      </div>
 
     </header>
   );

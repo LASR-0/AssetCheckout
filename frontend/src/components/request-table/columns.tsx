@@ -77,6 +77,7 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
 
   function ActionButton({
     icon,
+    label,
     color,
     hoverBg,
     title,
@@ -84,6 +85,7 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     onClick,
   }: {
     icon: string;
+    label: string;
     color: string;
     hoverBg: string;
     title: string;
@@ -94,11 +96,12 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
       <button
         onClick={onClick}
         title={title}
-        className={`group/icon ${color} ${hoverBg} ${border} p-1 hover:cursor-pointer rounded-lg shadow-sm transition-colors  inline-flex items-center justify-center`}
+        className={`group/icon ${color} ${hoverBg} ${border} border-1 rounded-full px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center justify-center whitespace-nowrap text-xs font-semibold`}
       >
-        <span className="material-symbols-outlined hover:cursor-pointer icon-fill-hover transition-all">
+        <span className="material-symbols-outlined !text-[16px] hover:cursor-pointer icon-fill-hover transition-all">
           {icon}
         </span>
+        {label}
       </button>
     );
   }
@@ -120,7 +123,7 @@ function StatusBadge({ status }: { status: string }) {
 
   const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
     APPROVED: { bg: "bg-blue-500/10", text: "text-blue-400", icon: "schedule" },
-    COMPLETED: { bg: "bg-green-500/10", text: "text-green-600", icon: "Add_DIAMOND" },
+    COMPLETED: { bg: "bg-green-500/10", text: "text-green-600", icon: "check_circle" },
     REJECTED: { bg: "bg-red-500/10", text: "text-red-600", icon: "cancel" },
     PENDING: { bg: "bg-yellow-500/10", text: "text-yellow-600", icon: "schedule" },
     AWAITING_IT: { bg: "bg-purple-500/10", text: "text-purple-400", icon: "shield_person" },
@@ -222,9 +225,10 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         <ActionRow>
           <ActionButton
             icon="inventory_2"
+            label={collecting ? "Mark collected" : "Mark received"}
             color="text-green-500"
-            hoverBg="bg-green-600/10"
-            border="hover:border-green-500/50 hover:border-1"
+            hoverBg="hover:bg-green-600/10"
+            border="border-green-500/50"
             title={collecting ? "Mark collected" : "Mark received"}
             onClick={() => meta.onMarkReceived(request)}
           />
@@ -239,9 +243,10 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionRow>
             <ActionButton
               icon="local_shipping"
+              label="Mark shipped"
               color="text-amber-400"
-              hoverBg="bg-amber-500/10"
-              border="hover:border-amber-500/50 hover:border-1"
+              hoverBg="hover:bg-amber-500/10"
+              border="border-amber-500/50"
               title="Mark shipped"
               onClick={() => meta.onMarkShipped(request)}
             />
@@ -253,9 +258,10 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionRow>
             <ActionButton
               icon="package_2"
+              label="Mark ready"
               color="text-teal-400"
-              hoverBg="bg-teal-500/10"
-              border="hover:border-teal-500/50 hover:border-1"
+              hoverBg="hover:bg-teal-500/10"
+              border="border-teal-500/50"
               title="Mark ready for collection"
               onClick={() => meta.onMarkReadyForCollection(request)}
             />
@@ -277,11 +283,11 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isPending) {
       return (
         <ActionRow>
-          <ActionButton icon="check_circle" color="text-green-500" hoverBg="bg-green-600/10"
-            border="hover:border-green-500/50 hover:border-1" title="Approve"
+          <ActionButton icon="check_circle" label="Approve" color="text-green-500" hoverBg="hover:bg-green-600/10"
+            border="border-green-500/50" title="Approve"
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" color="text-error" hoverBg="bg-error/10"
-            border="hover:border-error/50 hover:border-1" title="Reject"
+          <ActionButton icon="cancel" label="Reject" color="text-error" hoverBg="hover:bg-error/10"
+            border="border-error/50" title="Reject"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -299,12 +305,12 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isPending || isApprovedAwaitingAdmin || isStandardAwaitingIT) {
       return (
         <ActionRow>
-          <ActionButton icon="check_circle" color="text-green-500" hoverBg="bg-green-600/10"
-            border="hover:border-green-500/50 hover:border-1"
+          <ActionButton icon="check_circle" label="Approve" color="text-green-500" hoverBg="hover:bg-green-600/10"
+            border="border-green-500/50"
             title={isStandardAwaitingIT ? "Approve & assign asset" : "Approve"}
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" color="text-error" hoverBg="bg-red-600/10"
-            border="hover:border-red-500/50 hover:border-1" title="Reject"
+          <ActionButton icon="cancel" label="Reject" color="text-error" hoverBg="hover:bg-red-600/10"
+            border="border-red-500/50" title="Reject"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -312,8 +318,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAdminApprovedAwaitingModel) {
       return (
         <ActionRow>
-          <ActionButton icon="Add_Circle" color="text-amber-400" hoverBg="bg-amber-500/10"
-            border="hover:border-amber-500/50 hover:border-1" title="Create Model"
+          <ActionButton icon="add_circle" label="Create model" color="text-amber-400" hoverBg="hover:bg-amber-500/10"
+            border="border-amber-500/50" title="Create Model"
             onClick={() => meta.onCreateModel(request)} />
         </ActionRow>
       );
@@ -321,8 +327,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isModelCreated) {
       return (
         <ActionRow>
-          <ActionButton icon="info" color="text-blue-400" hoverBg="bg-blue-600/10"
-            border="hover:border-blue-500/50 hover:border-1" title="Asset Details"
+          <ActionButton icon="info" label="Asset details" color="text-blue-400" hoverBg="hover:bg-blue-600/10"
+            border="border-blue-500/50" title="Asset Details"
             onClick={() => meta.onAssetDetails(request)} />
         </ActionRow>
       );
@@ -401,7 +407,14 @@ export const columns: ColumnDef<Request>[] = [
     id: "reason",
     enableSorting: false,
     header: () => <StaticHeader icon="text_snippet" label="Reason" />,
-    cell: ({ row }) => <ReasonCell text={row.original.reason} />,
+    // Constrained so long reasons wrap inside a fixed width instead of
+    // squeezing the actions column and overflowing the pill buttons.
+    cell: ({ row }) => (
+      <div className="max-w-[220px]">
+        <ReasonCell text={row.original.reason} />
+      </div>
+    ),
+    meta: { tdClass: "max-w-[220px]" },
   },
   {
     accessorKey: "manager",
@@ -441,6 +454,6 @@ export const columns: ColumnDef<Request>[] = [
     enableSorting: false,
     header: () => <StaticHeader icon="menu" label="Actions" align="center" />,
     cell: ActionsCell,
-    meta: { headerClass: "text-center", tdClass: "text-center" },
+    meta: { headerClass: "text-center", tdClass: "text-center whitespace-nowrap" },
   },
 ];
