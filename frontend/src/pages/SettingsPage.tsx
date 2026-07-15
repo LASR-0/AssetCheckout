@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ThemeSwitch from "@/components/nav/ThemeSwitch";
 import DevAuthToggle from "@/components/nav/DevAuthToggle";
-import RequestableCategoriesSelector from "@/components/settings/RequestableCategoriesSelector";
-import StandardModelsSelector from "@/components/settings/StandardModelsSelector";
+import AssetConfigurationSettings from "@/components/settings/AssetConfiguration";
 import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
 import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
 import JobHistoryTable from "@/components/settings/JobsHistoryTable";
@@ -36,10 +35,7 @@ export default function SettingsPage() {
       {/* Asset Configuration -- admin-only */}
       {isAdmin && (
         <SettingsSection icon="inventory" title="Asset Configuration">
-          <div className="space-y-6">
-            <RequestableCategoriesSelector />
-            <StandardModelsSelector />
-          </div>
+          <AssetConfigurationSettings />
         </SettingsSection>
       )}
 

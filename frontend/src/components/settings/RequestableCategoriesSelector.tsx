@@ -1,75 +1,37 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  getAllAssetCategories,
-} from "@/api/categories";
-import {
-  getRequestableCategoryIds,
-  setRequestableCategoryIds,
-} from "@/api/settings";
 import { iconForCategory } from "@/lib/categoryIcon";
 import type { AssetCategory } from "@/types/categoriesType";
 
-export default function RequestableCategoriesSelector() {
+/**
+ * Presentational checkbox list of asset categories. State (the full category
+ * list, the allowed set, and persistence) is owned by
+ * AssetConfigurationSettings so that changes here propagate immediately to
+ * StandardModelsSelector without a page refresh.
+ */
+
+type Props = {
+  categories: AssetCategory[];
+  allowed: Set<number>;
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+  onToggle: (id: number) => void;
+};
+
+export default function RequestableCategoriesSelector({
+  categories,
+  allowed,
+  loading,
+  saving,
+  error,
+  onToggle,
+}: Props) {
   const [open, setOpen] = useState(false);
-  const [categories, setCategories] = useState<AssetCategory[]>([]);
-  const [allowed, setAllowed] = useState<Set<number>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const [allCats, allowedIds] = await Promise.all([
-          getAllAssetCategories(),
-          getRequestableCategoryIds(),
-        ]);
-        if (cancelled) return;
-        setCategories(allCats);
-        setAllowed(new Set(allowedIds ?? allCats.map((c) => c.id)));
-      } catch (err) {
-        if (!cancelled) {
-          setError("Failed to load categories");
-          console.error(err);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const toggle = async (id: number) => {
-    const next = new Set(allowed);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    setAllowed(next);
-
-    try {
-      setSaving(true);
-      setError(null);
-      await setRequestableCategoryIds(Array.from(next));
-    } catch (err: any) {
-      setError(err.message || "Failed to save");
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="space-y-2 border-t border-outline/20 mt-2 pt-3">
@@ -120,7 +82,7 @@ export default function RequestableCategoriesSelector() {
                     <input
                       type="checkbox"
                       checked={isAllowed}
-                      onChange={() => toggle(cat.id)}
+                      onChange={() => onToggle(cat.id)}
                       disabled={saving}
                       className="w-4 h-4 hover:cursor-pointer rounded"
                     />

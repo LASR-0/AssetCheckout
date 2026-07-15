@@ -5,7 +5,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import ComboboxField from "@/components/ui/comboboxfield";
-import { getAssetCategories } from "@/api/categories";
 import { getModelsForCategory } from "@/api/categories";
 import {
   getStandardModels,
@@ -20,58 +19,56 @@ import type { StandardModelsConfig } from "@/types/settingsType";
  * category, with an optional backup. Used by the standard-request auto-checkout
  * flow to pick which model's assets to deploy.
  *
+ * The requestable category list is passed in from AssetConfigurationSettings
+ * (rather than fetched here) so that enabling/disabling a category in
+ * RequestableCategoriesSelector is reflected immediately. Saved config for a
+ * category that gets disabled is retained (so re-enabling restores it) but is
+ * excluded from the "X of Y configured" count while hidden.
+ *
  * Each category is its own collapsible section to keep the popover height
  * manageable when the org has many categories. Auto-saves on change.
  */
 
 const NONE_LABEL = "(none)";
 
-export default function StandardModelsSelector() {
+type Props = {
+  /** Requestable categories only — derived and owned by the parent. */
+  categories: AssetCategory[];
+  /** True while the parent is still loading the category list. */
+  categoriesLoading: boolean;
+};
+
+export default function StandardModelsSelector({
+  categories,
+  categoriesLoading,
+}: Props) {
   const [open, setOpen] = useState(false);
-  const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [config, setConfig] = useState<StandardModelsConfig>({});
   const [modelsByCategory, setModelsByCategory] = useState<Record<number, CategoryModel[]>>({});
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [configLoading, setConfigLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loading = categoriesLoading || configLoading;
+
+  // Load the saved standard-models config once on mount.
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        setLoading(true);
+        setConfigLoading(true);
         setError(null);
-
-        const [cats, savedConfig] = await Promise.all([
-          getAssetCategories(),
-          getStandardModels(),
-        ]);
-
+        const savedConfig = await getStandardModels();
         if (cancelled) return;
-        setCategories(cats);
         setConfig(savedConfig);
-
-        const modelLists = await Promise.all(
-          cats.map(async (c) => ({
-            categoryId: c.id,
-            models: await getModelsForCategory(c.id),
-          }))
-        );
-
-        if (cancelled) return;
-        const map: Record<number, CategoryModel[]> = {};
-        for (const entry of modelLists) {
-          map[entry.categoryId] = entry.models;
-        }
-        setModelsByCategory(map);
       } catch (err) {
         if (!cancelled) {
           setError("Failed to load standard model configuration");
           console.error(err);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setConfigLoading(false);
       }
     }
     load();
@@ -79,6 +76,44 @@ export default function StandardModelsSelector() {
       cancelled = true;
     };
   }, []);
+
+  // Fetch model lists lazily for any visible category we haven't cached yet.
+  // Runs again whenever the category list changes (e.g. a category is
+  // re-enabled), so newly visible categories get their models without a
+  // refresh. Cached entries are kept when a category is hidden.
+  useEffect(() => {
+    const missing = categories.filter((c) => !(c.id in modelsByCategory));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const modelLists = await Promise.all(
+          missing.map(async (c) => ({
+            categoryId: c.id,
+            models: await getModelsForCategory(c.id),
+          }))
+        );
+        if (cancelled) return;
+        setModelsByCategory((prev) => {
+          const next = { ...prev };
+          for (const entry of modelLists) {
+            next[entry.categoryId] = entry.models;
+          }
+          return next;
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setError("Failed to load models for one or more categories");
+          console.error(err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [categories, modelsByCategory]);
 
   function toggleExpanded(categoryId: number) {
     setExpandedCategories((prev) => {
@@ -120,7 +155,12 @@ export default function StandardModelsSelector() {
     }
   }
 
-  const configuredCount = Object.values(config).filter((c) => c.primary !== null).length;
+  // Count only categories that are currently requestable. Config entries for
+  // disabled categories are retained in state but must not inflate the count
+  // (previously produced "5 of 4 configured").
+  const configuredCount = categories.filter(
+    (c) => (config[String(c.id)]?.primary ?? null) !== null
+  ).length;
 
   return (
     <div className="space-y-2 border-t border-outline/20 mt-2 pt-3">
