@@ -25,7 +25,7 @@ function App() {
           <Route
             path="/requests"
             element={
-              <ProtectedRoute allowedRoles={["ADMIN", "MANAGER", "REQUESTER"]}>
+              <ProtectedRoute requireRole={false}>
                 <RequestTablePage />
               </ProtectedRoute>
             }

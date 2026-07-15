@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { BackgroundJob, JobType } from "@/api/jobs";
+import { Badge } from "@/components/ui/statusbadge";
 
 ///  +-----------------------------------------------------------------+
 ///  |                         JOB COLUMNS                             |
@@ -10,6 +11,10 @@ import type { BackgroundJob, JobType } from "@/api/jobs";
 //  mirrors the requests table (request-table/columns.tsx): same header
 //  layout, same badge visual language, same Material Symbols + surface
 //  tokens, so the two tables read identically.
+//
+//  Badges render through the shared <Badge> primitive (StatusBadge.tsx)
+//  with the theme-aware `status-*` tokens, so job statuses recolour with
+//  the theme exactly like request statuses do.
 //
 //  Sorting is fixed newest-first on the backend (JobHistoryTable runs with
 //  manualSorting: true), so headers are STATIC — no sort handlers, no idle
@@ -46,28 +51,20 @@ function StaticHeader({ icon, label }: { icon: string; label: string }) {
 }
 
 // --- Status badge — job statuses (Pending/Running/Completed/Failed) ---
-//  Palette mirrors columns.tsx StatusBadge: Completed green, Failed red,
-//  Running blue (like Approved), Pending yellow. Icons per the handoff
-//  (Running = schedule, matching the requests "Approved" badge — swap to
-//  "progress_activity" + animate-spin if you'd prefer a live spinner).
+//  Semantic mapping onto the shared status tokens: Completed → success,
+//  Failed → error, Running → approved (the requests-table blue), Pending →
+//  pending. Icons per the handoff (Running = schedule, matching the requests
+//  "Approved" badge — swap to "progress_activity" if you'd prefer a spinner).
+const JOB_STATUS_STYLES: Record<string, { bg: string; text: string; icon: string }> = {
+  Completed: { bg: "bg-status-success/15", text: "text-status-success", icon: "check_circle" },
+  Failed: { bg: "bg-status-error/15", text: "text-status-error", icon: "cancel" },
+  Running: { bg: "bg-status-approved/15", text: "text-status-approved", icon: "schedule" },
+  Pending: { bg: "bg-status-pending/15", text: "text-status-pending", icon: "schedule" },
+};
+
 function JobStatusBadge({ status }: { status: string }) {
-  const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
-    Completed: { bg: "bg-green-500/10", text: "text-green-600", icon: "check_circle" },
-    Failed: { bg: "bg-red-500/10", text: "text-red-600", icon: "cancel" },
-    Running: { bg: "bg-blue-500/10", text: "text-blue-400", icon: "schedule" },
-    Pending: { bg: "bg-yellow-500/10", text: "text-yellow-600", icon: "schedule" },
-  };
-
-  const style = styleMap[status] ?? styleMap.Pending;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold border-1 rounded-full ${style.bg} ${style.text}`}
-    >
-      <span className="material-symbols-outlined !text-sm">{style.icon}</span>
-      {status}
-    </span>
-  );
+  const style = JOB_STATUS_STYLES[status] ?? JOB_STATUS_STYLES.Pending;
+  return <Badge icon={style.icon} label={status} bg={style.bg} text={style.text} />;
 }
 
 // --- Date/time formatter ---
@@ -85,7 +82,7 @@ function formatDateTime(value: string | null): string {
 
 // --- Detail cell: result summary, or the error message when failed ---
 //  Click to expand (mirrors the requests table's ReasonCell). Errors render
-//  in the error colour so a failed run is obvious at a glance.
+//  in the error token so a failed run is obvious at a glance.
 function DetailCell({ job }: { job: BackgroundJob }) {
   const [expanded, setExpanded] = useState(false);
   const isError = job.status === "Failed" && !!job.errorMessage;
@@ -98,7 +95,7 @@ function DetailCell({ job }: { job: BackgroundJob }) {
       onClick={() => setExpanded((p) => !p)}
       title={text}
       className={`text-sm w-[280px] leading-relaxed cursor-pointer transition-all break-words whitespace-normal ${
-        isError ? "text-red-600" : "text-info-light"
+        isError ? "text-status-error" : "text-info-light"
       } ${expanded ? "" : "line-clamp-2"}`}
     >
       {text}
@@ -138,7 +135,9 @@ export const jobColumns: ColumnDef<BackgroundJob>[] = [
       const { attempts, maxAttempts, status } = row.original;
       const exhausted = status === "Failed" && attempts >= maxAttempts;
       return (
-        <span className={`text-sm font-mono ${exhausted ? "text-red-600" : "text-info-light"}`}>
+        <span
+          className={`text-sm font-mono ${exhausted ? "text-status-error" : "text-info-light"}`}
+        >
           {attempts} / {maxAttempts}
         </span>
       );

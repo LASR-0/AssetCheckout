@@ -20,6 +20,7 @@ import {
   type ScheduleSpec,
 } from "@/lib/schedule";
 import type { JobType } from "@/api/jobs";
+import { Badge } from "@/components/ui/statusbadge";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     SCHEDULED JOB ROW                           |
@@ -29,6 +30,10 @@ import type { JobType } from "@/api/jobs";
 //  Expanded: a control-panel schedule editor — a header zone (Execution Mode
 //  toggle · Safety toggle · live cron expression) above a single even row of
 //  fields, then a Save action.
+//
+//  Collapsed-row badges render through the shared <Badge> primitive
+//  (StatusBadge.tsx, compact size) with the theme-aware status tokens:
+//  schedule → approved (blue), dry-run → success, live → error.
 //
 //  The builder edits a DRAFT ScheduleSpec; nothing persists until Save. The
 //  collapsed badge reflects the SAVED cron (from the parent). If the saved
@@ -220,21 +225,21 @@ export default function ScheduledJobRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-on-background text-sm">{label}</span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-400">
-              <span className="material-symbols-outlined !text-[14px]">schedule</span>
-              {scheduleBadge}
-            </span>
+            <Badge
+              size="compact"
+              icon="schedule"
+              label={scheduleBadge}
+              bg="bg-status-approved/15"
+              text="text-status-approved"
+            />
             {dryRun !== undefined && (
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
-                  dryRun ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
-                }`}
-              >
-                <span className="material-symbols-outlined !text-[14px]">
-                  {dryRun ? "visibility" : "warning"}
-                </span>
-                {dryRun ? "Dry-run" : "Live"}
-              </span>
+              <Badge
+                size="compact"
+                icon={dryRun ? "visibility" : "warning"}
+                label={dryRun ? "Dry-run" : "Live"}
+                bg={dryRun ? "bg-status-success/15" : "bg-status-error/15"}
+                text={dryRun ? "text-status-success" : "text-status-error"}
+              />
             )}
           </div>
           <p className="text-xs text-info-light mt-0.5 truncate">{description}</p>

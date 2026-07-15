@@ -9,6 +9,7 @@ import {
 } from "@/api/feedback";
 import CollapsibleTableSection from "./CollapsibleTable";
 import { getDevHeaders } from "@/api/client";
+import { Badge } from "@/components/ui/statusbadge";
 
 ///  +-----------------------------------------------------------------+
 ///  |                   FEEDBACK SETTINGS CARD                        |
@@ -24,19 +25,48 @@ import { getDevHeaders } from "@/api/client";
 //  the data simply doesn't carry one.
 ///  +-----------------------------------------------------------------+
 
-const RESPONSE_DISPLAY: Record<FeedbackResponse, { label: string; cls: string }> = {
-  improved: { label: "Improved", cls: "bg-green-500/10 text-green-600 border border-green-600" },
-  no_change: { label: "No change", cls: "bg-yellow-500/10 text-yellow-600 border border-yellow-600" },
-  worse: { label: "Worse", cls: "bg-red-500/10 text-red-600 border border-red-600" },
+// Response pills render through the shared <Badge> primitive with the
+// theme-aware status tokens: improved → success, no change → pending,
+// worse → error. Trending icons give the sentiment at a glance.
+const RESPONSE_DISPLAY: Record<
+  FeedbackResponse,
+  { label: string; bg: string; text: string; icon: string }
+> = {
+  improved: {
+    label: "Improved",
+    bg: "bg-status-success/15",
+    text: "text-status-success",
+    icon: "trending_up",
+  },
+  no_change: {
+    label: "No change",
+    bg: "bg-status-pending/15",
+    text: "text-status-pending",
+    icon: "trending_flat",
+  },
+  worse: {
+    label: "Worse",
+    bg: "bg-status-error/15",
+    text: "text-status-error",
+    icon: "trending_down",
+  },
 };
 
 function ResponsePill({ value }: { value: FeedbackResponse }) {
-  const d = RESPONSE_DISPLAY[value] ?? { label: value, cls: "bg-surface-container text-info-light" };
-  return (
-    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${d.cls}`}>
-      {d.label}
-    </span>
-  );
+  const d = RESPONSE_DISPLAY[value];
+  if (!d) {
+    // Unknown enum value — render neutrally rather than crashing.
+    return (
+      <Badge
+        size="compact"
+        icon="help"
+        label={value}
+        bg="bg-surface-container"
+        text="text-info-light"
+      />
+    );
+  }
+  return <Badge size="compact" icon={d.icon} label={d.label} bg={d.bg} text={d.text} />;
 }
 
 function formatDate(iso: string): string {
