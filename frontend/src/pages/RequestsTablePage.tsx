@@ -93,15 +93,9 @@ export default function RequestTablePage() {
     try {
       const data = await getRequests({
         status: status === "ALL" ? undefined : status,
-        viewAs: role,
-        currentUserName,
       });
 
-      setRequests(
-        status === "ALL"
-          ? data.requests
-          : data.requests.filter((req: Request) => req.status === status)
-      );
+      setRequests(data.requests);
     } catch (err) {
       console.error("Failed to load requests", err);
     }

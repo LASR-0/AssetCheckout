@@ -5,9 +5,10 @@ import {
   getAveragePricesFromSnipe,
   getTierValues,
 } from "../services/snipeit.js";
-import { isValidRequestStatus, isValidRequestType, isValidRole } from "../utils/validation.js";
+import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import { createRequest } from "../services/request.js";
+import { getActorName, getActorEmail, isAdminEmail, normalizeName } from "../config/auth.js";
 
 const router = express.Router();
 
@@ -73,13 +74,36 @@ router.get("/averages", async (req, res, next) => {
 ///  |                         GET REQUESTS                            |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Visibility is derived entirely from the authenticated actor — nothing
+ * about identity or role is accepted from the client:
+ *
+ *   - Admin (email in ADMIN_EMAILS): all requests.
+ *   - Everyone else: requests they submitted OR requests where they are
+ *     the nominated approver. A "manager" is not a stored role; it's
+ *     simply having your name in the manager field of a request.
+ *
+ * Name matching is done in code with normalizeName (SQLite
+ * case-insensitivity workaround), consistent with how manager/requester
+ * matching works elsewhere.
+ */
 router.get("/", async (req, res, next) => {
   try {
-    const { status, userId, requestType, viewAs, currentUserName } = req.query;
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({
+        success: false,
+        message: "Missing actor identity",
+      });
+    }
+
+    const isAdmin = isAdminEmail(getActorEmail(req));
+
+    const { status, requestType } = req.query;
 
     const where = {
       ...(isValidRequestStatus(status) ? { status } : {}),
-      ...(userId ? { userId: Number(userId) } : {}),
       ...(isValidRequestType(requestType) ? { requestType } : {}),
     };
 
@@ -93,28 +117,21 @@ router.get("/", async (req, res, next) => {
       },
     });
 
-    // Role-based filtering done in code (SQLite case-insensitivity workaround)
-    let filtered = requests;
+    let visible = requests;
 
-    if (isValidRole(viewAs) && typeof currentUserName === "string") {
-      const target = currentUserName.trim().toLowerCase();
-
-      if (viewAs === "MANAGER") {
-        filtered = requests.filter(
-          (r) => r.manager && r.manager.trim().toLowerCase() === target
-        );
-      } else if (viewAs === "REQUESTER") {
-        filtered = requests.filter(
-          (r) => r.userName.trim().toLowerCase() === target
-        );
-      }
-      // ADMIN → no filter, return all
+    if (!isAdmin) {
+      const actor = normalizeName(actorName);
+      visible = requests.filter(
+        (r) =>
+          normalizeName(r.userName) === actor ||
+          (r.manager !== null && normalizeName(r.manager) === actor)
+      );
     }
 
     res.json({
       success: true,
-      count: filtered.length,
-      requests: filtered,
+      count: visible.length,
+      requests: visible,
     });
   } catch (err) {
     next(err);
