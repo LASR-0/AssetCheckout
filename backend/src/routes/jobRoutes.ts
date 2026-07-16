@@ -364,4 +364,18 @@ router.post("/reminder-thresholds", async (req, res, next) => {
   }
 });
 
+router.get("/stats", async (_req, res) => {
+  const groups = await prisma.backgroundJob.groupBy({
+    by: ["status"],
+    _count: { _all: true },
+  });
+
+  const stats = { pending: 0, running: 0, completed: 0, failed: 0 };
+  for (const g of groups) {
+    const key = g.status.toLowerCase() as keyof typeof stats;
+    if (key in stats) stats[key] = g._count._all;
+  }
+  res.json(stats);
+});
+
 export default router;

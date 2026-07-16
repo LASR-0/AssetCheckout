@@ -35,7 +35,7 @@ export default function Navbar() {
     <header className="fixed top-0 z-50 w-full">
 
       {/* PRIMARY BAR */}
-      <div className="bg-nav shadow-md flex justify-between items-center w-full px-8 h-16">
+      <div className="bg-footer-bg shadow-md flex justify-between items-center w-full px-8 h-16">
 
         {/* Left side */}
         <div className="flex items-center gap-8">
@@ -54,7 +54,7 @@ export default function Navbar() {
             {/* Brand text — hidden on mobile (it lives in the burger panel
                 there); the logo remains as the mobile home tap-target. */}
             <span
-              className={`hidden md:inline text-xl font-bold transition-colors ${
+              className={`hidden md:inline mb-1 text-xl font-bold transition-colors ${
                 isActive("/")
                   ? "text-nav-tab-selected"
                   : "text-nav-tab hover:text-nav-tab-selected"
@@ -169,7 +169,7 @@ export default function Navbar() {
           via max-height + opacity. Background is the nav colour mixed 10%
           toward black so it reads a step darker than the primary bar. */}
       <div
-        className={`md:hidden overflow-hidden bg-[color-mix(in_srgb,var(--color-nav),black_1%)] shadow-md transition-all duration-300 ease-in-out ${
+        className={`md:hidden overflow-hidden bg-[color-mix(in_srgb,var(--footer-bg),black_3%)] shadow-md transition-all duration-300 ease-in-out ${
           mobileNavOpen
             ? "max-h-56 opacity-100 border-t border-outline/20"
             : "max-h-0 opacity-0 border-t-0"

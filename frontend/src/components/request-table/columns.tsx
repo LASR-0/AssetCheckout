@@ -3,6 +3,7 @@ import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
 import { ReasonCell } from "@/components/request-table/FormatReason";
 import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Role } from "@/types/authType";
 
 declare module "@tanstack/react-table" {
@@ -94,18 +95,62 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     onClick: () => void;
   }) {
     return (
-      <button
-        onClick={onClick}
-        title={title}
-        className={`group/icon ${color} ${hoverBg} ${border} border-1 rounded-full px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center justify-center whitespace-nowrap text-xs font-semibold`}
-      >
-        <span className="material-symbols-outlined !text-[16px] hover:cursor-pointer icon-fill-hover transition-all">
-          {icon}
-        </span>
-        {label}
-      </button>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onClick}
+              className={`group/icon ${color} ${hoverBg} ${border} border-1 rounded-full px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center justify-center whitespace-nowrap text-xs font-semibold`}
+            >
+              <span className="material-symbols-outlined !text-[16px] hover:cursor-pointer icon-fill-hover transition-all">
+                {icon}
+              </span>
+              {label}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {title}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
+
+// --- Status badge with tooltip ---
+type StatusBadgeStatus = React.ComponentProps<typeof StatusBadge>["status"];
+
+// Default tooltip copy for the plain request statuses. Stage-specific copy
+// for COMPLETED fulfilment badges is computed in ActionsCell (it depends on
+// the derived fulfilment booleans) and passed in via `tip`.
+const STATUS_TIPS: Record<string, string> = {
+  PENDING: "Waiting for manager approval",
+  APPROVED: "Approved — in progress with IT",
+  REJECTED: "This request was rejected",
+  COMPLETED: "Request fulfilled",
+  AWAITING_IT: "Approved by manager — waiting for IT to approve and assign an asset",
+};
+
+function BadgeWithTooltip({ status, tip }: { status: StatusBadgeStatus; tip?: string }) {
+  const text = tip ?? STATUS_TIPS[status as string];
+  // Unknown status with no explicit tip → render the badge plain rather
+  // than showing an empty tooltip.
+  if (!text) return <StatusBadge status={status} />;
+  return (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* StatusBadge may not forward refs, so anchor the trigger on a span. */}
+          <span className="inline-flex">
+            <StatusBadge status={status} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          {text}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 // --- Actions / Status cell ---
 function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> }) {
@@ -122,8 +167,6 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     requestStatus === "APPROVED" && modelRequestStatus === "PENDING";
   const isAdminApprovedAwaitingModel =
     requestStatus === "APPROVED" && modelRequestStatus === "APPROVED" && !linkedAssetId;
-  const isModelCreated =
-    requestStatus === "APPROVED" && modelRequestStatus === "COMPLETED" && !!linkedAssetId;
   const isStandardAwaitingIT =
     requestStatus === "APPROVED" &&
     request.requestType === "STANDARD" &&
@@ -144,8 +187,24 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   const needsShipping = request.needsShipping ?? false;
   const isOwner = request.userName === meta.currentUserName;
 
+  // Stage-specific tooltip for the COMPLETED fulfilment badge, derived from
+  // the same booleans that drive the badge itself.
+  const completedTip = isReceivedOrCollected
+    ? needsShipping
+      ? "Device received by the requester"
+      : "Device collected by the requester"
+    : isShipped
+    ? "Shipped — waiting for the requester to confirm receipt"
+    : isReadyToCollect
+    ? "Ready — waiting for the requester to collect"
+    : isShipAwaitingPrep
+    ? "Fulfilled — waiting for IT to ship the device"
+    : isCollectAwaitingPrep
+    ? "Fulfilled — waiting for IT to prepare it for collection"
+    : undefined;
+
   if (requestStatus === "REJECTED") {
-    return <StatusBadge status={requestStatus} />;
+    return <BadgeWithTooltip status={requestStatus} />;
   }
 
   // ──────────────────────────────────────────────────
@@ -154,7 +213,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   if (isCompleted) {
     // Terminal: received/collected → badge only, everyone.
     if (isReceivedOrCollected) {
-      return <StatusBadge status={completedBadgeKey} />;
+      return <BadgeWithTooltip status={completedBadgeKey} tip={completedTip} />;
     }
 
     // Owner receipt action takes precedence over role — an admin who is also
@@ -169,7 +228,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             color="text-status-success"
             hoverBg="hover:bg-status-success/10"
             border="border-status-success/40"
-            title={collecting ? "Mark collected" : "Mark received"}
+            title={collecting ? "Confirm you've collected this device" : "Confirm you've received this device"}
             onClick={() => meta.onMarkReceived(request)}
           />
         </ActionRow>
@@ -187,7 +246,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
               color="text-status-ship"
               hoverBg="hover:bg-status-ship/10"
               border="border-status-ship/40"
-              title="Mark shipped"
+              title="Mark this device as shipped to the requester"
               onClick={() => meta.onMarkShipped(request)}
             />
           </ActionRow>
@@ -202,18 +261,18 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
               color="text-status-collect"
               hoverBg="hover:bg-status-collect/10"
               border="border-status-collect/40"
-              title="Mark ready for collection"
+              title="Mark this device as ready for collection"
               onClick={() => meta.onMarkReadyForCollection(request)}
             />
           </ActionRow>
         );
       }
-      return <StatusBadge status={completedBadgeKey} />;
+      return <BadgeWithTooltip status={completedBadgeKey} tip={completedTip} />;
     }
 
     // Everyone else (manager, non-owner requester, owner at non-actionable
     // stage): the stage badge.
-    return <StatusBadge status={completedBadgeKey} />;
+    return <BadgeWithTooltip status={completedBadgeKey} tip={completedTip} />;
   }
 
   // ──────────────────────────────────────────────────
@@ -224,18 +283,18 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
       return (
         <ActionRow>
           <ActionButton icon="check_circle" label="Approve" color="text-status-success" hoverBg="hover:bg-status-success/10"
-            border="border-status-success/40" title="Approve"
+            border="border-status-success/40" title="Approve this request"
             onClick={() => meta.onApprove(request)} />
           <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
-            border="border-status-error/40" title="Reject"
+            border="border-status-error/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
     }
     if (isStandardAwaitingIT) {
-      return <StatusBadge status="AWAITING_IT" />;
+      return <BadgeWithTooltip status="AWAITING_IT" />;
     }
-    return <StatusBadge status={requestStatus} />;
+    return <BadgeWithTooltip status={requestStatus} />;
   }
 
   // ──────────────────────────────────────────────────
@@ -247,10 +306,10 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         <ActionRow>
           <ActionButton icon="check_circle" label="Approve" color="text-status-success" hoverBg="hover:bg-status-success/10"
             border="border-status-success/40"
-            title={isStandardAwaitingIT ? "Approve & assign asset" : "Approve"}
+            title={isStandardAwaitingIT ? "Approve and assign an asset" : "Approve this request"}
             onClick={() => meta.onApprove(request)} />
           <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
-            border="border-status-error/40" title="Reject"
+            border="border-status-error/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -259,25 +318,16 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
       return (
         <ActionRow>
           <ActionButton icon="add_circle" label="Create model" color="text-status-model" hoverBg="hover:bg-status-model/10"
-            border="border-status-model/40" title="Create Model"
+            border="border-status-model/40" title="Create the asset model for this request"
             onClick={() => meta.onCreateModel(request)} />
         </ActionRow>
       );
     }
-    if (isModelCreated) {
-      return (
-        <ActionRow>
-          <ActionButton icon="info" label="Asset details" color="text-status-approved" hoverBg="hover:bg-status-approved/10"
-            border="border-status-approved/40" title="Asset Details"
-            onClick={() => meta.onAssetDetails(request)} />
-        </ActionRow>
-      );
-    }
-    return <StatusBadge status={requestStatus} />;
+    return <BadgeWithTooltip status={requestStatus} />;
   }
 
   // REQUESTER and others on non-completed states: badge only.
-  return <StatusBadge status={requestStatus} />;
+  return <BadgeWithTooltip status={requestStatus} />;
 }
 
 // --- Column definitions ---

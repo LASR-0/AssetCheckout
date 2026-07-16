@@ -6,10 +6,12 @@ import AssetConfigurationSettings from "@/components/settings/AssetConfiguration
 import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
 import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
 import JobHistoryTable from "@/components/settings/JobsHistoryTable";
+import JobStatusBar from "@/components/settings/JobStatusBar";
 import FeedbackSettingsCard from "@/components/settings/FeedbackSettingsCard";
 import CollapsibleTableSection from "@/components/settings/CollapsibleTable";
 import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
 import MobileFilterCard from "@/components/settings/MobileFilterCard";
+import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
 
 export default function SettingsPage() {
   const { role } = useAuth();
@@ -85,6 +87,7 @@ export default function SettingsPage() {
     <div className="min-w-0 space-y-8">
       <SettingsSection icon="schedule" title="Background Jobs">
         <div className="space-y-8">
+          <ScheduledJobsTimeline />
           <div>
             <h3 className="font-semibold text-on-background mb-1">Scheduled Jobs</h3>
             <p className="text-sm text-info-light mb-4">
@@ -98,6 +101,9 @@ export default function SettingsPage() {
             <p className="text-sm text-info-light mb-4">
               Recent job runs, newest first. Filter by status or type.
             </p>
+            <div className="mb-4">
+              <JobStatusBar refreshKey={jobsRefreshKey} />
+            </div>
             <CollapsibleTableSection title="Jobs History Table">
               <JobHistoryTable refreshKey={jobsRefreshKey} />
             </CollapsibleTableSection>

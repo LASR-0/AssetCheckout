@@ -1,5 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   getFeedbackEnabled,
   setFeedbackEnabled,
@@ -20,6 +26,10 @@ import { Badge } from "@/components/ui/statusbadge";
 //  feature is enabled. Disabling collapses the section back to just the
 //  toggle (the data still exists in the DB — it's only hidden from the view
 //  and the submit/nudge/CTA stop surfacing).
+//
+//  The distribution bar always renders below the section title in one of
+//  three states: sentiment segments (enabled + data), an empty placeholder
+//  (enabled, no data), or a disabled placeholder (feature off).
 //
 //  Feedback is structurally anonymous — there's no submitter column because
 //  the data simply doesn't carry one.
@@ -69,6 +79,129 @@ function ResponsePill({ value }: { value: FeedbackResponse }) {
   return <Badge size="compact" icon={d.icon} label={d.label} bg={d.bg} text={d.text} />;
 }
 
+///  +-----------------------------------------------------------------+
+///  |                  FEEDBACK DISTRIBUTION BAR                      |
+///  +-----------------------------------------------------------------+
+//
+//  A single stacked bar summarising the sentiment split of all collected
+//  responses. Segments use the badge styling: translucent /15 background
+//  with a solid border in the same status token, so they track the theme
+//  exactly like the pills. The tooltip slides horizontally with the cursor
+//  (Radix align offset driven by onMouseMove). Zero-count segments are
+//  omitted. When there's no data (or the feature is off) the bar renders
+//  as a grey placeholder with a centred message.
+
+// Fixed display order: positive → neutral → negative, left to right.
+const BAR_ORDER: FeedbackResponse[] = ["improved", "no_change", "worse"];
+
+// Badge-matched styling: translucent fill + solid border per status.
+const BAR_SEGMENT_STYLE: Record<FeedbackResponse, string> = {
+  improved: "bg-status-success/15 border-status-success border-r-0",
+  no_change: "bg-status-pending/15 border-status-pending border-r-0 border-l-0",
+  worse: "bg-status-error/15 border-status-error border-l-0",
+};
+
+const BAR_HEIGHT = "h-6";
+
+type BarSegmentData = {
+  key: FeedbackResponse;
+  count: number;
+  width: number; // exact %, segments sum to 100
+  pct: number; // rounded, for display
+};
+
+function BarSegment({ segment }: { segment: BarSegmentData }) {
+  // Horizontal offset of the cursor from the segment's centre. Feeding this
+  // into Radix's alignOffset (align="center") makes the tooltip slide with
+  // the mouse as it moves across the segment.
+  const [cursorOffset, setCursorOffset] = useState(0);
+  const d = RESPONSE_DISPLAY[segment.key];
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`h-full border-1 first:rounded-l-full last:rounded-r-full transition-opacity hover:opacity-70 ${BAR_SEGMENT_STYLE[segment.key]}`}
+          style={{ width: `${segment.width}%` }}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setCursorOffset(e.clientX - (rect.left + rect.width / 2));
+          }}
+        />
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="center"
+        alignOffset={cursorOffset}
+        sideOffset={8}
+        collisionPadding={8}
+        className="pointer-events-none text-xs"
+      >
+        <span className="font-semibold">{d.label}</span>
+        {" — "}
+        {segment.pct}% ({segment.count})
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// Grey placeholder used for both the "no data" and "feature off" states.
+function PlaceholderBar({ message }: { message: string }) {
+  return (
+    <div
+      className={`flex ${BAR_HEIGHT} w-full items-center justify-center rounded-full border-2 border-outline/20 bg-surface-container-low`}
+    >
+      <span className="text-xs text-info-light/60 select-none">{message}</span>
+    </div>
+  );
+}
+
+function FeedbackDistributionBar({
+  values,
+  featureEnabled,
+}: {
+  values: FeedbackResponse[];
+  featureEnabled: boolean;
+}) {
+  const segments = useMemo<BarSegmentData[]>(() => {
+    const total = values.length;
+    if (total === 0) return [];
+    const counts = new Map<FeedbackResponse, number>();
+    for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+    return BAR_ORDER.flatMap((key) => {
+      const count = counts.get(key) ?? 0;
+      if (count === 0) return [];
+      return [
+        {
+          key,
+          count,
+          width: (count / total) * 100,
+          pct: Math.round((count / total) * 100),
+        },
+      ];
+    });
+  }, [values]);
+
+  if (!featureEnabled) return <PlaceholderBar message="Feedback is turned off" />;
+  if (segments.length === 0) return <PlaceholderBar message="No feedback collected" />;
+
+  return (
+    <TooltipProvider delayDuration={100} skipDelayDuration={300}>
+      <div
+        className={`flex ${BAR_HEIGHT} w-full overflow-hidden rounded-full`}
+        role="img"
+        aria-label={segments
+          .map((s) => `${RESPONSE_DISPLAY[s.key].label}: ${s.pct}%`)
+          .join(", ")}
+      >
+        {segments.map((s) => (
+          <BarSegment key={s.key} segment={s} />
+        ))}
+      </div>
+    </TooltipProvider>
+  );
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -82,6 +215,13 @@ export default function FeedbackSettingsCard() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  // Both response dimensions feed the one bar. To visualise a single
+  // question instead, map just that field here.
+  const distributionValues = useMemo(
+    () => rows.flatMap((r) => [r.improvedRequesting, r.improvesItOverall]),
+    [rows]
+  );
 
   // Load the enabled state on mount.
   useEffect(() => {
@@ -163,6 +303,11 @@ export default function FeedbackSettingsCard() {
 
   return (
     <div className="space-y-6">
+      {/* Sentiment distribution — always rendered below the section title:
+          segments (enabled + data), "No feedback collected" (enabled, no
+          data), or "Feedback is turned off" (feature off) */}
+      <FeedbackDistributionBar values={distributionValues} featureEnabled={enabled} />
+
       {/* Enable toggle — always rendered */}
       <div className="flex items-center justify-between gap-4 rounded-lg border border-outline/20 bg-surface p-4">
         <div className="min-w-0">

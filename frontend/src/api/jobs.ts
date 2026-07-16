@@ -7,6 +7,13 @@ import { apiFetch } from "./client";
 
 export type JobStatus = "Pending" | "Running" | "Completed" | "Failed";
 
+export type JobStatsResponse = {
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+};
+
 export type JobType =
   | "SEND_REQUEST_NOTIFICATION"
   | "SYNC_REQUEST_TO_SHAREPOINT"
@@ -122,4 +129,9 @@ export async function saveReminderThresholds(
     method: "POST",
     body: thresholds,
   });
+}
+
+/** Global job counts by status — powers the JobStatusBar. */
+export async function getJobStats(): Promise<JobStatsResponse> {
+  return apiFetch<JobStatsResponse>("/api/job/stats");
 }

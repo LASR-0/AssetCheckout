@@ -31,8 +31,6 @@ export default function RequestTablePage() {
 
   const [selectedTier, setSelectedTier] = useState<string>("STANDARD");
 
-  const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
-
   const { role, name: currentUserName } = useAuth();
   const columnVisibility = getColumnVisibility(role);
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});

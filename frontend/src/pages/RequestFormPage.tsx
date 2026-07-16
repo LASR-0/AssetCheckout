@@ -44,8 +44,6 @@ const INITIAL_STATE: FormState = {
   managerId: "",
 };
 
-const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
-
 export default function RequestFormPage() {
   const [formState, setFormState] = useState<FormState>(INITIAL_STATE);
   const [formKey, setFormKey] = useState(0);

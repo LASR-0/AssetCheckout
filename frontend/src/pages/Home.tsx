@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { fetchUsers } from "@/api/users";
 import { getRequests } from "@/api/requests";
 import { getAssetCategories } from "@/api/categories";
 import { iconForCategory } from "@/lib/categoryIcon";
@@ -48,18 +47,20 @@ type HomeRequest = {
 ///  +-----------------------------------------------------------------+
 //
 //  Scope: requests where the signed-in person is the TARGET USER.
-//  Resolved deterministically: auth email → users list → userId →
-//  getRequests({ userId }). Stats are derived client-side from the
-//  returned page (limit 100 — plenty at our org size).
+//  getRequests no longer accepts a userId filter, so we fetch the most
+//  recent org-wide page (limit 100) and filter client-side by userName —
+//  the same comparison RecentRequests already uses. NOTE: the 100-request
+//  window is now org-wide, so stats reflect the user's share of recent
+//  activity rather than a guaranteed all-time count.
 
 function useMyRequests() {
-  const { email, isLoading: authLoading } = useAuth();
+  const { name, isLoading: authLoading } = useAuth();
   const [requests, setRequests] = useState<HomeRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!email) {
+    if (!name) {
       setLoading(false);
       return;
     }
@@ -68,16 +69,10 @@ function useMyRequests() {
 
     (async () => {
       try {
-        const users = await fetchUsers();
-        const me = users.find(
-          (u) => u.email?.toLowerCase() === email.toLowerCase()
-        );
-        if (!me) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-        const data = await getRequests({ userId: Number(me.id), limit: 100 });
-        if (!cancelled) setRequests(data.requests ?? []);
+        const data = await getRequests({ limit: 100 });
+        const all: HomeRequest[] = data.requests ?? [];
+        const mine = all.filter((r) => r.userName === name);
+        if (!cancelled) setRequests(mine);
       } catch (err) {
         console.error("Failed to load home page requests", err);
       } finally {
@@ -88,7 +83,7 @@ function useMyRequests() {
     return () => {
       cancelled = true;
     };
-  }, [email, authLoading]);
+  }, [name, authLoading]);
 
   return { requests, loading };
 }
@@ -164,8 +159,13 @@ function HomeHead({
         </p>
       </div>
 
-      {/* Status snapshot */}
-      <div className="flex gap-3 shrink-0" aria-label="Your request summary">
+      {/* Status snapshot — mobile: full-width 3-col grid so the cards
+          share the space equally (centred, equal side padding);
+          desktop: unchanged flex row. */}
+      <div
+        className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0"
+        aria-label="Your request summary"
+      >
         <Stat num={inProgress} label="In progress" loading={loading} />
         <Stat num={completed} label="Completed" loading={loading} />
         <Stat
@@ -192,7 +192,7 @@ function Stat({
 }) {
   return (
     <div
-      className={`${CARD} flex flex-col items-center justify-center gap-1 px-5 py-4 min-w-[110px] ${
+      className={`${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px] ${
         attention ? "!border-status-error/50" : ""
       }`}
     >
