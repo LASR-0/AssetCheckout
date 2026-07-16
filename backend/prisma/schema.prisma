@@ -18,6 +18,7 @@ model Request {
   categoryId     Int
   categoryName   String
 
+  requestKind    RequestKind  @default(ASSET)
   requestType    RequestType
   status         RequestStatus @default(PENDING)
 
@@ -74,6 +75,7 @@ model ModelRequest {
 
   linkedAssetId  Int?
   snipeModelId   Int?
+  snipeAccessoryId  Int?
 
   status         ModelRequestStatus @default(PENDING)
   assetReady     Boolean            @default(false)
@@ -162,4 +164,9 @@ enum JobStatus {
   Running
   Completed
   Failed
+}
+
+enum RequestKind {
+  ASSET
+  ACCESSORY
 }
