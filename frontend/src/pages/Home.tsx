@@ -166,8 +166,8 @@ function HomeHead({
         className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0"
         aria-label="Your request summary"
       >
-        <Stat num={inProgress} label="In progress" loading={loading} />
-        <Stat num={completed} label="Completed" loading={loading} />
+        <Stat num={inProgress} label="In progress" loading={loading} pending={inProgress > 0} />
+        <Stat num={completed} label="Completed" loading={loading} complete={completed > 0} />
         <Stat
           num={rejected}
           label="Rejected"
@@ -184,22 +184,29 @@ function Stat({
   label,
   loading,
   attention = false,
+  complete = false,
+  pending = false,
 }: {
   num: number;
   label: string;
   loading: boolean;
   attention?: boolean;
+  complete?: boolean;
+  pending?: boolean;
 }) {
   return (
     <div
-      className={`${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px] ${
-        attention ? "!border-status-error/50" : ""
-      }`}
+      className={`${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px] 
+        ${attention ? "!border-status-error/50" : ""} 
+        ${complete ? "!border-status-success/50" : ""} 
+        ${pending ? "!border-status-ship/50" : ""}`}
     >
       <span
-        className={`font-headline font-extrabold text-2xl ${
-          attention ? "text-status-error" : ""
-        }`}
+        className={`font-headline font-extrabold text-2xl 
+          ${attention ? "text-status-error" : "" } 
+          ${complete ? "text-status-success" : ""}
+          ${pending ? "text-status-ship" : ""}
+          `}
       >
         {loading ? "–" : num}
       </span>

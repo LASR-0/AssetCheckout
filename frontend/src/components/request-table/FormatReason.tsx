@@ -57,7 +57,7 @@ export const ReasonCell = ({ text }: { text?: string }) => {
         )}
         {/* FIXED: ml-5 indents the quote bar to align with the label text (icon 14px + 6px gap = 20px) */}
         {parsed.request && (
-          <p className="ml-2 border-l-2 border-border pl-2.5 text-[13px] leading-snug text-muted-foreground">
+          <p className="ml-2 border-l-2 border-border pl-2.5 text-[13px] leading-snug text-info-light">
             {parsed.request}
           </p>
         )}
