@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import requestRoutes from "./requestRoutes.js";
+import accessoryRoutes from "./accessoryRoutes.js";
 import userRoutes from "./userRoutes.js";
 import approvalRoutes from "./approvalRoutes.js";
 import authRoutes from "./authRoutes.js"
@@ -18,6 +19,7 @@ import sharepointRoutes from "./sharepointRoutes.js";
 const router = Router();
 
 router.use("/requests", requestRoutes);
+router.use("/accessories", accessoryRoutes);
 router.use("/users", userRoutes);
 router.use("/approval", approvalRoutes);
 router.use("/auth", authRoutes);

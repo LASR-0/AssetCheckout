@@ -6,7 +6,7 @@ import {
     isSnipeAssetLive,
   modelHasAnyAssets,
   deleteSnipeModel,
-} from "../../services/snipeit.js";
+} from "../../services/snipeitassets.js";
 import { getSetting } from "../../services/settings.js";
 
 const DEFAULT_MAX_DELETES = 5;

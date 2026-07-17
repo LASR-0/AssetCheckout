@@ -16,6 +16,7 @@ import type { JobType } from "../../generated/prisma_client/client.js";
 export const ONE_SHOT_JOBS: Set<JobType> = new Set([
   "REFRESH_CATEGORIES_CACHE",
   "REFRESH_PRICES_CACHE",
+  "REFRESH_ACCESSORIES_CACHE",
   "CLEANUP_STALE_REQUESTS",
   "CLEANUP_ORPHAN_SNIPE_MODELS",
   "PURGE_OLD_JOB_HISTORY",

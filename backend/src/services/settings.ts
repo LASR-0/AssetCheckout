@@ -11,6 +11,10 @@ export type CategoryStandardModels = {
 
 export type StandardModelsConfig = Record<string, CategoryStandardModels>;
 
+// Accessories reuse the same per-category { primary, backup } shape —
+// the values are Snipe accessory IDs instead of Snipe model IDs.
+export type StandardAccessoriesConfig = StandardModelsConfig;
+
 // FIXED: mobile-filter config shape — mirrors MobileNumberConfig on the frontend
 export type MobileFilterConfig = {
   countryCode: string;        // digits only, e.g. "61"
@@ -29,6 +33,9 @@ const SKELETON_STATUS_KEY = "skeleton_status_id";
 // FIXED: mobile number filter keys
 const MOBILE_COUNTRY_CODE_KEY = "mobile_country_code";
 const MOBILE_LEADING_DIGIT_KEY = "mobile_leading_digit";
+// Accessories chapter
+const REQUESTABLE_ACCESSORY_CATEGORIES_KEY = "requestable_accessory_categories";
+const STANDARD_ACCESSORIES_KEY = "standard_accessories";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DEFAULTS REGISTRY + SEEDING                    |
@@ -129,6 +136,27 @@ const SETTING_DEFAULTS: SettingDefault[] = [
       "Snipe-IT status ID assigned to newly-created skeleton assets. Empty string falls back to looking up the 'Pending' status by name.",
   },
 
+  // ---- Accessories ----
+  // Same shapes and normalisers as the asset equivalents; the standard-
+  // accessories values are Snipe accessory IDs (accessories have no
+  // separate model layer).
+  {
+    key: REQUESTABLE_ACCESSORY_CATEGORIES_KEY,
+    envVar: "REQUESTABLE_ACCESSORY_CATEGORY_IDS",
+    normalize: normalizeCategoryIdsEnv,
+    defaultValue: "",
+    description:
+      "JSON array of Snipe-IT accessory category IDs that are allowed for new accessory requests. Empty string means all accessory categories allowed.",
+  },
+  {
+    key: STANDARD_ACCESSORIES_KEY,
+    envVar: "STANDARD_ACCESSORIES_JSON",
+    normalize: normalizeStandardModelsEnv,
+    defaultValue: "",
+    description:
+      "JSON object mapping accessory categoryId → { primary, backup } Snipe accessory IDs for standard accessory fulfilment.",
+  },
+
   // ---- Mobile number filtering ----
   // FIXED: seeded from env on fresh installs (MOBILE_COUNTRY_CODE /
   // MOBILE_LEADING_DIGIT), admin-editable thereafter. AU defaults.
@@ -172,6 +200,13 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     envVar: "JOBS_REFRESH_PRICES_CRON",
     defaultValue: "*/10 * * * *",
     description: "Cron expression for refreshing the Snipe price-averages cache (default: every 10 minutes).",
+  },
+  {
+    key: "jobs.refreshAccessoriesCron",
+    envVar: "JOBS_REFRESH_ACCESSORIES_CRON",
+    defaultValue: "*/10 * * * *",
+    description:
+      "Cron expression for refreshing the Snipe accessories and accessory-categories caches (default: every 10 minutes).",
   },
   {
     key: "jobs.cleanupStaleCron",
@@ -445,6 +480,131 @@ export async function setStandardModelsForCategory(
  */
 export async function getAllConfiguredStandardModelIds(): Promise<Set<number>> {
   const config = await getStandardModels();
+  const ids = new Set<number>();
+  for (const entry of Object.values(config)) {
+    if (entry.primary !== null) ids.add(entry.primary);
+    if (entry.backup !== null) ids.add(entry.backup);
+  }
+  return ids;
+}
+
+///  +-----------------------------------------------------------------+
+///  |             REQUESTABLE ACCESSORY CATEGORIES                    |
+///  +-----------------------------------------------------------------+
+//
+//  Accessory mirrors of the asset wrappers above. Kept as separate
+//  functions on separate keys (rather than generalising the asset ones)
+//  so nothing in the production asset flow is touched.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Returns the list of allowed accessory category IDs, or null if unset
+ * (null means "all accessory categories allowed" — the default).
+ */
+export async function getRequestableAccessoryCategoryIds(): Promise<number[] | null> {
+  const raw = await getSetting(REQUESTABLE_ACCESSORY_CATEGORIES_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((id): id is number => typeof id === "number");
+  } catch {
+    return null;
+  }
+}
+
+export async function setRequestableAccessoryCategoryIds(
+  ids: number[],
+  actorEmail: string
+): Promise<void> {
+  // Validate input: all numbers, deduplicated
+  const cleaned = Array.from(new Set(ids.filter((id) => typeof id === "number")));
+  await setSetting(
+    REQUESTABLE_ACCESSORY_CATEGORIES_KEY,
+    JSON.stringify(cleaned),
+    actorEmail
+  );
+}
+
+/** True if the given accessory categoryId is currently allowed for new requests. */
+export async function isAccessoryCategoryRequestable(
+  categoryId: number
+): Promise<boolean> {
+  const allowed = await getRequestableAccessoryCategoryIds();
+  if (allowed === null) return true; // no setting → everything allowed
+  return allowed.includes(categoryId);
+}
+
+///  +-----------------------------------------------------------------+
+///  |                  STANDARD ACCESSORIES CONFIG                    |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Returns the full standard-accessories config across all accessory
+ * categories. Values are Snipe accessory IDs. Returns an empty object if
+ * no config has been saved yet.
+ */
+export async function getStandardAccessories(): Promise<StandardAccessoriesConfig> {
+  const raw = await getSetting(STANDARD_ACCESSORIES_KEY);
+  if (!raw) return EMPTY_CONFIG;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return EMPTY_CONFIG;
+    }
+    // Light validation — accept entries shaped { primary, backup }, drop anything else.
+    const cleaned: StandardAccessoriesConfig = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value !== "object" || value === null) continue;
+      const v = value as Record<string, unknown>;
+      const primary = typeof v.primary === "number" ? v.primary : null;
+      const backup = typeof v.backup === "number" ? v.backup : null;
+      cleaned[key] = { primary, backup };
+    }
+    return cleaned;
+  } catch {
+    return EMPTY_CONFIG;
+  }
+}
+
+/**
+ * Returns the configured standard accessories for a single category.
+ * Returns { primary: null, backup: null } if no config exists for this category.
+ */
+export async function getStandardAccessoriesForCategory(
+  categoryId: number
+): Promise<CategoryStandardModels> {
+  const config = await getStandardAccessories();
+  return config[String(categoryId)] ?? { primary: null, backup: null };
+}
+
+/**
+ * Persist the configured standard accessories for a single category.
+ * Reads the existing config, replaces this category's entry, writes back.
+ *
+ * Pass `null` for primary or backup to clear that slot.
+ */
+export async function setStandardAccessoriesForCategory(
+  categoryId: number,
+  primary: number | null,
+  backup: number | null,
+  actorEmail: string
+): Promise<void> {
+  const config = await getStandardAccessories();
+  config[String(categoryId)] = { primary, backup };
+  await setSetting(STANDARD_ACCESSORIES_KEY, JSON.stringify(config), actorEmail);
+}
+
+/**
+ * Returns the set of Snipe accessory IDs configured as standards across
+ * ALL accessory categories. The accessory non-standard search will use
+ * this to exclude configured standards from results, mirroring
+ * getAllConfiguredStandardModelIds.
+ */
+export async function getAllConfiguredStandardAccessoryIds(): Promise<Set<number>> {
+  const config = await getStandardAccessories();
   const ids = new Set<number>();
   for (const entry of Object.values(config)) {
     if (entry.primary !== null) ids.add(entry.primary);

@@ -8,7 +8,7 @@ import {
   offboardSnipeUser,
   getRequestableAssetCategories,
   getAllUserPhones,
-} from "../services/snipeit.js";
+} from "../services/snipeitassets.js";
 import { AppError } from "../utils/errors.js";
 
 const router = express.Router();

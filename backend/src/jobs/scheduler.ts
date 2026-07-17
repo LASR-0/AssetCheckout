@@ -24,6 +24,7 @@ import { maxAttemptsFor } from "./policy.js";
 export const SCHEDULE_KEYS: Record<string, JobType> = {
   "jobs.refreshCategoriesCron": "REFRESH_CATEGORIES_CACHE",
   "jobs.refreshPricesCron": "REFRESH_PRICES_CACHE",
+  "jobs.refreshAccessoriesCron": "REFRESH_ACCESSORIES_CACHE",
   "jobs.cleanupStaleCron": "CLEANUP_STALE_REQUESTS",
   "jobs.cleanupOrphanCron": "CLEANUP_ORPHAN_SNIPE_MODELS",
   "jobs.purgeHistoryCron": "PURGE_OLD_JOB_HISTORY",

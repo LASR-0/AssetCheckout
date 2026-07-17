@@ -4,7 +4,7 @@ import {
   checkoutAsset,
   getAveragePricesFromSnipe,
   getTierValues,
-} from "../services/snipeit.js";
+} from "../services/snipeitassets.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import { createRequest } from "../services/request.js";

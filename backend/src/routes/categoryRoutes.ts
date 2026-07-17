@@ -3,7 +3,7 @@ import {
   getAllAssetCategories,
   getRequestableAssetCategories,
   getAllModelsByCategory,
-} from "../services/snipeit.js";
+} from "../services/snipeitassets.js";
 
 const router = Router();
 

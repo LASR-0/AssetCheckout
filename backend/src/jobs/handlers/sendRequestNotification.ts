@@ -1,8 +1,8 @@
 import { prisma } from "../../db/prisma.js";
-import { resolveUserEmail } from "../../services/snipeit.js";
+import { resolveUserEmail } from "../../services/snipeitassets.js";
 import { sendEmail } from "../../services/email.js";
 import { getSetting } from "../../services/settings.js";
-import { appLink } from "../handlers/AppLinks.js";
+import { appLink } from "./appLinks.js";
 import {
   renderEmail,
   esc,

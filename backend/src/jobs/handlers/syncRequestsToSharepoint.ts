@@ -1,7 +1,7 @@
 import { prisma } from "../../db/prisma.js";
 import { sendEmail } from "../../services/email.js";
 import { getSetting } from "../../services/settings.js";
-import { getSnipeUser } from "../../services/snipeit.js";
+import { getSnipeUser } from "../../services/snipeitassets.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |              SYNC REQUESTS TO SHAREPOINT (cron)                 |

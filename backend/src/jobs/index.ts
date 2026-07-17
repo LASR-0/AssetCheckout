@@ -8,6 +8,7 @@ import { cleanupOrphanSnipeModelsHandler } from "./handlers/cleanupOrphanSnipeMo
 import { sendRequestNotificationHandler } from "./handlers/sendRequestNotification.js";
 import { remindShippedRequestsHandler } from "./handlers/remindShippedRequests.js";
 import { syncRequestsToSharepointHandler } from "./handlers/syncRequestsToSharepoint.js";
+import { refreshAccessoriesCacheHandler } from "./handlers/refreshAccessoriesCachehandler.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    JOB SYSTEM ENTRY POINT                       |
@@ -32,6 +33,7 @@ export async function startJobs(): Promise<void> {
   registerHandler("SEND_REQUEST_NOTIFICATION", sendRequestNotificationHandler);
   registerHandler("REMIND_SHIPPED_REQUESTS", remindShippedRequestsHandler);
   registerHandler("SYNC_REQUEST_TO_SHAREPOINT", syncRequestsToSharepointHandler );
+  registerHandler("REFRESH_ACCESSORIES_CACHE", refreshAccessoriesCacheHandler);
 
   await startRunner();
   await startScheduler();

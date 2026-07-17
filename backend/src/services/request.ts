@@ -15,7 +15,7 @@ import {
   getLocationComparison,
   getSnipeUser,
   type AssetDetailsInput,
-} from "../services/snipeit.js";
+} from "./snipeitassets.js";
 import {
   isCategoryRequestable,
   getStandardModelsForCategory,

@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllUsersCleaned } from "../services/snipeit.js";
+import { getAllUsersCleaned } from "../services/snipeitassets.js";
 
 const router = express.Router();
 

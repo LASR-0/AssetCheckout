@@ -33,8 +33,7 @@ const API_TOKEN = process.env.SNIPEIT_BOT_TOKEN;
 if (!BASE_URL || !API_TOKEN) {
   throw new Error('Missing Snipe-IT environment variables');
 }
-
-const baseUrl: string = BASE_URL;
+export const baseUrl: string = BASE_URL;
 const apiToken: string = API_TOKEN;
 
 const cleanPhoneField = (value: unknown): string | null =>
@@ -48,7 +47,7 @@ const cleanPhoneField = (value: unknown): string | null =>
  * fetch() with a timeout. Snipe-IT can be slow or unreachable on a flaky
  * network, and we'd rather surface a clean 504/502 than hang the request.
  */
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 8000) {
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 8000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
@@ -71,7 +70,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
   }
 }
 
-function getHeaders(): HeadersInit {
+export function getHeaders(): HeadersInit {
   return {
     Authorization: `Bearer ${apiToken}`,
     Accept: 'application/json',

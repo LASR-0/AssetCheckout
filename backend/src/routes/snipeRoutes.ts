@@ -4,7 +4,7 @@ import {
   getLocations,
   getAllStatuses,
   getSnipeAssetDetail
-} from "../services/snipeit.js";
+} from "../services/snipeitassets.js";
 import { getActorName } from "../config/auth.js";
  
 const router = express.Router();

@@ -127,3 +127,50 @@ export type OffboardResult = {
   failed: CheckinFailure[];
   userDeactivated: boolean;
 };
+
+///  +-----------------------------------------------------------------+
+///  |                        ACCESSORIES                              |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Raw Snipe-IT /accessories row (the fields we consume — Snipe returns
+ * more). Note there is no model layer: the accessory record itself
+ * carries name, manufacturer, model_number, and stock quantities.
+ * `remaining_qty` is canonical in current Snipe payloads; `remaining` is
+ * an older alias that some versions also/only send.
+ */
+export type SnipeAccessory = {
+  id: number;
+  name: string;
+  model_number?: string | null;
+  manufacturer?: { id: number; name: string } | null;
+  category?: { id: number; name: string } | null;
+  location?: { id: number; name: string } | null;
+  qty?: number;
+  remaining_qty?: number;
+  remaining?: number;
+  purchase_cost?: string | null;
+};
+
+export type AccessoryCategory = {
+  id: number;
+  name: string;
+};
+
+/**
+ * Normalised accessory shape served to the frontend (request form options
+ * list, admin standard-accessories picker). `remaining` is the current
+ * checkout-able stock.
+ */
+export type AccessorySummary = {
+  id: number;
+  name: string;
+  modelNumber: string | null;
+  manufacturer: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  qty: number;
+  remaining: number;
+  locationId: number | null;
+  locationName: string | null;
+};

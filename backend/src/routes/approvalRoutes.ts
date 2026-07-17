@@ -9,7 +9,7 @@ import {
   markReadyForCollection,
   markRequestReceived 
 } from "../services/request.js";
-import { searchModelsByManufacturer } from "../services/snipeit.js";
+import { searchModelsByManufacturer } from "../services/snipeitassets.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/errors.js";
 import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
