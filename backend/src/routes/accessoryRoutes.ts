@@ -10,6 +10,8 @@ import {
   setRequestableAccessoryCategoryIds,
   getStandardAccessories,
   setStandardAccessoriesForCategory,
+  getAccessoryOptionLabels,
+  type AccessoryOptionConfig,
 } from "../services/settings.js";
 import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
 
@@ -72,6 +74,42 @@ router.get("/categories/requestable", async (req, res, next) => {
 });
 
 ///  +-----------------------------------------------------------------+
+///  |                       OPTION LABELS                             |
+///  +-----------------------------------------------------------------+
+
+/**
+ * The requester-facing option labels for a category ("USB-C to Lightning",
+ * "Case", ...). Labels ONLY — the accessory IDs each label resolves to are
+ * deliberately not exposed, so the configured standards stay hidden from
+ * requesters, consistent with the asset flow. Non-admin: any authenticated
+ * actor (the request form calls this).
+ */
+router.get("/options/:categoryId", async (req, res, next) => {
+  try {
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res.status(401).json({
+        success: false,
+        message: "Missing actor identity",
+      });
+    }
+
+    const categoryId = Number(req.params.categoryId);
+    if (!Number.isFinite(categoryId) || categoryId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid categoryId",
+      });
+    }
+
+    const options = await getAccessoryOptionLabels(categoryId);
+    res.json({ success: true, options });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
 ///  |                          CATALOG                                |
 ///  +-----------------------------------------------------------------+
 
@@ -81,8 +119,8 @@ router.get("/categories/requestable", async (req, res, next) => {
  *   GET /api/accessories                → every accessory
  *   GET /api/accessories?categoryId=16  → accessories in one category
  *
- * The request form uses the categoryId form; the admin settings page
- * (standard-accessories picker) uses the unfiltered form.
+ * The admin settings page (standard-accessories picker) uses these;
+ * requesters never see raw accessory records.
  */
 router.get("/", async (req, res, next) => {
   try {
@@ -122,8 +160,8 @@ router.get("/", async (req, res, next) => {
 
 /**
  * Current accessory configuration in one call — the requestable-category
- * whitelist (null = all allowed) and the per-category standard
- * accessories map. Admin settings page only.
+ * whitelist (null = all allowed) and the per-category option config.
+ * Admin settings page only.
  */
 router.get("/settings", async (req, res, next) => {
   try {
@@ -159,10 +197,7 @@ router.get("/settings", async (req, res, next) => {
 
 /**
  * Replace the requestable-accessory-categories whitelist.
- * Body: { ids: number[] } — an empty array means "nothing requestable";
- * to return to "all allowed", the admin clears the setting via the same
- * endpoint semantics as the asset side (empty stored value), which the
- * UI models as selecting every category.
+ * Body: { ids: number[] }.
  */
 router.put("/settings/requestable-categories", async (req, res, next) => {
   try {
@@ -202,9 +237,10 @@ router.put("/settings/requestable-categories", async (req, res, next) => {
 });
 
 /**
- * Set (or clear) the standard accessories for one category.
- * Body: { primary: number | null, backup: number | null } — Snipe
- * accessory IDs. Pass null to clear a slot.
+ * Replace the full option list for one accessory category.
+ * Body: { options: [{ label: string, primary: number|null, backup: number|null }] }
+ * — replace semantics; the admin UI edits a category's options as a unit.
+ * Pass { options: [] } to clear a category.
  */
 router.put("/settings/standard-accessories/:categoryId", async (req, res, next) => {
   try {
@@ -232,23 +268,32 @@ router.put("/settings/standard-accessories/:categoryId", async (req, res, next) 
       });
     }
 
-    const { primary, backup } = req.body ?? {};
+    const { options } = req.body ?? {};
     const validSlot = (v: unknown) =>
-      v === null || (typeof v === "number" && Number.isFinite(v));
+      v === null || v === undefined || (typeof v === "number" && Number.isFinite(v));
+    const validOption = (o: unknown) =>
+      typeof o === "object" &&
+      o !== null &&
+      typeof (o as any).label === "string" &&
+      (o as any).label.trim().length > 0 &&
+      validSlot((o as any).primary) &&
+      validSlot((o as any).backup);
 
-    if (!validSlot(primary) || !validSlot(backup)) {
+    if (!Array.isArray(options) || !options.every(validOption)) {
       return res.status(400).json({
         success: false,
-        message: "Body must be { primary: number|null, backup: number|null }",
+        message:
+          "Body must be { options: [{ label: string, primary: number|null, backup: number|null }] }",
       });
     }
 
-    await setStandardAccessoriesForCategory(
-      categoryId,
-      primary,
-      backup,
-      actorEmail ?? ""
-    );
+    const cleaned: AccessoryOptionConfig[] = options.map((o: any) => ({
+      label: o.label,
+      primary: o.primary ?? null,
+      backup: o.backup ?? null,
+    }));
+
+    await setStandardAccessoriesForCategory(categoryId, cleaned, actorEmail ?? "");
 
     res.json({ success: true });
   } catch (err) {

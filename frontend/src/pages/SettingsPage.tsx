@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import ThemeSwitch from "@/components/nav/ThemeSwitch";
 import DevAuthToggle from "@/components/nav/DevAuthToggle";
 import AssetConfigurationSettings from "@/components/settings/AssetConfiguration";
+import AccessoryConfigurationSettings from "@/components/settings/AccessoryConfiguration";
 import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
 import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
 import JobHistoryTable from "@/components/settings/JobsHistoryTable";
@@ -38,6 +39,18 @@ export default function SettingsPage() {
       {isAdmin && (
         <SettingsSection icon="inventory" title="Asset Configuration">
           <AssetConfigurationSettings />
+        </SettingsSection>
+      )}
+
+      {/* Accessory Configuration -- admin-only */}
+      {isAdmin && (
+        <SettingsSection icon="cable" title="Accessory Configuration">
+          <p className="text-sm text-info-light mb-4">
+            Which accessory categories can be requested, and the named options
+            requesters pick from in each. "Something else" is always offered
+            automatically and locks a request to non-standard.
+          </p>
+          <AccessoryConfigurationSettings />
         </SettingsSection>
       )}
 

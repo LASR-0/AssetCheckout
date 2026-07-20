@@ -30,6 +30,7 @@ model Request {
   newNumber      Boolean @default(false) //this will be replaced after we clean out where the value is used on the frontend
   needsData            Boolean       @default(false)
   numberOption         NumberOption?
+  accessoryOption      String?
   reuseNumberFromEmail String?
   reuseNumberPhone     String?
 

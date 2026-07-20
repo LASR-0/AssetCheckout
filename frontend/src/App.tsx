@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import RequestFormPage from "@/pages/RequestFormPage";
+import AccessoryRequestFormPage from "@/pages/AccessoryFormPage";
 import SuccessRedirect from "@/pages/SuccessRedirect";
 import RequestTablePage from "@/pages/RequestsTablePage"
 import Navbar from "./components/nav/Navbar";
@@ -20,6 +21,9 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/checkout" element={
             <ProtectedRoute requireRole={false}><RequestFormPage /></ProtectedRoute>
+          } />
+          <Route path="/accessories" element={
+            <ProtectedRoute requireRole={false}><AccessoryRequestFormPage /></ProtectedRoute>
           } />
           <Route path="/success" element={<SuccessRedirect />} />
           <Route

@@ -7,9 +7,13 @@ import {
   fillAssetDetailsForRequest,
   markRequestShipped,
   markReadyForCollection,
-  markRequestReceived 
+  markRequestReceived,
+  useExistingAccessoryForRequest,
+  createNewAccessoryForRequest,
+  addAccessoryStockForRequest,
 } from "../services/request.js";
 import { searchModelsByManufacturer } from "../services/snipeitassets.js";
+import { searchAccessories } from "../services/snipeitaccessories.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/errors.js";
 import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
@@ -219,6 +223,236 @@ router.post("/:requestId/create-model", async (req, res, next) => {
       modelNumber,
     });
 
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |               ACCESSORY SELECTION ROUTES (phase 3c)             |
+///  +-----------------------------------------------------------------+
+//
+//  The non-standard accessory twins of the model-creation routes above.
+//  Same actor-gating pattern as those (authenticated actor required; the
+//  service functions enforce kind + row-state). Mounted on the same
+//  /api/approval router. The request-kind guard lives in the service
+//  (loadAccessoryRequestAtSelection / ...AtQuantity) so an accessory
+//  endpoint hit against an asset request returns a clean 400.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Search existing accessories for a non-standard request. `name` is required
+ * (the primary match key); `manufacturer` is optional (most accessories have
+ * none). Returns per-location records with a hasAvailable flag — the admin
+ * picks one specific record, so location duplicates are shown, not grouped.
+ */
+router.get("/:requestId/search-accessories", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({
+        success: false,
+        message: "Missing actor identity",
+      });
+    }
+
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid requestId",
+      });
+    }
+
+    const manufacturer = String(req.query.manufacturer ?? "").trim();
+    const name = String(req.query.name ?? "").trim();
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "name is required",
+      });
+    }
+
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { categoryId: true },
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Request not found",
+      });
+    }
+
+    const matches = await searchAccessories({
+      manufacturer: manufacturer || undefined,
+      name,
+      categoryId: request.categoryId,
+    });
+
+    res.json({
+      success: true,
+      matches,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:requestId/use-existing-accessory", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({
+        success: false,
+        message: "Missing actor identity",
+      });
+    }
+
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid requestId",
+      });
+    }
+
+    const { snipeAccessoryId } = req.body ?? {};
+    if (
+      typeof snipeAccessoryId !== "number" ||
+      !Number.isFinite(snipeAccessoryId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "snipeAccessoryId is required and must be a number",
+      });
+    }
+
+    const result = await useExistingAccessoryForRequest(
+      requestId,
+      snipeAccessoryId
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:requestId/create-accessory", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({
+        success: false,
+        message: "Missing actor identity",
+      });
+    }
+
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid requestId",
+      });
+    }
+
+    const name = String(req.body?.name ?? "").trim();
+    // Optional buffer fields — kept in the ModelRequest, not pushed to Snipe.
+    const rawManufacturer = req.body?.manufacturer;
+    const rawModelNumber = req.body?.modelNumber;
+    const manufacturer =
+      typeof rawManufacturer === "string" && rawManufacturer.trim()
+        ? rawManufacturer.trim()
+        : null;
+    const modelNumber =
+      typeof rawModelNumber === "string" && rawModelNumber.trim()
+        ? rawModelNumber.trim()
+        : null;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "name is required",
+      });
+    }
+
+    const result = await createNewAccessoryForRequest(requestId, {
+      name,
+      manufacturer,
+      modelNumber,
+    });
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                 ACCESSORY QUANTITY ROUTE (phase 3c)             |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Waiting-phase submit: set the arrived quantity (and optionally the
+ * location, for a newly-created record) on the selected accessory. When
+ * stock becomes available the service checks out + completes automatically.
+ * The accessory twin of the asset-details route.
+ */
+router.post("/:requestId/accessory-stock", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({
+        success: false,
+        message: "Missing actor identity",
+      });
+    }
+
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid requestId",
+      });
+    }
+
+    const rawQty = req.body?.qty;
+    if (
+      typeof rawQty !== "number" ||
+      !Number.isFinite(rawQty) ||
+      rawQty < 0 ||
+      !Number.isInteger(rawQty)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "qty is required and must be a non-negative integer",
+      });
+    }
+
+    const rawLocationId = req.body?.locationId;
+    let locationId: number | null | undefined;
+    if (rawLocationId === undefined || rawLocationId === null) {
+      locationId = undefined;
+    } else if (typeof rawLocationId === "number" && Number.isFinite(rawLocationId)) {
+      locationId = rawLocationId;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "locationId, when provided, must be a number",
+      });
+    }
+
+    const result = await addAccessoryStockForRequest(requestId, {
+      qty: rawQty,
+      locationId,
+    });
     res.json(result);
   } catch (err) {
     next(err);

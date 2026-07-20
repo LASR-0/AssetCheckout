@@ -11,9 +11,22 @@ export type CategoryStandardModels = {
 
 export type StandardModelsConfig = Record<string, CategoryStandardModels>;
 
-// Accessories reuse the same per-category { primary, backup } shape —
-// the values are Snipe accessory IDs instead of Snipe model IDs.
-export type StandardAccessoriesConfig = StandardModelsConfig;
+// Accessories: each category carries a list of NAMED options ("USB-C to
+// Lightning", "Case", ...), and each option has its own standard — a
+// representative Snipe accessory ID (fulfilment expands location-siblings
+// by product identity at approval time). Categories with one option render
+// no choice on the form; the option labels are what requesters see.
+export type AccessoryOptionConfig = {
+  label: string;
+  primary: number | null; // representative Snipe accessory ID
+  backup: number | null;
+};
+
+export type CategoryAccessoryOptions = {
+  options: AccessoryOptionConfig[];
+};
+
+export type StandardAccessoriesConfig = Record<string, CategoryAccessoryOptions>;
 
 // FIXED: mobile-filter config shape — mirrors MobileNumberConfig on the frontend
 export type MobileFilterConfig = {
@@ -110,6 +123,64 @@ function normalizeStandardModelsEnv(raw: string): string | null {
   }
 }
 
+/**
+ * Shared cleaner for one category's accessory-options entry. Drops
+ * malformed entries, trims labels, discards empty labels, and dedupes
+ * labels case-insensitively (first occurrence wins). Returns null when
+ * the value isn't shaped { options: [...] } at all.
+ */
+function cleanAccessoryOptions(value: unknown): CategoryAccessoryOptions | null {
+  if (typeof value !== "object" || value === null) return null;
+  const rawOptions = (value as Record<string, unknown>).options;
+  if (!Array.isArray(rawOptions)) return null;
+
+  const options: AccessoryOptionConfig[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of rawOptions) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+
+    const label = typeof e.label === "string" ? e.label.trim() : "";
+    if (!label) continue;
+
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    options.push({
+      label,
+      primary: typeof e.primary === "number" ? e.primary : null,
+      backup: typeof e.backup === "number" ? e.backup : null,
+    });
+  }
+
+  return { options };
+}
+
+// Env normaliser for standard accessories. JSON object of
+// categoryId → { options: [{ label, primary, backup }] }, cleaned through
+// the same rules as getStandardAccessories.
+function normalizeStandardAccessoriesEnv(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const cleaned: StandardAccessoriesConfig = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!/^\d+$/.test(key)) continue;
+      const entry = cleanAccessoryOptions(value);
+      if (entry === null) continue;
+      cleaned[key] = entry;
+    }
+    return JSON.stringify(cleaned);
+  } catch {
+    return null;
+  }
+}
+
 const SETTING_DEFAULTS: SettingDefault[] = [
   // ---- Existing settings ----
   {
@@ -151,10 +222,10 @@ const SETTING_DEFAULTS: SettingDefault[] = [
   {
     key: STANDARD_ACCESSORIES_KEY,
     envVar: "STANDARD_ACCESSORIES_JSON",
-    normalize: normalizeStandardModelsEnv,
+    normalize: normalizeStandardAccessoriesEnv,
     defaultValue: "",
     description:
-      "JSON object mapping accessory categoryId → { primary, backup } Snipe accessory IDs for standard accessory fulfilment.",
+      "JSON object mapping accessory categoryId → { options: [{ label, primary, backup }] }. Each named option is a requester-facing choice whose primary/backup are representative Snipe accessory IDs.",
   },
 
   // ---- Mobile number filtering ----
@@ -542,73 +613,83 @@ export async function isAccessoryCategoryRequestable(
 
 /**
  * Returns the full standard-accessories config across all accessory
- * categories. Values are Snipe accessory IDs. Returns an empty object if
- * no config has been saved yet.
+ * categories: categoryId → { options: [{ label, primary, backup }] }.
+ * Returns an empty object if no config has been saved yet. Entries are
+ * cleaned on the way out, so callers always see well-shaped options.
  */
 export async function getStandardAccessories(): Promise<StandardAccessoriesConfig> {
   const raw = await getSetting(STANDARD_ACCESSORIES_KEY);
-  if (!raw) return EMPTY_CONFIG;
+  if (!raw) return {};
 
   try {
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return EMPTY_CONFIG;
+      return {};
     }
-    // Light validation — accept entries shaped { primary, backup }, drop anything else.
     const cleaned: StandardAccessoriesConfig = {};
     for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value !== "object" || value === null) continue;
-      const v = value as Record<string, unknown>;
-      const primary = typeof v.primary === "number" ? v.primary : null;
-      const backup = typeof v.backup === "number" ? v.backup : null;
-      cleaned[key] = { primary, backup };
+      const entry = cleanAccessoryOptions(value);
+      if (entry === null) continue;
+      cleaned[key] = entry;
     }
     return cleaned;
   } catch {
-    return EMPTY_CONFIG;
+    return {};
   }
 }
 
 /**
- * Returns the configured standard accessories for a single category.
- * Returns { primary: null, backup: null } if no config exists for this category.
+ * Returns the configured options for a single accessory category.
+ * Returns { options: [] } if no config exists for this category.
  */
 export async function getStandardAccessoriesForCategory(
   categoryId: number
-): Promise<CategoryStandardModels> {
+): Promise<CategoryAccessoryOptions> {
   const config = await getStandardAccessories();
-  return config[String(categoryId)] ?? { primary: null, backup: null };
+  return config[String(categoryId)] ?? { options: [] };
 }
 
 /**
- * Persist the configured standard accessories for a single category.
- * Reads the existing config, replaces this category's entry, writes back.
- *
- * Pass `null` for primary or backup to clear that slot.
+ * Persist the full option list for a single accessory category (replace
+ * semantics — the admin UI edits a category's options as a unit). Options
+ * are cleaned (trimmed labels, empties dropped, case-insensitive dedupe)
+ * before writing.
  */
 export async function setStandardAccessoriesForCategory(
   categoryId: number,
-  primary: number | null,
-  backup: number | null,
+  options: AccessoryOptionConfig[],
   actorEmail: string
 ): Promise<void> {
   const config = await getStandardAccessories();
-  config[String(categoryId)] = { primary, backup };
+  config[String(categoryId)] = cleanAccessoryOptions({ options }) ?? { options: [] };
   await setSetting(STANDARD_ACCESSORIES_KEY, JSON.stringify(config), actorEmail);
 }
 
 /**
+ * Requester-facing option labels for a category — labels ONLY, never the
+ * accessory IDs they resolve to, so which product is the configured
+ * standard stays unrevealed (consistent with the asset flow never showing
+ * standard models to requesters). Backs GET /api/accessories/options/:id.
+ */
+export async function getAccessoryOptionLabels(categoryId: number): Promise<string[]> {
+  const entry = await getStandardAccessoriesForCategory(categoryId);
+  return entry.options.map((o) => o.label);
+}
+
+/**
  * Returns the set of Snipe accessory IDs configured as standards across
- * ALL accessory categories. The accessory non-standard search will use
- * this to exclude configured standards from results, mirroring
+ * ALL accessory categories and options. The accessory non-standard search
+ * will use this to exclude configured standards from results, mirroring
  * getAllConfiguredStandardModelIds.
  */
 export async function getAllConfiguredStandardAccessoryIds(): Promise<Set<number>> {
   const config = await getStandardAccessories();
   const ids = new Set<number>();
   for (const entry of Object.values(config)) {
-    if (entry.primary !== null) ids.add(entry.primary);
-    if (entry.backup !== null) ids.add(entry.backup);
+    for (const option of entry.options) {
+      if (option.primary !== null) ids.add(option.primary);
+      if (option.backup !== null) ids.add(option.backup);
+    }
   }
   return ids;
 }

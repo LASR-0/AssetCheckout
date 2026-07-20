@@ -2,6 +2,10 @@ export type RequestType = "STANDARD" | "NON_STANDARD";
 export type RequestStatus = "PENDING" | "COMPLETED" | "REJECTED" | "APPROVED";
 // FIXED: number decision enum, matching the Prisma NumberOption enum
 export type NumberOption = "NEW" | "REUSE" | "NONE";
+// Accessories chapter: matches the Prisma RequestKind enum. Optional on
+// the interface — records created before the accessories expansion won't
+// carry it, and absent means ASSET.
+export type RequestKind = "ASSET" | "ACCESSORY";
 
 export interface Request {
   id: number;
@@ -13,6 +17,10 @@ export interface Request {
 
   requestType: RequestType;
   status: RequestStatus;
+
+  // Accessories chapter
+  requestKind?: RequestKind;
+  accessoryOption?: string | null;
 
   reason?: string;
   manager?: string;

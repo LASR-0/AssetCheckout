@@ -7,7 +7,19 @@ export type CreateRequestInput = {
   userName: string;
   categoryId: number;
   categoryName: string;
+  /**
+   * Discriminates asset vs accessory requests. Absent = ASSET, so the legacy
+   * asset form (which never sends the field) is completely unaffected.
+   */
+  requestKind?: "ASSET" | "ACCESSORY";
   requestType: "STANDARD" | "NON_STANDARD";
+  /**
+   * Accessory requests only: the chosen option label ("USB-C to Lightning",
+   * "Case", ...). Null when the requester picked "Something else" (the reason
+   * carries the detail) or when the category has no configured options.
+   * Ignored (forced null) on asset requests.
+   */
+  accessoryOption?: string | null;
   reason?: string;
   manager?: string;
   managerId?: number;
@@ -53,9 +65,31 @@ export type StandardAdminApproveResponse = {
   message: string;
 };
 
+/**
+ * Accessory admin approval — the accessory twin of
+ * StandardAdminApproveResponse. Accessories have no asset tag or model
+ * layer, so this carries the chosen accessory record ({ id, name }) instead
+ * of asset/model. Same discriminants (type: "STANDARD", stage: "ADMIN")
+ * plus kind: "ACCESSORY" so a consumer can tell the two ADMIN payloads
+ * apart when it needs the accessory shape.
+ */
+export type AccessoryStandardAdminApproveResponse = {
+  success: true;
+  type: "STANDARD";
+  stage: "ADMIN";
+  kind: "ACCESSORY";
+  request: Request;
+  accessory: {
+    id: number;
+    name: string;
+  };
+  message: string;
+};
+
 export type StandardApproveResponse =
   | StandardManagerApproveResponse
-  | StandardAdminApproveResponse;
+  | StandardAdminApproveResponse
+  | AccessoryStandardAdminApproveResponse;
 
 export type NonStandardApproveResponse = {
   success: true;

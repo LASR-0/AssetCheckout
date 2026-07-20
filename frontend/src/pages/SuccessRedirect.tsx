@@ -68,6 +68,16 @@ export default function SuccessRedirect() {
             <span className="text-on-surface-variant font-semibold">{request.categoryName}</span>
           </DetailRow>
 
+          {/* Accessories: which named option was requested. Only ever set
+              on accessory requests, so asset requests are unaffected. */}
+          {request.accessoryOption && (
+            <DetailRow label="Requested">
+              <span className="text-on-surface-variant font-semibold">
+                {request.accessoryOption}
+              </span>
+            </DetailRow>
+          )}
+
           {/* Non-standard-only fields */}
           {!isStandard && request.modelRequest && (
             <>

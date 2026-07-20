@@ -80,7 +80,23 @@ export default function Navbar() {
               >
                 list_alt
               </span>
-              Checkouts
+              Assets
+            </Link>
+
+            <Link
+              to="/accessories"
+              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+                isActive("/accessories")
+                  ? "text-nav-tab-selected border-b-2 border-underline"
+                  : "text-nav-tab hover:text-nav-tab-selected"
+              }`}
+            >
+              <span
+                className="material-symbols-outlined !text-xl"
+              >
+                cable
+              </span>
+              Accessories
             </Link>
 
             <Link
@@ -171,7 +187,7 @@ export default function Navbar() {
       <div
         className={`md:hidden overflow-hidden bg-[color-mix(in_srgb,var(--footer-bg),black_3%)] shadow-md transition-all duration-300 ease-in-out ${
           mobileNavOpen
-            ? "max-h-56 opacity-100 border-t border-outline/20"
+            ? "max-h-72 opacity-100 border-t border-outline/20"
             : "max-h-0 opacity-0 border-t-0"
         }`}
       >
@@ -205,7 +221,25 @@ export default function Navbar() {
             >
               inventory_2
             </span>
-            Checkouts
+            Assets
+          </Link>
+
+          <Link
+            to="/accessories"
+            onClick={() => setMobileNavOpen(false)}
+            className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              isActive("/accessories")
+                ? "text-nav-tab-selected border-b-2 border-underline"
+                : "text-nav-tab hover:text-nav-tab-selected"
+            }`}
+          >
+            <span
+              className="material-symbols-outlined !text-xl"
+              style={{ fontVariationSettings: `'FILL' 1` }}
+            >
+              cable
+            </span>
+            Accessories
           </Link>
 
           <Link

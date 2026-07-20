@@ -174,3 +174,36 @@ export type AccessorySummary = {
   locationId: number | null;
   locationName: string | null;
 };
+
+///  +-----------------------------------------------------------------+
+///  |               ACCESSORY FULFILMENT (phase 3b)                   |
+///  +-----------------------------------------------------------------+
+
+/**
+ * The outcome of resolving a standard accessory request to a concrete
+ * Snipe accessory record to check out. Returned by
+ * resolveAccessoryForRequest; consumed by the admin-approval accessory
+ * branch in services/request.ts.
+ *
+ * `accessory` is the specific location record chosen (siblings sharing a
+ * product identity are per-location rows — this is the one we'll check
+ * out). `needsShipping`/`locationMissing` mirror the asset flow's
+ * ship-vs-collect semantics: the chosen record is at the user's site
+ * (collect) or elsewhere (ship); locationMissing flags an unknown on
+ * either side for manual review.
+ */
+export type AccessoryResolution = {
+  accessory: AccessorySummary;
+  needsShipping: boolean;
+  locationMissing: boolean;
+};
+
+/**
+ * A non-standard accessory search hit — an AccessorySummary plus a
+ * `hasAvailable` flag (remaining > 0), the accessory twin of
+ * ModelSearchResult. Unlike the requester-facing option list (which must
+ * hide per-location duplicates), non-standard search returns each location
+ * record individually: the admin is deliberately picking ONE specific
+ * record and needs to see its location, so siblings are shown, not grouped.
+ */
+export type AccessorySearchResult = AccessorySummary & { hasAvailable: boolean };

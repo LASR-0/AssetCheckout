@@ -18,10 +18,20 @@ import {
 } from "./snipeitassets.js";
 import {
   isCategoryRequestable,
+  isAccessoryCategoryRequestable,
+  getAccessoryOptionLabels,
   getStandardModelsForCategory,
   getSkeletonStatusId,
   getSetting
 } from "../services/settings.js";
+import {
+  resolveAccessoryForRequest,
+  checkoutAccessory,
+  getAccessoryById,
+  createAccessory,
+  updateAccessoryStock,
+  deleteAccessory,
+} from "./snipeitaccessories.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import { AppError } from "../utils/errors.js";
 import type {
@@ -32,6 +42,7 @@ import type {
   ApproveResponse,
   StandardManagerApproveResponse,
   StandardAdminApproveResponse,
+  AccessoryStandardAdminApproveResponse,
   NonStandardApproveResponse,
   AssetDetailsResponse,
   RejectResponse,
@@ -75,6 +86,11 @@ function notify(requestId: number, kind: NotificationKind): void {
 /**
  * Creates a new request.
  *
+ * `requestKind` discriminates the two flavours. Absent = ASSET, so the
+ * legacy asset form (which never sends the field) is untouched. ACCESSORY
+ * requests are dispatched to createAccessoryRequest below; the asset path
+ * here is byte-for-byte the original behaviour.
+ *
  * The category must be in the requestable-categories allow-list (or no
  * allow-list set at all). For STANDARD requests no ModelRequest is created;
  * for NON_STANDARD the ModelRequest is created later, at manager approval
@@ -89,6 +105,19 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   if (typeof input.managerId !== "number") {
     throw new AppError("managerId is required", 400);
   }
+
+  const requestKind: "ASSET" | "ACCESSORY" =
+    input.requestKind === undefined ? "ASSET" : input.requestKind;
+
+  if (requestKind !== "ASSET" && requestKind !== "ACCESSORY") {
+    throw new AppError("Invalid requestKind", 400);
+  }
+
+  if (requestKind === "ACCESSORY") {
+    return createAccessoryRequest(input);
+  }
+
+  // ---- ASSET path (original behaviour, unchanged) ----
 
   if (!(await isCategoryRequestable(input.categoryId))) {
     throw new AppError(
@@ -105,7 +134,11 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
       userName: input.userName,
       categoryId: input.categoryId,
       categoryName: input.categoryName,
+      requestKind: "ASSET",
       requestType: input.requestType,
+      // Defensive: accessoryOption is an accessory-only field. A crafted
+      // asset payload carrying one is ignored rather than persisted.
+      accessoryOption: null,
       reason: input.reason,
       manager: input.manager,
       managerId: input.managerId,
@@ -120,6 +153,99 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   });
 
   // New request → the nominated manager needs to approve it.
+  notify(request.id, "MANAGER_APPROVAL_NEEDED");
+
+  return {
+    success: true,
+    type: request.requestType,
+    request,
+    message:
+      request.requestType === "STANDARD"
+        ? "Request submitted for approval"
+        : "Non-standard request submitted for approval",
+  };
+}
+
+/**
+ * Creates a new ACCESSORY request. Dispatched from createRequest; shares
+ * its response contract so the frontend handles both kinds identically.
+ *
+ * Category gating uses the accessory-side allow-list
+ * (isAccessoryCategoryRequestable), never the asset one.
+ *
+ * accessoryOption validation mirrors what the form enforces, so a crafted
+ * payload can't slip past what the UI would refuse:
+ *
+ *   - Category has NO configured options → the form shows an informational
+ *     line and no choice; any supplied option is ignored (forced null).
+ *   - Option supplied → must match a currently-configured label for the
+ *     category, else 400 (covers admin edits between form load and submit).
+ *   - Options configured but none supplied → only legitimate as "Something
+ *     else", which one-way locks the form to NON_STANDARD. A STANDARD
+ *     request in that state is therefore rejected.
+ *
+ * Phone/number mechanics (callText, needsData, numberOption, reuse fields)
+ * are asset-only and are hard-nulled regardless of the payload — the
+ * accessory form never renders them.
+ */
+async function createAccessoryRequest(
+  input: CreateRequestInput
+): Promise<CreateResponse> {
+
+  if (!(await isAccessoryCategoryRequestable(input.categoryId))) {
+    throw new AppError(
+      "This category is not currently available for new requests.",
+      403
+    );
+  }
+
+  const labels = await getAccessoryOptionLabels(input.categoryId);
+
+  const rawOption =
+    typeof input.accessoryOption === "string" ? input.accessoryOption.trim() : "";
+  let accessoryOption: string | null = rawOption.length > 0 ? rawOption : null;
+
+  if (labels.length === 0) {
+    accessoryOption = null;
+  } else if (accessoryOption !== null) {
+    if (!labels.includes(accessoryOption)) {
+      throw new AppError(
+        "The chosen option is no longer available for this category. Please refresh and pick again.",
+        400
+      );
+    }
+  } else if (input.requestType === "STANDARD") {
+    throw new AppError(
+      "An option must be selected for a standard request in this category.",
+      400
+    );
+  }
+
+  const request = await prisma.request.create({
+    data: {
+      userId: input.userId,
+      userName: input.userName,
+      categoryId: input.categoryId,
+      categoryName: input.categoryName,
+      requestKind: "ACCESSORY",
+      requestType: input.requestType,
+      accessoryOption,
+      reason: input.reason,
+      manager: input.manager,
+      managerId: input.managerId,
+      callText: false,
+      newNumber: false,
+      needsData: false,
+      numberOption: null,
+      reuseNumberFromEmail: null,
+      reuseNumberPhone: null,
+      status: "PENDING",
+    },
+  });
+
+  // New request → the nominated manager needs to approve it. Same first hop
+  // as assets; per-kind downstream branching (emails, admin fulfilment) is
+  // phase 3b/3d work.
   notify(request.id, "MANAGER_APPROVAL_NEEDED");
 
   return {
@@ -171,6 +297,12 @@ export async function approveRequest(
   ) {
     if (!actor.isAdmin) {
       throw new AppError("IT admin sign-off required for this stage", 403);
+    }
+    // Standard admin fulfilment forks by kind: accessories resolve against
+    // the accessory catalog (no model/asset layer), assets keep the
+    // original path untouched.
+    if (request.requestKind === "ACCESSORY") {
+      return handleAdminAccessoryStandardApproval(request, actor.name);
     }
     return handleAdminStandardApproval(request, actor.name);
   }
@@ -307,6 +439,71 @@ async function handleAdminStandardApproval(
     asset: { id: result.asset.id, tag: result.asset.asset_tag },
     model: result.modelName,
     message: "Admin approval recorded — asset assigned and request completed",
+  };
+}
+
+/**
+ * Accessory twin of handleAdminStandardApproval. Resolves the request's
+ * option to a concrete Snipe accessory record (option label → configured
+ * primary/backup → location-siblings → prefer user's site; or scan-any for
+ * a zero-config category), checks it out, and completes the request with
+ * ship-vs-collect derived from the chosen record's location.
+ *
+ * No model/asset layer here: an accessory record IS the stock-bearing
+ * entity, so there's nothing analogous to model selection or skeleton
+ * assets — resolve, check out, done.
+ *
+ * Ordering mirrors the asset handler: location comparison is computed by
+ * the resolver from cached catalog data BEFORE checkout, so it isn't
+ * affected by whatever Snipe does to the record on checkout.
+ */
+async function handleAdminAccessoryStandardApproval(
+  request: Request,
+  actorName: string
+): Promise<AccessoryStandardAdminApproveResponse> {
+
+  const resolution = await resolveAccessoryForRequest(
+    request.categoryId,
+    request.accessoryOption,
+    request.userId
+  );
+
+  if (resolution === null) {
+    throw new AppError(
+      "No accessory stock available for this request — the configured standard is out of stock, or nothing in this category has stock.",
+      404
+    );
+  }
+
+  const { accessory, needsShipping, locationMissing } = resolution;
+
+  // Checkout is the one write that can race (stock drained between resolve
+  // and here). checkoutAccessory throws on Snipe error; we let it propagate
+  // so the admin sees the failure and the request stays at this stage for a
+  // retry rather than being marked completed with nothing assigned.
+  await checkoutAccessory(accessory.id, request.userId);
+
+  const updated = await prisma.request.update({
+    where: { id: request.id },
+    data: {
+      status: "COMPLETED",
+      adminApprovedBy: actorName,
+      adminApprovedAt: new Date(),
+      needsShipping,
+      locationMissing,
+    },
+  });
+
+  notify(updated.id, "DEVICE_ASSIGNED");
+
+  return {
+    success: true,
+    type: "STANDARD",
+    stage: "ADMIN",
+    kind: "ACCESSORY",
+    request: updated,
+    accessory: { id: accessory.id, name: accessory.name },
+    message: "Admin approval recorded — accessory assigned and request completed",
   };
 }
 
@@ -744,6 +941,300 @@ export async function fillAssetDetailsForRequest(
 ///  +-----------------------------------------------------------------+
 
 
+
+///  +-----------------------------------------------------------------+
+///  |            ACCESSORY NON-STANDARD FLOW (phase 3c)               |
+///  +-----------------------------------------------------------------+
+//
+//  The non-standard accessory twin of the model-creation flow above. It
+//  reuses the ModelRequest row as a working buffer, but keyed on
+//  snipeAccessoryId instead of snipeModelId + linkedAssetId (both stay
+//  null for accessories — there's no model or hardware layer). Because the
+//  asset row-state guards (loadRequestAtRow3/Row4) key off linkedAssetId,
+//  accessories need their own guards that key off snipeAccessoryId; the
+//  asset guards are left completely untouched.
+//
+//  Shape (confirmed with Luke):
+//    admin approves (kind-agnostic handleAdminNonStandardApproval → model-
+//      Request APPROVED) → accessory SELECTION:
+//        • pick existing WITH stock  → link + checkout now → COMPLETED
+//        • pick existing WITHOUT stock → link → waiting phase
+//        • create new (qty 0)          → create + link → waiting phase
+//      → waiting phase (add quantity) → when stock > 0, checkout → COMPLETED
+//    Checkout fires the moment the accessory becomes ready — at selection
+//    for a stocked pick, at quantity-submit otherwise — never at the later
+//    mark-ready/mark-shipped step (those stay dumb stamps, as for assets).
+///  +-----------------------------------------------------------------+
+
+/**
+ * Preconditions for accessory SELECTION (twin of loadRequestAtRow3). The
+ * request must be an accessory, APPROVED, with an APPROVED ModelRequest not
+ * yet linked to an accessory.
+ */
+async function loadAccessoryRequestAtSelection(
+  requestId: number
+): Promise<Request & { modelRequest: ModelRequest }> {
+
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: { modelRequest: true },
+  });
+
+  if (!request) {
+    throw new AppError("Request not found", 404);
+  }
+  if (request.requestKind !== "ACCESSORY") {
+    throw new AppError("This endpoint is for accessory requests only", 400);
+  }
+  if (request.status !== "APPROVED") {
+    throw new AppError("Request is not in APPROVED state", 400);
+  }
+  if (!request.modelRequest) {
+    throw new AppError("Request has no ModelRequest — cannot select accessory", 500);
+  }
+  if (request.modelRequest.status !== "APPROVED") {
+    throw new AppError(
+      "ModelRequest is not in APPROVED state — admin must approve before selecting an accessory",
+      400
+    );
+  }
+  if (request.modelRequest.snipeAccessoryId !== null) {
+    throw new AppError(
+      "ModelRequest already has a linked accessory — selection has already happened",
+      400
+    );
+  }
+
+  return request as Request & { modelRequest: ModelRequest };
+}
+
+/**
+ * Preconditions for the quantity WAITING phase (twin of loadRequestAtRow4).
+ * The accessory has been selected (ModelRequest COMPLETED + linked) but its
+ * stock isn't ready yet.
+ */
+async function loadAccessoryRequestAtQuantity(
+  requestId: number
+): Promise<Request & { modelRequest: ModelRequest }> {
+
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: { modelRequest: true },
+  });
+
+  if (!request) {
+    throw new AppError("Request not found", 404);
+  }
+  if (request.requestKind !== "ACCESSORY") {
+    throw new AppError("This endpoint is for accessory requests only", 400);
+  }
+  if (request.status !== "APPROVED") {
+    throw new AppError("Request is not in APPROVED state", 400);
+  }
+  if (!request.modelRequest) {
+    throw new AppError("Request has no ModelRequest", 500);
+  }
+  if (request.modelRequest.status !== "COMPLETED") {
+    throw new AppError(
+      "ModelRequest is not in COMPLETED state — an accessory must be selected before adding quantity",
+      400
+    );
+  }
+  if (request.modelRequest.snipeAccessoryId === null) {
+    throw new AppError(
+      "ModelRequest has no linked accessory — cannot add quantity",
+      400
+    );
+  }
+
+  return request as Request & { modelRequest: ModelRequest };
+}
+
+/**
+ * Checks the selected accessory out and completes the request — the
+ * accessory twin of fulfilReadyAsset. Reads the accessory's location BEFORE
+ * checkout for ship-vs-collect, checks out, stamps COMPLETED +
+ * needsShipping/locationMissing, and notifies. Returns the updated request
+ * so callers can surface the fresh row.
+ */
+async function fulfilReadyAccessory(
+  request: Request & { modelRequest: ModelRequest }
+): Promise<Request> {
+  const snipeAccessoryId = request.modelRequest.snipeAccessoryId!;
+
+  const accessory = await getAccessoryById(snipeAccessoryId);
+  const accessoryLocId = accessory?.locationId ?? null;
+
+  await checkoutAccessory(snipeAccessoryId, request.userId);
+
+  const user = await getSnipeUser(request.userId);
+  const userLocId = user?.location?.id ?? null;
+  const locationMissing = accessoryLocId === null || userLocId === null;
+  const needsShipping = !locationMissing && accessoryLocId !== userLocId;
+
+  const updated = await prisma.request.update({
+    where: { id: request.id },
+    data: { status: "COMPLETED", needsShipping, locationMissing },
+  });
+
+  notify(request.id, "DEVICE_ASSIGNED");
+  return updated;
+}
+
+/**
+ * Select an EXISTING Snipe accessory for a non-standard request (twin of
+ * useExistingModelForRequest). Links it to the ModelRequest; if it has stock
+ * right now, checks out + completes immediately; otherwise lands in the
+ * waiting phase for quantity to be added. The record's manufacturer / name /
+ * model_number are copied into the working buffer for later display.
+ */
+export async function useExistingAccessoryForRequest(
+  requestId: number,
+  snipeAccessoryId: number
+): Promise<ModelCreationResponse> {
+
+  const request = await loadAccessoryRequestAtSelection(requestId);
+
+  const accessory = await getAccessoryById(snipeAccessoryId);
+  if (!accessory) {
+    throw new AppError("Chosen accessory not found in Snipe-IT", 404);
+  }
+
+  const hasStock = accessory.remaining > 0;
+
+  const updatedModelRequest = await prisma.modelRequest.update({
+    where: { id: request.modelRequest.id },
+    data: {
+      snipeAccessoryId,
+      status: "COMPLETED",
+      assetReady: hasStock,
+      manufacturer: accessory.manufacturer,
+      modelName: accessory.name,
+      modelNumber: accessory.modelNumber,
+    },
+  });
+
+  let finalRequest: Request = request;
+  if (hasStock) {
+    finalRequest = await fulfilReadyAccessory({
+      ...request,
+      modelRequest: updatedModelRequest,
+    });
+  }
+
+  return {
+    success: true,
+    request: finalRequest,
+    modelRequest: updatedModelRequest,
+    message: hasStock
+      ? "Accessory assigned and checked out."
+      : "Accessory selected — awaiting stock. Add the quantity once it arrives.",
+  };
+}
+
+/**
+ * Create a NEW Snipe accessory for a non-standard request (twin of
+ * createNewModelForRequest). The record is authored at qty 0 and lands in
+ * the waiting phase; quantity + location are set later via the stock step.
+ *
+ * Rollback: if the DB link fails after the Snipe accessory was created, the
+ * freshly-created zero-stock record is deleted (deleteAccessory logs+continues
+ * on its own failure). This differs deliberately from createNewModelForRequest,
+ * which logs-and-leaves — a lone qty-0 accessory with nothing attached is a
+ * clean delete, whereas a model may carry a skeleton asset.
+ */
+export async function createNewAccessoryForRequest(
+  requestId: number,
+  input: { name: string; manufacturer?: string | null; modelNumber?: string | null }
+): Promise<ModelCreationResponse> {
+
+  const request = await loadAccessoryRequestAtSelection(requestId);
+
+  const newAccessoryId = await createAccessory({
+    name: input.name,
+    categoryId: request.categoryId,
+    qty: 0,
+  });
+
+  try {
+    const updatedModelRequest = await prisma.modelRequest.update({
+      where: { id: request.modelRequest.id },
+      data: {
+        snipeAccessoryId: newAccessoryId,
+        manufacturer: input.manufacturer ?? null,
+        modelName: input.name,
+        modelNumber: input.modelNumber ?? null,
+        status: "COMPLETED",
+        assetReady: false,
+      },
+    });
+
+    return {
+      success: true,
+      request,
+      modelRequest: updatedModelRequest,
+      message:
+        "New accessory created with no stock — add the quantity once it arrives.",
+    };
+  } catch (err) {
+    await deleteAccessory(newAccessoryId);
+    console.error(
+      `Accessory ${newAccessoryId} was created in Snipe but DB linkage failed for request ${requestId}; rolled back.`,
+      err
+    );
+    throw err;
+  }
+}
+
+/**
+ * Waiting-phase submit: set the arrived quantity (and, for a newly-authored
+ * record, its location) on the selected accessory, then re-probe stock. When
+ * stock is now available, checkout + complete fire immediately (twin of
+ * fillAssetDetailsForRequest's completing submit). A partial/zero submit just
+ * saves and stays in the waiting phase.
+ *
+ * `locationId` is optional: pass it for a newly-created record (which authors
+ * its site here), omit it for an existing record (whose site stays put).
+ */
+export async function addAccessoryStockForRequest(
+  requestId: number,
+  input: { qty: number; locationId?: number | null }
+): Promise<AssetDetailsResponse> {
+
+  const request = await loadAccessoryRequestAtQuantity(requestId);
+  const snipeAccessoryId = request.modelRequest.snipeAccessoryId!;
+
+  await updateAccessoryStock(snipeAccessoryId, {
+    qty: input.qty,
+    locationId: input.locationId ?? undefined,
+  });
+
+  // Re-read direct from Snipe — the catalog cache is stale right after a write.
+  const accessory = await getAccessoryById(snipeAccessoryId);
+  const assetReady = (accessory?.remaining ?? 0) > 0;
+
+  const updatedModelRequest = await prisma.modelRequest.update({
+    where: { id: request.modelRequest.id },
+    data: { assetReady },
+  });
+
+  let finalRequest: Request = request;
+  if (assetReady && request.status !== "COMPLETED") {
+    finalRequest = await fulfilReadyAccessory({
+      ...request,
+      modelRequest: updatedModelRequest,
+    });
+  }
+
+  return {
+    success: true,
+    request: finalRequest,
+    modelRequest: updatedModelRequest,
+    message: assetReady
+      ? "Stock added — accessory checked out and request completed."
+      : "Stock saved, but the accessory still shows no available quantity.",
+  };
+}
 
 ///  +-----------------------------------------------------------------+
 ///  |                    SHIPPING / RECEIPT                           |
