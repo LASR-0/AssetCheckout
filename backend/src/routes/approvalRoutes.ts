@@ -276,6 +276,20 @@ router.get("/:requestId/search-accessories", async (req, res, next) => {
       });
     }
 
+    // Optional location filter — narrows results to one site when supplied.
+    let locationId: number | undefined;
+    const rawLocationId = req.query.locationId;
+    if (rawLocationId !== undefined && String(rawLocationId).trim() !== "") {
+      const parsed = Number(rawLocationId);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "locationId, when provided, must be a positive number",
+        });
+      }
+      locationId = parsed;
+    }
+
     const request = await prisma.request.findUnique({
       where: { id: requestId },
       select: { categoryId: true },
@@ -292,6 +306,7 @@ router.get("/:requestId/search-accessories", async (req, res, next) => {
       manufacturer: manufacturer || undefined,
       name,
       categoryId: request.categoryId,
+      locationId,
     });
 
     res.json({
@@ -382,8 +397,24 @@ router.post("/:requestId/create-accessory", async (req, res, next) => {
       });
     }
 
+    // Location is required for a new accessory — the admin authors its site
+    // at creation (Snipe won't set it on create, so the service create-then-
+    // PATCHes it).
+    const rawLocationId = req.body?.locationId;
+    if (
+      typeof rawLocationId !== "number" ||
+      !Number.isFinite(rawLocationId) ||
+      rawLocationId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "locationId is required and must be a positive number",
+      });
+    }
+
     const result = await createNewAccessoryForRequest(requestId, {
       name,
+      locationId: rawLocationId,
       manufacturer,
       modelNumber,
     });
@@ -399,10 +430,10 @@ router.post("/:requestId/create-accessory", async (req, res, next) => {
 ///  +-----------------------------------------------------------------+
 
 /**
- * Waiting-phase submit: set the arrived quantity (and optionally the
- * location, for a newly-created record) on the selected accessory. When
- * stock becomes available the service checks out + completes automatically.
- * The accessory twin of the asset-details route.
+ * Waiting-phase submit: ADD the arrived quantity to the selected accessory's
+ * current stock (delta, not a set). When stock becomes available the service
+ * checks out + completes automatically. The accessory twin of the asset-
+ * details route. Location is NOT set here — it's authored at create time.
  */
 router.post("/:requestId/accessory-stock", async (req, res, next) => {
   try {
@@ -423,7 +454,7 @@ router.post("/:requestId/accessory-stock", async (req, res, next) => {
       });
     }
 
-    const rawQty = req.body?.qty;
+    const rawQty = req.body?.arrivedQty;
     if (
       typeof rawQty !== "number" ||
       !Number.isFinite(rawQty) ||
@@ -432,26 +463,12 @@ router.post("/:requestId/accessory-stock", async (req, res, next) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "qty is required and must be a non-negative integer",
-      });
-    }
-
-    const rawLocationId = req.body?.locationId;
-    let locationId: number | null | undefined;
-    if (rawLocationId === undefined || rawLocationId === null) {
-      locationId = undefined;
-    } else if (typeof rawLocationId === "number" && Number.isFinite(rawLocationId)) {
-      locationId = rawLocationId;
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "locationId, when provided, must be a number",
+        message: "arrivedQty is required and must be a non-negative integer",
       });
     }
 
     const result = await addAccessoryStockForRequest(requestId, {
-      qty: rawQty,
-      locationId,
+      arrivedQty: rawQty,
     });
     res.json(result);
   } catch (err) {

@@ -22,6 +22,9 @@ export type AccessoryOptionConfig = {
   backup: number | null;
 };
 
+// assetCategoryId (numeric-string key) → accessory category IDs.
+export type AssetAccessoryCategoryMap = Record<string, number[]>;
+
 export type CategoryAccessoryOptions = {
   options: AccessoryOptionConfig[];
 };
@@ -49,6 +52,7 @@ const MOBILE_LEADING_DIGIT_KEY = "mobile_leading_digit";
 // Accessories chapter
 const REQUESTABLE_ACCESSORY_CATEGORIES_KEY = "requestable_accessory_categories";
 const STANDARD_ACCESSORIES_KEY = "standard_accessories";
+const ACCESSORY_ASSET_CATEGORY_MAP_KEY = "accessory_asset_category_map";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DEFAULTS REGISTRY + SEEDING                    |
@@ -352,6 +356,17 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     envVar: "SHAREPOINT_SYNC_ENABLED",
     defaultValue: "false",
     description: "Whether the nightly SharePoint request-ledger sync is active." 
+  },
+  { key: "jobs.sharepointSyncCron",
+    envVar: "JOBS_SHAREPOINT_SYNC_CRON",
+    defaultValue: "0 1 * * *",
+    description: "Cron expression for the nightly SharePoint request-ledger sync (default: daily at 1am). Also gated by sharepoint_sync_enabled + SHAREPOINT_SYNC_TO — this only controls when the scan fires.",
+  },
+  { key: ACCESSORY_ASSET_CATEGORY_MAP_KEY,
+    envVar: "ACCESSORY_ASSET_CATEGORY_MAP_JSON",
+    normalize: normalizeAssetAccessoryMapEnv,
+    defaultValue: "",
+    description: "JSON object mapping Snipe-IT ASSET category IDs → array of accessory category IDs that holders of that asset category may request (L3). Empty string means no asset-derived mapping is configured.",
   },
 ];
 
@@ -769,4 +784,107 @@ export async function setMobileFilterConfig(
     setSetting(MOBILE_COUNTRY_CODE_KEY, countryCode.trim(), actorEmail),
     setSetting(MOBILE_LEADING_DIGIT_KEY, mobileLeadingDigit.trim(), actorEmail),
   ]);
+}
+
+/**
+ * Shared cleaner for the L3 asset→accessory-category map. Keeps only
+ * numeric-string asset-category keys whose value is an array; within each,
+ * keeps finite numbers, dedupes, and DROPS entries that end up empty (an
+ * empty tag list means "this asset category unlocks nothing" = absent).
+ */
+function cleanAssetAccessoryMap(value: unknown): AssetAccessoryCategoryMap {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const cleaned: AssetAccessoryCategoryMap = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^\d+$/.test(key)) continue;
+    if (!Array.isArray(raw)) continue;
+    const ids = Array.from(
+      new Set(raw.filter((n): n is number => typeof n === "number" && Number.isFinite(n)))
+    );
+    if (ids.length === 0) continue;
+    cleaned[key] = ids;
+  }
+  return cleaned;
+}
+
+// Env normaliser for the L3 map. JSON object only, cleaned through the same
+// rules as getAssetAccessoryCategoryMap. Empty string = unset.
+function normalizeAssetAccessoryMapEnv(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    return JSON.stringify(cleanAssetAccessoryMap(parsed));
+  } catch {
+    return null;
+  }
+}
+
+///  +-----------------------------------------------------------------+
+///  |          ACCESSORY ↔ ASSET-CATEGORY MAP (L3)                    |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Full L3 map: assetCategoryId → [accessoryCategoryId]. Empty object if
+ * nothing configured. Cleaned on the way out, so callers always see
+ * well-shaped arrays.
+ */
+export async function getAssetAccessoryCategoryMap(): Promise<AssetAccessoryCategoryMap> {
+  const raw = await getSetting(ACCESSORY_ASSET_CATEGORY_MAP_KEY);
+  if (!raw) return {};
+  try {
+    return cleanAssetAccessoryMap(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+/** The accessory category IDs a single asset category unlocks. [] if none. */
+export async function getAccessoryCategoriesForAssetCategory(
+  assetCategoryId: number
+): Promise<number[]> {
+  const map = await getAssetAccessoryCategoryMap();
+  return map[String(assetCategoryId)] ?? [];
+}
+
+/**
+ * Replace the accessory-category list for ONE asset category (the admin
+ * table edits a row as a unit). An empty array clears the row entirely.
+ */
+export async function setAccessoryCategoriesForAssetCategory(
+  assetCategoryId: number,
+  accessoryCategoryIds: number[],
+  actorEmail: string
+): Promise<void> {
+  const map = await getAssetAccessoryCategoryMap();
+  const ids = Array.from(
+    new Set(accessoryCategoryIds.filter((n) => typeof n === "number" && Number.isFinite(n)))
+  );
+  if (ids.length === 0) {
+    delete map[String(assetCategoryId)];
+  } else {
+    map[String(assetCategoryId)] = ids;
+  }
+  await setSetting(ACCESSORY_ASSET_CATEGORY_MAP_KEY, JSON.stringify(map), actorEmail);
+}
+
+export async function getRequestableAccessoryCategoryIdsForAssetCategories(
+  assetCategoryIds: number[]
+): Promise<number[]> {
+  const [map, l1] = await Promise.all([
+    getAssetAccessoryCategoryMap(),
+    getRequestableAccessoryCategoryIds(),
+  ]);
+
+  const union = new Set<number>();
+  for (const assetCatId of assetCategoryIds) {
+    const accIds = map[String(assetCatId)];
+    if (!accIds) continue;
+    for (const id of accIds) union.add(id);
+  }
+
+  if (l1 === null) return Array.from(union); // no whitelist → all allowed
+  const allowed = new Set(l1);
+  return Array.from(union).filter((id) => allowed.has(id));
 }

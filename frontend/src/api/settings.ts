@@ -75,3 +75,30 @@ export async function setSkeletonStatusId(
   );
   return data.statusId ?? null;
 }
+
+///  +-----------------------------------------------------------------+
+///  |          ACCESSORY ↔ ASSET-CATEGORY MAP (L3)                    |
+///  +-----------------------------------------------------------------+
+
+/** Full L3 map: assetCategoryId → [accessoryCategoryId]. {} if unset. */
+export async function getAccessoryAssetMap(): Promise<Record<string, number[]>> {
+  const data = await apiFetch<{ map: Record<string, number[]> }>(
+    "/api/settings/accessory-asset-map"
+  );
+  return data.map ?? {};
+}
+
+/**
+ * Replace one asset category's accessory-category list (per-row contract).
+ * Empty array clears the row. Returns the full updated map to adopt.
+ */
+export async function setAccessoryCategoriesForAssetCategory(
+  assetCategoryId: number,
+  accessoryCategoryIds: number[]
+): Promise<Record<string, number[]>> {
+  const data = await apiFetch<{ map: Record<string, number[]> }>(
+    "/api/settings/accessory-asset-map",
+    { method: "PUT", body: { assetCategoryId, accessoryCategoryIds } }
+  );
+  return data.map ?? {};
+}

@@ -11,9 +11,11 @@ import {
   getStandardAccessories,
   setStandardAccessoriesForCategory,
   getAccessoryOptionLabels,
+  getRequestableAccessoryCategoryIdsForAssetCategories,
   type AccessoryOptionConfig,
 } from "../services/settings.js";
 import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
+import { getUserAssetCategoryIds, findSnipeUserByEmail } from "../services/snipeitassets.js";
 
 const router = express.Router();
 
@@ -296,6 +298,59 @@ router.put("/settings/standard-accessories/:categoryId", async (req, res, next) 
     await setStandardAccessoriesForCategory(categoryId, cleaned, actorEmail ?? "");
 
     res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/categories/for-user/:userId", async (req, res, next) => {
+  try {
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+
+    const userId = Number(req.params.userId);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid userId" });
+    }
+
+    const assetCategoryIds = await getUserAssetCategoryIds(userId);
+    const allowedIds =
+      await getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds);
+
+    const allowedSet = new Set(allowedIds);
+    const allCategories = await getAllAccessoryCategories();
+    const categories = allCategories.filter((c) => allowedSet.has(c.id));
+
+    res.json({ success: true, categories });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/categories/for-me", async (req, res, next) => {
+  try {
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+
+    const actorEmail = getActorEmail(req);
+    const user = actorEmail ? await findSnipeUserByEmail(actorEmail) : null;
+    if (!user) {
+      return res.json({ success: true, categories: [] });
+    }
+
+    const assetCategoryIds = await getUserAssetCategoryIds(user.id);
+    const allowedIds =
+      await getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds);
+
+    const allowedSet = new Set(allowedIds);
+    const allCategories = await getAllAccessoryCategories();
+    const categories = allCategories.filter((c) => allowedSet.has(c.id));
+
+    res.json({ success: true, categories });
   } catch (err) {
     next(err);
   }

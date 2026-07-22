@@ -21,6 +21,8 @@ type Props = {
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
   onAssetDetails: (request: Request) => void;
+  onSelectAccessory: (request: Request) => void;
+  onAddAccessoryStock: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   globalFilter: string;
@@ -55,6 +57,8 @@ export default function RequestsTable({
   onReject,
   onCreateModel,
   onAssetDetails,
+  onSelectAccessory,
+  onAddAccessoryStock,
   onMarkShipped,
   onMarkReceived,
   globalFilter,
@@ -89,6 +93,8 @@ export default function RequestsTable({
       onReject,
       onCreateModel,
       onAssetDetails,
+      onSelectAccessory,
+      onAddAccessoryStock,
       onMarkShipped,
       onMarkReceived,
       onMarkReadyForCollection

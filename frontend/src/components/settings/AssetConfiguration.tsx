@@ -18,7 +18,11 @@ import type { AssetCategory } from "@/types/categoriesType";
  *   StandardModelsSelector, replacing its previous independent fetch of
  *   the server-filtered category list.
  */
-export default function AssetConfigurationSettings() {
+export default function AssetConfigurationSettings({
+    onRequestableChange,
+  }: {
+    onRequestableChange?: () => void;
+  } = {}) {
   const [allCategories, setAllCategories] = useState<AssetCategory[]>([]);
   const [allowed, setAllowed] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -70,6 +74,7 @@ export default function AssetConfigurationSettings() {
       setSaving(true);
       setError(null);
       await setRequestableCategoryIds(Array.from(next));
+      onRequestableChange?.();
     } catch (err: any) {
       // Roll back so the UI never disagrees with what's persisted.
       setAllowed(previous);

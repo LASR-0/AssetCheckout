@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { getAccessoryCategories } from "@/api/accessories";
+import { useEffect, useRef } from "react";
 import { iconForCategory } from "@/lib/categoryIcon";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 
@@ -7,54 +6,48 @@ import type { AccessoryCategory } from "@/types/accessoriesType";
 ///  |                  ACCESSORY TYPE SELECTOR                        |
 ///  +-----------------------------------------------------------------+
 //
-//  Clone of AssetTypeSelector against the accessory categories endpoint.
-//  Kept as its own component (rather than parameterising the asset one)
-//  so the production asset form stays untouched. iconForCategory already
-//  covers most accessory vocabulary (mouse, keyboard, headset, cable...).
+//  Presentational tile picker for accessory categories. It no longer
+//  fetches — the parent (AccessoryRequestFormPage) derives the categories
+//  from the selected user's devices (L3) and passes them in, so this only
+//  renders and reports selection. Kept as its own component (rather than
+//  parameterising the asset one) so the production asset form stays
+//  untouched. iconForCategory already covers most accessory vocabulary
+//  (mouse, keyboard, headset, cable...).
+//
+//  Empty state is caller-driven via `emptyMessage`, since "no user picked
+//  yet" and "this user's devices unlock nothing" are different messages the
+//  parent knows how to phrase.
 ///  +-----------------------------------------------------------------+
 
 type Props = {
   value: number;
   onChange: (categoryId: number, categoryName: string) => void;
+  /** Requestable categories for the selected user — owned + fetched by the parent. */
+  categories: AccessoryCategory[];
+  loading: boolean;
+  error: string | null;
   // Optional preselect (from ?categoryId= links). Applied once after
-  // categories load, only if the id actually exists, and never over a
-  // selection the user has already made.
+  // categories load, only if the id actually exists in the derived set, and
+  // never over a selection the user has already made.
   preselectId?: number | null;
+  /** Shown when there are no categories and we're not loading or erroring. */
+  emptyMessage?: string;
 };
 
-export default function AccessoryTypeSelector({ value, onChange, preselectId }: Props) {
-  const [categories, setCategories] = useState<AccessoryCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function AccessoryTypeSelector({
+  value,
+  onChange,
+  categories,
+  loading,
+  error,
+  preselectId,
+  emptyMessage = "No accessory categories found in Snipe-IT.",
+}: Props) {
   const preselectAttempted = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getAccessoryCategories();
-        if (!cancelled) setCategories(data);
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            "Looks like Snipe-IT is unreachable. If you believe this is a mistake, contact your administrator."
-          );
-          console.error("Failed to load accessory categories", err);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Apply the preselect through the normal onChange path so all
-  // downstream category logic behaves exactly as if the tile was clicked.
+  // Apply the preselect through the normal onChange path so all downstream
+  // category logic behaves exactly as if the tile was clicked. Only fires
+  // once the derived categories are present and only if the id is among them.
   useEffect(() => {
     if (preselectAttempted.current) return;
     if (!preselectId || categories.length === 0) return;
@@ -68,7 +61,7 @@ export default function AccessoryTypeSelector({ value, onChange, preselectId }: 
   return (
     <section>
       <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-6">
-        1. Accessory Selection
+        2. Accessory Selection
       </label>
 
       {loading && (
@@ -87,7 +80,7 @@ export default function AccessoryTypeSelector({ value, onChange, preselectId }: 
 
       {!loading && !error && categories.length === 0 && (
         <div className="text-sm text-info-light italic py-6 text-center">
-          No accessory categories found in Snipe-IT.
+          {emptyMessage}
         </div>
       )}
 

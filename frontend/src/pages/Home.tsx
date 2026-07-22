@@ -6,6 +6,9 @@ import { iconForCategory } from "@/lib/categoryIcon";
 import { useAuth } from "@/hooks/useAuth";
 import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
 import type { AssetCategory } from "@/types/categoriesType";
+import { getAccessoryCategoriesForMe } from "@/api/accessories";
+import type { AccessoryCategory } from "@/types/accessoriesType";
+import type { Request } from "@/types/requestType"
 
 ///  +-----------------------------------------------------------------+
 ///  |                     HOME PAGE (internal tool)                   |
@@ -23,24 +26,7 @@ import type { AssetCategory } from "@/types/categoriesType";
 const CARD = "bg-landing-card border border-landing-border rounded-xl";
 const RAISED = "bg-landing-raised border border-landing-border rounded-lg";
 
-// Minimal structural type for what this page reads off a request.
-// Fulfilment timestamps included so the shared StatusBadge can derive
-// post-completion stages (Assigned / Shipped / Ready to collect / …).
-// TODO: swap for the real `Request` import from your types file.
-type HomeRequest = {
-  id: number;
-  userName: string;
-  categoryName: string;
-  status: "PENDING" | "COMPLETED" | "REJECTED" | "APPROVED";
-  createdAt: string;
-  needsShipping?: boolean | null;
-  shippedAt?: string | null;
-  collectionReadyAt?: string | null;
-  receivedAt?: string | null;
-  modelRequest?: {
-    modelName: string;
-  };
-};
+
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DATA: THE USER'S REQUESTS                      |
@@ -55,7 +41,7 @@ type HomeRequest = {
 
 function useMyRequests() {
   const { name, isLoading: authLoading } = useAuth();
-  const [requests, setRequests] = useState<HomeRequest[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,7 +56,7 @@ function useMyRequests() {
     (async () => {
       try {
         const data = await getRequests({ limit: 100 });
-        const all: HomeRequest[] = data.requests ?? [];
+        const all: Request[] = data.requests ?? [];
         const mine = all.filter((r) => r.userName === name);
         if (!cancelled) setRequests(mine);
       } catch (err) {
@@ -96,6 +82,7 @@ export default function LandingPage() {
       <main className="w-full max-w-[1160px] mx-auto px-6 md:px-8 pb-16">
         <HomeHead requests={requests} loading={loading} />
         <QuickStart />
+        <AccessoryQuickStart />
         <RecentRequests requests={requests} loading={loading} />
         <QuickLinks />
       </main>
@@ -126,7 +113,7 @@ function HomeHead({
   requests,
   loading,
 }: {
-  requests: HomeRequest[];
+  requests: Request[];
   loading: boolean;
 }) {
   // useAuth already provides the display name — works in dev mode too
@@ -153,7 +140,7 @@ function HomeHead({
           {timeOfDayGreeting()}
           {firstName ? `, ${firstName}.` : "."}
         </h1>
-        <p className="text-on-surface-variant text-lg max-w-[52ch]">
+        <p className="text-info-light text-lg max-w-[52ch]">
           Need a device for yourself or someone on your team? Start a request
           below — we'll route it to the right approver and keep you posted.
         </p>
@@ -254,7 +241,7 @@ function QuickStart() {
     <section className={`${CARD} shadow-sm p-6 md:p-8 mb-8`}>
       <div className="mb-5">
         <h2 className="font-headline font-bold text-xl">Start a request</h2>
-        <p className="text-on-surface-variant text-[15px]">
+        <p className="text-info-light text-[15px]">
           Pick what you need to get going.
         </p>
       </div>
@@ -323,7 +310,7 @@ function RecentRequests({
   requests,
   loading,
 }: {
-  requests: HomeRequest[];
+  requests: Request[];
   loading: boolean;
 }) {
   const { name } = useAuth();
@@ -403,25 +390,31 @@ function QuickLinks() {
     {
       icon: "table_rows",
       title: "Request log",
-      desc: "Every non-standard request across the org",
+      desc: "Every non-standard request across the org.",
       to: "/requests",
     },
     {
       icon: "list",
-      title: "Request Form",
-      desc: "Request an Asset here",
+      title: "Request Assets",
+      desc: "Request an Asset here.",
       to: "/checkout",
     },
     {
       icon: "settings",
       title: "Settings",
-      desc: "Categories, price tiers & approvers",
+      desc: "Categories, price tiers & approvers.",
       to: "/settings",
     },
     {
       icon: "feedback",
       title: "Feedback",
-      desc: "Let us know if this service is an improvement",
+      desc: "Let us know if this service is an improvement.",
+      to: "/feedback",
+    },
+        {
+      icon: "keyboard",
+      title: "Request Accessories",
+      desc: "Request Asset Accessories here.",
       to: "/feedback",
     },
   ];
@@ -450,6 +443,71 @@ function QuickLinks() {
             </span>
             <span className="ml-auto text-info-light group-hover:text-on-background transition-colors">
               →
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |            ACCESSORIES FOR YOUR DEVICES (device-derived)        |
+///  +-----------------------------------------------------------------+
+//
+//  Only the accessory categories the signed-in user's own devices unlock
+//  (L3 ∩ L1). Deliberately quiet: renders nothing until loaded, and nothing
+//  at all when the user has no eligible accessories (or the fetch fails) —
+//  the home page shouldn't carry an empty accessory card.
+
+// TODO: confirm this matches your accessory form's actual route.
+const ACCESSORY_FORM_ROUTE = "/checkout-accessory";
+
+function AccessoryQuickStart() {
+  const [categories, setCategories] = useState<AccessoryCategory[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getAccessoryCategoriesForMe();
+        if (!cancelled) setCategories(data);
+      } catch (err) {
+        console.error("Failed to load accessory categories for home page", err);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!loaded || categories.length === 0) return null;
+
+  return (
+    <section className={`${CARD} shadow-sm p-6 md:p-8 mb-8`}>
+      <div className="mb-5">
+        <h2 className="font-headline font-bold text-xl">Accessories for your devices</h2>
+        <p className="text-info-light text-[15px]">
+          Based on the equipment assigned to you.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {categories.map((cat) => (
+          <Link
+            key={cat.id}
+            to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
+            className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+          >
+            <span className="material-symbols-outlined !text-[28px]">
+              {iconForCategory(cat.name)}
+            </span>
+            <span className="font-bold text-[15px]">{cat.name}</span>
+            <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+              Request →
             </span>
           </Link>
         ))}

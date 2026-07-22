@@ -34,14 +34,14 @@ export default function RequestableCategoriesSelector({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="space-y-2 border-t border-outline/20 mt-2 pt-3">
+    <div className="space-y-2  mt-2 pt-3">
       <div className="text-xs font-semibold text-info-light uppercase tracking-wider px-3">
         Requestable categories
       </div>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button className="w-full text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between">
+          <button className="w-full border rounded-md border-outline text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between">
             <span>
               {loading
                 ? "Loading..."

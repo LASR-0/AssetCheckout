@@ -5,6 +5,7 @@ import {
   getAveragePricesFromSnipe,
   getTierValues,
 } from "../services/snipeitassets.js";
+import { getAllAccessories } from "../services/snipeitaccessories.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import { createRequest } from "../services/request.js";
@@ -86,6 +87,16 @@ router.get("/averages", async (req, res, next) => {
  * Name matching is done in code with normalizeName (SQLite
  * case-insensitivity workaround), consistent with how manager/requester
  * matching works elsewhere.
+ *
+ * Accessory enrichment: each ACCESSORY request that has a selected accessory
+ * (modelRequest.snipeAccessoryId) is annotated with the accessory's LIVE
+ * remaining stock (accessoryRemaining), resolved in-memory from the cached
+ * accessory catalog — one cache read for the whole page, no per-row API
+ * calls. This drives the "Add stock" row action, which shows whenever the
+ * selected accessory has 0 available, so repeat requests for a drained
+ * accessory each re-surface it. Freshness is bounded by the accessory cache
+ * TTL (10 min) / its refresh job, not real-time. Non-accessory rows and
+ * accessory rows without a selection get accessoryRemaining: null.
  */
 router.get("/", async (req, res, next) => {
   try {
@@ -128,10 +139,52 @@ router.get("/", async (req, res, next) => {
       );
     }
 
+    // Enrich visible accessory rows with live remaining stock. Only fetch the
+    // catalog if there's at least one accessory request with a selection to
+    // resolve — asset-only pages skip the cache read entirely.
+    const needsAccessoryStock = visible.some(
+      (r) => r.requestKind === "ACCESSORY" && r.modelRequest?.snipeAccessoryId != null
+    );
+
+    let catalogById: Map<number, { remaining: number; locationName: string | null }> | null =
+      null;
+    if (needsAccessoryStock) {
+      try {
+        const catalog = await getAllAccessories();
+        catalogById = new Map(
+          catalog.map((a) => [
+            a.id,
+            { remaining: a.remaining, locationName: a.locationName },
+          ])
+        );
+      } catch (err) {
+        // Enrichment is best-effort: if the accessory catalog is unreachable,
+        // fall back to null rather than failing the whole request list. The
+        // "Add stock" action just won't re-derive until the next successful
+        // load — the request list itself stays functional.
+        console.error("[requests] accessory stock enrichment failed:", err);
+      }
+    }
+
+    const enriched = visible.map((r) => {
+      const snipeAccessoryId = r.modelRequest?.snipeAccessoryId ?? null;
+      const hit =
+        r.requestKind === "ACCESSORY" &&
+        snipeAccessoryId != null &&
+        catalogById !== null
+          ? catalogById.get(snipeAccessoryId) ?? null
+          : null;
+      return {
+        ...r,
+        accessoryRemaining: hit ? hit.remaining : null,
+        accessoryLocationName: hit ? hit.locationName : null,
+      };
+    });
+
     res.json({
       success: true,
-      count: visible.length,
-      requests: visible,
+      count: enriched.length,
+      requests: enriched,
     });
   } catch (err) {
     next(err);

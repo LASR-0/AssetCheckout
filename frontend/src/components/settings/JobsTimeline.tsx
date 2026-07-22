@@ -228,7 +228,7 @@ function ClusterMarker({
 /** Grey placeholder for the loading / error / no-data states. */
 function PlaceholderTrack({ message }: { message: string }) {
   return (
-    <div className="flex h-9 w-full items-center justify-center rounded-lg border border-outline/20 bg-surface-container-low">
+    <div className="flex h-9 w-full items-center justify-center rounded-lg border border-outline bg-surface-container-low">
       <span className="select-none text-xs text-info-light/60">{message}</span>
     </div>
   );
@@ -333,7 +333,7 @@ export default function ScheduledJobsTimeline({
             edge padding; the inner div is the 0%–100% positioning context,
             so markers at 00:00 and late evening sit inside the buffer. */}
         <div
-          className={`h-9 w-full overflow-hidden rounded-lg border border-outline/20 bg-surface ${TRACK_EDGE_PADDING}`}
+          className={`h-9 w-full overflow-hidden rounded-lg border border-outline/80 bg-surface ${TRACK_EDGE_PADDING}`}
           role="img"
           aria-label={`Scheduled jobs across the day: ${clusters
             .flatMap((c) => c.jobs)

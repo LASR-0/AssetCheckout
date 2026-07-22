@@ -13,6 +13,7 @@ import CollapsibleTableSection from "@/components/settings/CollapsibleTable";
 import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
 import MobileFilterCard from "@/components/settings/MobileFilterCard";
 import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
+import AccessoryAssetMap from "@/components/settings/AccessoryAssetMap";
 
 export default function SettingsPage() {
   const { role } = useAuth();
@@ -21,6 +22,7 @@ export default function SettingsPage() {
 
   // Bumped whenever a job is manually queued, so the history table refetches.
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
+  const [assetConfigRefreshKey, setAssetConfigRefreshKey] = useState(0);
 
   // -- Left column: the vertically-stacked settings ------------------
   const stackedSettings = (
@@ -38,19 +40,32 @@ export default function SettingsPage() {
       {/* Asset Configuration -- admin-only */}
       {isAdmin && (
         <SettingsSection icon="inventory" title="Asset Configuration">
-          <AssetConfigurationSettings />
+          <AssetConfigurationSettings onRequestableChange={() => setAssetConfigRefreshKey((k) => k + 1)}/>
         </SettingsSection>
       )}
 
       {/* Accessory Configuration -- admin-only */}
       {isAdmin && (
-        <SettingsSection icon="cable" title="Accessory Configuration">
+        <SettingsSection icon="keyboard" title="Accessory Configuration">
           <p className="text-sm text-info-light mb-4">
             Which accessory categories can be requested, and the named options
             requesters pick from in each. "Something else" is always offered
             automatically and locks a request to non-standard.
           </p>
           <AccessoryConfigurationSettings />
+        </SettingsSection>
+      )}
+
+      {/* Accessory Availability by Asset (L3) -- admin-only */}
+      {isAdmin && (
+        <SettingsSection icon="account_tree" title="Accessory Availability by Asset">
+          <p className="text-sm text-info-light mb-4">
+            Which accessory categories a user can request, based on the asset
+            categories they hold in Snipe-IT. Only requestable accessory
+            categories can be mapped here, and requesters only see accessories
+            tied to assets they actually have.
+          </p>
+          <AccessoryAssetMap refreshKey={assetConfigRefreshKey}/>
         </SettingsSection>
       )}
 

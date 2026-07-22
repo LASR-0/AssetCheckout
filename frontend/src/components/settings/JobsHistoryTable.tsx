@@ -169,7 +169,7 @@ export default function JobHistoryTable({ refreshKey = 0 }: JobHistoryTableProps
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto border border-outline rounded-md">
         <table className="w-full text-left border-collapse">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -191,7 +191,7 @@ export default function JobHistoryTable({ refreshKey = 0 }: JobHistoryTableProps
             ))}
           </thead>
 
-          <tbody className="divide-y divide-outline-variant/10">
+          <tbody className="divide-y divide-outline">
             {rows.length === 0 ? (
               <tr>
                 <td
@@ -205,7 +205,7 @@ export default function JobHistoryTable({ refreshKey = 0 }: JobHistoryTableProps
               rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-surface-container-low/20 transition-colors border-b border-outline/10"
+                  className="hover:bg-surface-container-low/20 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-4 py-3 align-middle">

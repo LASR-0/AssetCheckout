@@ -15,7 +15,7 @@
 
     --surface: 253 248 249;
     --surface-container: 242 236 238;
-    --surface-container-low: 248 242 244;
+    --surface-container-low: 240 232 240;
     --surface-container-lowest: 255 255 255;
 
     --approver-bg: 255 170 0;
@@ -39,7 +39,7 @@
     --not-found-text: 196 160 233;
 
     /* Borders */
-    --outline: 243 244 246;
+    --outline: 223 224 226;
     --underline: 98 116 142;
     --info-light: 97 94 97;
 
@@ -57,11 +57,11 @@
     --status-pending:     #ca8a04; /* yellow-600 — pending */
     --status-approved:    #60a5fa; /* blue-400   — approved badge, asset details */
     --status-awaiting-it: #c084fc; /* purple-400 — awaiting IT */
-    --status-collect:     #2dd4bf; /* teal-400   — ready to collect / mark ready */
+    --status-collect:     #6d2dd4; /* teal-400   — ready to collect / mark ready */
     --status-ship:        #fbbf24; /* amber-400  — ready to ship / mark shipped */
     --status-shipped:     #38bdf8; /* sky-400    — shipped */
     --status-assigned:    #818cf8; /* indigo-400 — assigned */
-    --status-model:       #fbbf24; /* amber-400  — create model */
+    --status-model:       #e2a302; /* amber-400  — create model */
 
     /* modals */
     --modal-text-primary: 52 50 52;
@@ -140,7 +140,7 @@
     --status-pending:     #fcd34d; /* amber-300 */
     --status-approved:    #38bdf8; /* sky-400 */
     --status-awaiting-it: #a78bfa; /* violet-400 */
-    --status-collect:     #5eead4; /* teal-300 */
+    --status-collect:     #7f51fd; /* teal-300 */
     --status-ship:        #fdba74; /* orange-300 */
     --status-shipped:     #22d3ee; /* cyan-400 */
     --status-assigned:    #a5b4fc; /* indigo-300 */

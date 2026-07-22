@@ -510,10 +510,12 @@ export async function searchAccessories({
   manufacturer,
   name,
   categoryId,
+  locationId,
 }: {
   manufacturer?: string;
   name: string;
   categoryId: number;
+  locationId?: number;
 }): Promise<AccessorySearchResult[]> {
   const all = await getAllAccessories();
   const standardIds = await getAllConfiguredStandardAccessoryIds();
@@ -528,6 +530,10 @@ export async function searchAccessories({
     if (targetManufacturer && a.manufacturer) {
       if (a.manufacturer.trim().toLowerCase() !== targetManufacturer) return false;
     }
+    // Optional location narrowing — like manufacturer, only applied when
+    // given. Records are per-location, so this filters to a single site's
+    // rows when the admin already knows which site they want.
+    if (locationId !== undefined && a.locationId !== locationId) return false;
     return true;
   });
 

@@ -149,7 +149,7 @@ function BarSegment({ segment }: { segment: BarSegmentData }) {
 function PlaceholderBar({ message }: { message: string }) {
   return (
     <div
-      className={`flex ${BAR_HEIGHT} w-full items-center justify-center rounded-full border-2 border-outline/20 bg-surface-container-low`}
+      className={`flex ${BAR_HEIGHT} w-full items-center justify-center rounded-full border-2 border-outline bg-surface-container-low`}
     >
       <span className="text-xs text-info-light/60 select-none">{message}</span>
     </div>
@@ -309,7 +309,7 @@ export default function FeedbackSettingsCard() {
       <FeedbackDistributionBar values={distributionValues} featureEnabled={enabled} />
 
       {/* Enable toggle — always rendered */}
-      <div className="flex items-center justify-between gap-4 rounded-lg border border-outline/20 bg-surface p-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-outline bg-surface p-4">
         <div className="min-w-0">
           <h4 className="font-semibold text-on-background text-sm">Collect feedback</h4>
           <p className="text-xs text-info-light mt-0.5">
@@ -352,62 +352,70 @@ export default function FeedbackSettingsCard() {
           </div>
 
           <CollapsibleTableSection title="Feedback Table">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-surface-container-low/30 border-b !border-outline">
-                    <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
-                      Requesting
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
-                      IT Overall
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
-                      Comments
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/10">
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-10 text-center text-sm text-info-light"
-                      >
-                        {loadingRows ? "Loading…" : "No feedback submitted yet"}
-                      </td>
+            {/* The wrapper owns the border, radius, and clipping. Keeping them
+                off the <table> is what fixes the corner artifacts (square cell
+                backgrounds no longer poke through the rounded border) and the
+                missing bottom edge (it's now just the wrapper's own border).
+                overflow-hidden does the corner clip; the inner div keeps the
+                horizontal scroll without re-squaring the corners. */}
+            <div className="rounded-md border !border-outline overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-surface-container-low/30 border-b border-outline">
+                      <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
+                        Requesting
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
+                        IT Overall
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
+                        Comments
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant">
+                        Date
+                      </th>
                     </tr>
-                  ) : (
-                    rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="hover:bg-surface-container-low/20 transition-colors border-b border-outline/10"
-                      >
-                        <td className="px-4 py-3 align-middle">
-                          <ResponsePill value={row.improvedRequesting} />
-                        </td>
-                        <td className="px-4 py-3 align-middle">
-                          <ResponsePill value={row.improvesItOverall} />
-                        </td>
-                        <td className="px-4 py-3 align-middle text-sm text-on-surface-variant max-w-md">
-                          {row.comments ? (
-                            <span className="whitespace-pre-wrap break-words">{row.comments}</span>
-                          ) : (
-                            <span className="text-info-light/50 italic">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 align-middle text-sm text-info-light whitespace-nowrap">
-                          {formatDate(row.createdAt)}
+                  </thead>
+                  <tbody className="divide-y divide-outline">
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-4 py-10 text-center text-sm text-info-light"
+                        >
+                          {loadingRows ? "Loading…" : "No feedback submitted yet"}
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-          </div>
+                    ) : (
+                      rows.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="hover:bg-surface-container-low/20 transition-colors"
+                        >
+                          <td className="px-4 py-3 align-middle">
+                            <ResponsePill value={row.improvedRequesting} />
+                          </td>
+                          <td className="px-4 py-3 align-middle">
+                            <ResponsePill value={row.improvesItOverall} />
+                          </td>
+                          <td className="px-4 py-3 align-middle text-sm text-on-surface-variant max-w-md">
+                            {row.comments ? (
+                              <span className="whitespace-pre-wrap break-words">{row.comments}</span>
+                            ) : (
+                              <span className="text-info-light/50 italic">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 align-middle text-sm text-info-light whitespace-nowrap">
+                            {formatDate(row.createdAt)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </CollapsibleTableSection>
         </>
       )}

@@ -95,7 +95,7 @@ function BarSegment({ segment }: { segment: BarSegmentData }) {
 function PlaceholderBar({ message }: { message: string }) {
   return (
     <div
-      className={`flex ${BAR_HEIGHT} w-full items-center justify-center rounded-full border-2 border-outline/20 bg-surface-container-low`}
+      className={`flex ${BAR_HEIGHT} w-full items-center justify-center rounded-full border-2 border-outline bg-surface-container-low`}
     >
       <span className="text-xs text-info-light/60 select-none">{message}</span>
     </div>

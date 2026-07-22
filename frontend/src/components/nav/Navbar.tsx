@@ -94,7 +94,7 @@ export default function Navbar() {
               <span
                 className="material-symbols-outlined !text-xl"
               >
-                cable
+                keyboard
               </span>
               Accessories
             </Link>

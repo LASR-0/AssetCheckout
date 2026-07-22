@@ -48,7 +48,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="p-6 bg-surface-container-low/80 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-tl-xl rounded-tr-xl">
+      <div className="p-6 bg-surface-container-low flex flex-col sm:flex-row justify-between items-center gap-4 rounded-tl-xl rounded-tr-xl">
 
         {/* SEARCH INPUT */}
         <div className="relative w-full sm:max-w-xs">

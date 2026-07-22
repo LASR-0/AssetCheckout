@@ -109,9 +109,12 @@ export default function AccessoryOptionsSection({
 
   return (
     <div>
-      <h3 className="text-xs font-medium tracking-wider mb-5 uppercase text-on-surface-variant">
+      <h3 className="text-xs font-medium tracking-wider mb-2 uppercase text-on-surface-variant">
         3. What Do You Need?
       </h3>
+      <p className="mb-5 text-xs text-info-light">
+        (if your expected option is not listed, then state your needs with "Something else" in the reasoning text field)
+      </p>
 
       <div className="p-6 bg-surface-container/40 rounded-xl border border-outline space-y-5">
         {!categoryId && (
@@ -167,7 +170,7 @@ export default function AccessoryOptionsSection({
             {/* The escape hatch — anything not on the list is by
                 definition non-standard, so picking this locks the spec
                 level (one-way, released on unpick). */}
-            <div className="flex items-center gap-3 pt-2 border-t border-outline/30">
+            <div className="flex items-center gap-3 pt-2">
               <RadioGroupItem value={SOMETHING_ELSE} id="opt-something-else" />
               <label
                 htmlFor="opt-something-else"

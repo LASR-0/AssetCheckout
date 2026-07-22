@@ -75,3 +75,5 @@ export type AccessoryProductOption = {
   aggregateRemaining: number;
   aggregateQty: number;
 };
+
+export type AssetAccessoryCategoryMap = Record<string, number[]>;

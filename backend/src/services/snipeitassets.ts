@@ -1450,6 +1450,32 @@ export async function getAllUserPhones(): Promise<
   }));
 }
 
+export async function getUserAssetCategoryIds(userId: number): Promise<number[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users/${userId}/assets?limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (res.status === 404) {
+    throw new AppError(`Snipe user ${userId} not found`, 404);
+  }
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch assets for user ${userId}: status ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  const ids = new Set<number>();
+  for (const asset of rows) {
+    const id = Number(asset.category?.id);
+    if (Number.isFinite(id) && id > 0) ids.add(id);
+  }
+  return Array.from(ids);
+}
+
 ///  +-----------------------------------------------------------------+
 ///  |                         RE-EXPORTS                              |
 ///  +-----------------------------------------------------------------+

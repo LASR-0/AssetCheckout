@@ -23,7 +23,11 @@ import type {
  * PUT and the option PUTs echo only { success }, so both selectors hold their
  * state here and update it optimistically.
  */
-export default function AccessoryConfigurationSettings() {
+export default function AssetConfigurationSettings({
+    onRequestableChange,
+  }: {
+    onRequestableChange?: () => void;
+  } = {}) {
   const [allCategories, setAllCategories] = useState<AccessoryCategory[]>([]);
   const [allowed, setAllowed] = useState<Set<number>>(new Set());
   const [standardConfig, setStandardConfig] =
@@ -78,6 +82,7 @@ export default function AccessoryConfigurationSettings() {
       setSaving(true);
       setError(null);
       await setRequestableAccessoryCategoryIds(Array.from(next));
+      onRequestableChange?.();
     } catch (err: any) {
       setAllowed(previous); // roll back
       setError(err.message || "Failed to save");

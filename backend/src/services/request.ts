@@ -1135,7 +1135,12 @@ export async function useExistingAccessoryForRequest(
 /**
  * Create a NEW Snipe accessory for a non-standard request (twin of
  * createNewModelForRequest). The record is authored at qty 0 and lands in
- * the waiting phase; quantity + location are set later via the stock step.
+ * the waiting phase; the quantity is added later via the stock step.
+ *
+ * Location is set HERE (not at the stock step): Snipe drops location_id on
+ * accessory create but persists it on PATCH, so we create then immediately
+ * PATCH the location onto the new id. The admin authors the site at creation
+ * because a fresh record has no meaningful location otherwise.
  *
  * Rollback: if the DB link fails after the Snipe accessory was created, the
  * freshly-created zero-stock record is deleted (deleteAccessory logs+continues
@@ -1145,7 +1150,12 @@ export async function useExistingAccessoryForRequest(
  */
 export async function createNewAccessoryForRequest(
   requestId: number,
-  input: { name: string; manufacturer?: string | null; modelNumber?: string | null }
+  input: {
+    name: string;
+    locationId: number;
+    manufacturer?: string | null;
+    modelNumber?: string | null;
+  }
 ): Promise<ModelCreationResponse> {
 
   const request = await loadAccessoryRequestAtSelection(requestId);
@@ -1155,6 +1165,22 @@ export async function createNewAccessoryForRequest(
     categoryId: request.categoryId,
     qty: 0,
   });
+
+  // Location doesn't stick on create — PATCH it onto the new record. If this
+  // fails, roll back the orphaned accessory before surfacing the error.
+  try {
+    await updateAccessoryStock(newAccessoryId, {
+      qty: 0,
+      locationId: input.locationId,
+    });
+  } catch (err) {
+    await deleteAccessory(newAccessoryId);
+    console.error(
+      `Accessory ${newAccessoryId} created but setting its location failed for request ${requestId}; rolled back.`,
+      err
+    );
+    throw err;
+  }
 
   try {
     const updatedModelRequest = await prisma.modelRequest.update({
@@ -1187,27 +1213,37 @@ export async function createNewAccessoryForRequest(
 }
 
 /**
- * Waiting-phase submit: set the arrived quantity (and, for a newly-authored
- * record, its location) on the selected accessory, then re-probe stock. When
- * stock is now available, checkout + complete fire immediately (twin of
- * fillAssetDetailsForRequest's completing submit). A partial/zero submit just
- * saves and stays in the waiting phase.
+ * Waiting-phase submit: ADD the arrived quantity to the selected accessory's
+ * current stock, then re-probe. When stock is now available, checkout +
+ * complete fire immediately (twin of fillAssetDetailsForRequest's completing
+ * submit). A zero submit is a no-op that stays in the waiting phase.
  *
- * `locationId` is optional: pass it for a newly-created record (which authors
- * its site here), omit it for an existing record (whose site stays put).
+ * Delta semantics: `arrivedQty` is how many MORE units arrived, not the new
+ * total. Snipe's `qty` is the cumulative total (checkouts reduce `remaining`,
+ * not `qty`), so we read the current qty and PATCH current + arrived. Setting
+ * qty directly would wrongly lower the total below what's already checked out.
+ * Location is NOT touched here — it's authored at create time for new records
+ * and left alone for existing ones.
  */
 export async function addAccessoryStockForRequest(
   requestId: number,
-  input: { qty: number; locationId?: number | null }
+  input: { arrivedQty: number }
 ): Promise<AssetDetailsResponse> {
 
   const request = await loadAccessoryRequestAtQuantity(requestId);
   const snipeAccessoryId = request.modelRequest.snipeAccessoryId!;
 
-  await updateAccessoryStock(snipeAccessoryId, {
-    qty: input.qty,
-    locationId: input.locationId ?? undefined,
-  });
+  // Read current qty direct from Snipe (cache may be stale) to compute the sum.
+  const before = await getAccessoryById(snipeAccessoryId);
+  if (!before) {
+    throw new AppError(
+      "The selected accessory no longer exists in Snipe-IT.",
+      404
+    );
+  }
+  const newQty = before.qty + input.arrivedQty;
+
+  await updateAccessoryStock(snipeAccessoryId, { qty: newQty });
 
   // Re-read direct from Snipe — the catalog cache is stale right after a write.
   const accessory = await getAccessoryById(snipeAccessoryId);

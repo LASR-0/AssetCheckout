@@ -46,9 +46,9 @@ import { Badge } from "@/components/ui/statusbadge";
 ///  +-----------------------------------------------------------------+
 
 const SELECT_TRIGGER =
-  "h-10 w-full text-on-surface-variant bg-surface-container-low border border-outline/20 text-sm rounded-lg";
+  "h-10 w-full text-on-surface-variant bg-surface-container-low border border-outline text-sm rounded-lg";
 const SELECT_CONTENT =
-  "bg-surface-container-low border border-outline/20 text-on-surface-variant";
+  "bg-surface-container-low border border-outline text-on-surface-variant";
 const SELECT_ITEM = "text-sm focus:bg-shadcn-background focus:text-shadcn-text";
 
 const DAYS_OF_WEEK = [
@@ -218,7 +218,7 @@ export default function ScheduledJobRow({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="rounded-lg border border-outline/20 bg-surface"
+      className="rounded-lg border border-outline bg-surface"
     >
       {/* Collapsed summary row */}
       <div className="flex items-center justify-between gap-3 p-3">
@@ -347,7 +347,7 @@ export default function ScheduledJobRow({
               </div>
 
               {/* Fields zone: single even row */}
-              <div className="rounded-lg border border-outline/20 p-3">
+              <div className="rounded-lg border border-outline p-3">
                 <ScheduleFields draft={draft} setDraft={setDraft} />
               </div>
 
@@ -654,7 +654,7 @@ function ReminderThresholdFields({
   error: string | null;
 }) {
   return (
-    <div className="rounded-lg border border-outline/20 p-3 space-y-3">
+    <div className="rounded-lg border border-outline p-3 space-y-3">
       <div className="flex flex-col">
         <span className="text-xs font-medium tracking-wider uppercase text-info-light mb-1">
           Reminder Thresholds (days after shipping)

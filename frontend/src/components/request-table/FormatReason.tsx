@@ -66,7 +66,7 @@ export const ReasonCell = ({ text }: { text?: string }) => {
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className="mt-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          className="mt-1 cursor-pointer text-xs text-muted-foreground hover:text-foreground hover:underline"
         >
           {expanded ? "Show less" : "Show more"}
         </button>

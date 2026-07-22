@@ -50,7 +50,7 @@ export default function SharepointSyncCard() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-4 rounded-lg border border-outline/20 bg-surface p-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-outline bg-surface p-4">
         <div className="min-w-0">
           <h4 className="font-semibold text-on-background text-sm">Nightly sync</h4>
           <p className="text-xs text-info-light mt-0.5">

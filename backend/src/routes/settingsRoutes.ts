@@ -9,6 +9,8 @@ import {
   setSkeletonStatusId,
   getMobileFilterConfig,
   setMobileFilterConfig,
+  getAssetAccessoryCategoryMap,
+  setAccessoryCategoriesForAssetCategory
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 
@@ -207,6 +209,47 @@ router.put("/mobile-filter", async (req: Request, res: Response, next: NextFunct
     await setMobileFilterConfig(countryCode, mobileLeadingDigit, getActorEmail(req));
     const saved = await getMobileFilterConfig();
     res.json(saved);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |          ACCESSORY ↔ ASSET-CATEGORY MAP (L3)                    |
+///  +-----------------------------------------------------------------+
+
+router.get("/accessory-asset-map", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const map = await getAssetAccessoryCategoryMap();
+    res.json({ map });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/accessory-asset-map", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { assetCategoryId, accessoryCategoryIds } = req.body ?? {};
+
+    if (typeof assetCategoryId !== "number" || !Number.isFinite(assetCategoryId)) {
+      return res.status(400).json({ error: "assetCategoryId must be a number" });
+    }
+    if (
+      !Array.isArray(accessoryCategoryIds) ||
+      !accessoryCategoryIds.every((n) => typeof n === "number" && Number.isFinite(n))
+    ) {
+      return res.status(400).json({ error: "accessoryCategoryIds must be an array of numbers" });
+    }
+
+    await setAccessoryCategoriesForAssetCategory(
+      assetCategoryId,
+      accessoryCategoryIds,
+      getActorEmail(req)
+    );
+    const map = await getAssetAccessoryCategoryMap();
+    res.json({ map });
   } catch (err) {
     next(err);
   }

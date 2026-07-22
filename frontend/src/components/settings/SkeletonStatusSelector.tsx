@@ -76,7 +76,7 @@ export default function SkeletonStatusSelector() {
       : DEFAULT_LABEL;
 
   return (
-    <div className="space-y-2 border-t border-outline/20 mt-2 pt-3">
+    <div className="space-y-2 border rounded-md border-outline mt-2 pt-3">
       <div className="text-xs font-semibold text-info-light uppercase tracking-wider px-3">
         Skeleton status
       </div>
@@ -86,7 +86,7 @@ export default function SkeletonStatusSelector() {
         to "Pending."
       </div>
 
-      <div className="px-3">
+      <div className="px-3 pb-5">
         {loading ? (
           <div className="text-sm text-info-light italic py-2">Loading...</div>
         ) : (

@@ -21,6 +21,8 @@ export type RequestsTableMeta = {
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
   onAssetDetails: (request: Request) => void;
+  onSelectAccessory: (request: Request) => void;
+  onAddAccessoryStock: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   onMarkReadyForCollection: (request: Request) => void;
@@ -162,11 +164,51 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   const modelRequestStatus = request.modelRequest?.status ?? null;
   const linkedAssetId = request.modelRequest?.linkedAssetId ?? null;
 
+  // Accessories have no model/hardware layer, so they key off snipeAccessoryId
+  // rather than linkedAssetId (which stays null for them). requestKind absent
+  // means a legacy ASSET record.
+  const isAccessory = request.requestKind === "ACCESSORY";
+  const snipeAccessoryId = request.modelRequest?.snipeAccessoryId ?? null;
+  // Live available stock of the selected accessory, enriched onto the row by
+  // the requests-list endpoint. null = asset row, or accessory not yet
+  // selected, or the catalog was briefly unreachable.
+  const accessoryRemaining =
+    typeof request.accessoryRemaining === "number"
+      ? request.accessoryRemaining
+      : null;
+
   const isPending = requestStatus === "PENDING";
   const isApprovedAwaitingAdmin =
     requestStatus === "APPROVED" && modelRequestStatus === "PENDING";
-  const isAdminApprovedAwaitingModel =
-    requestStatus === "APPROVED" && modelRequestStatus === "APPROVED" && !linkedAssetId;
+
+  // Non-standard SELECTION stage (ModelRequest APPROVED, nothing linked yet).
+  // For assets that's "no linked asset → Create model"; for accessories it's
+  // "no linked accessory → Select accessory". Keyed off the right field per
+  // kind so an accessory never shows "Create model" (its linkedAssetId is
+  // always null, which would otherwise misfire the asset branch).
+  const isAssetAwaitingModel =
+    !isAccessory &&
+    requestStatus === "APPROVED" &&
+    modelRequestStatus === "APPROVED" &&
+    !linkedAssetId;
+  const isAccessoryAwaitingSelection =
+    isAccessory &&
+    requestStatus === "APPROVED" &&
+    modelRequestStatus === "APPROVED" &&
+    snipeAccessoryId === null;
+
+  // Accessory QUANTITY-WAITING stage: an accessory has been selected (linked)
+  // but has no available stock. Keyed off LIVE remaining (not the stored
+  // assetReady snapshot), so the action re-appears whenever the selected
+  // accessory drains back to 0 — including for a second request against the
+  // same accessory after a prior one consumed the last unit.
+  const isAccessoryAwaitingStock =
+    isAccessory &&
+    requestStatus === "APPROVED" &&
+    modelRequestStatus === "COMPLETED" &&
+    snipeAccessoryId !== null &&
+    accessoryRemaining === 0;
+
   const isStandardAwaitingIT =
     requestStatus === "APPROVED" &&
     request.requestType === "STANDARD" &&
@@ -314,12 +356,30 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         </ActionRow>
       );
     }
-    if (isAdminApprovedAwaitingModel) {
+    if (isAssetAwaitingModel) {
       return (
         <ActionRow>
           <ActionButton icon="add_circle" label="Create model" color="text-status-model" hoverBg="hover:bg-status-model/10"
             border="border-status-model/40" title="Create the asset model for this request"
             onClick={() => meta.onCreateModel(request)} />
+        </ActionRow>
+      );
+    }
+    if (isAccessoryAwaitingSelection) {
+      return (
+        <ActionRow>
+          <ActionButton icon="cable" label="Select accessory" color="text-status-model" hoverBg="hover:bg-status-model/10"
+            border="border-status-model/40" title="Select or create the accessory for this request"
+            onClick={() => meta.onSelectAccessory(request)} />
+        </ActionRow>
+      );
+    }
+    if (isAccessoryAwaitingStock) {
+      return (
+        <ActionRow>
+          <ActionButton icon="inventory" label="Add stock" color="text-status-model" hoverBg="hover:bg-status-model/10"
+            border="border-status-model/40" title="Add the arrived quantity so the accessory can be checked out"
+            onClick={() => meta.onAddAccessoryStock(request)} />
         </ActionRow>
       );
     }
@@ -364,11 +424,25 @@ export const columns: ColumnDef<Request>[] = [
       // the legacy bridge for records created before the enum existed.
       const isNewNumber = r.numberOption ? r.numberOption === "NEW" : !!r.newNumber;
       const isReuse = r.numberOption === "REUSE" || !!r.reuseNumberPhone;
+      const isAccessory = r.requestKind === "ACCESSORY";
       return (
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-on-surface-variant">
-            {r.categoryName}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-on-surface-variant">
+              {r.categoryName}
+            </span>
+            {/* Kind badge — distinguishes accessory rows at a glance. */}
+            {isAccessory && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-model/10 text-status-model border border-status-model/30">
+                <span className="material-symbols-outlined !text-[11px]">cable</span>
+                Accessory
+              </span>
+            )}
+          </div>
+          {/* accessoryOption: the named option the requester chose (accessories). */}
+          {isAccessory && r.accessoryOption && (
+            <span className="text-xs text-info-light">{r.accessoryOption}</span>
+          )}
           {r.callText && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">
               <span className="material-symbols-outlined !text-[14px] text-status-success">check</span>

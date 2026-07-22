@@ -12,6 +12,8 @@ import { getColumnVisibility } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
+import CreateAccessoryDialog from "@/components/dialogs/CreateAccessoryDialog";
+import AccessoryStockDialog from "@/components/dialogs/AccessoryStockDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
 import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
 
@@ -35,6 +37,8 @@ export default function RequestTablePage() {
   const columnVisibility = getColumnVisibility(role);
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
+  const [createAccessoryDialogOpen, setCreateAccessoryDialogOpen] = useState(false);
+  const [accessoryStockDialogOpen, setAccessoryStockDialogOpen] = useState(false);
   const [standardResultOpen, setStandardResultOpen] = useState(false);
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
   const [standardResult, setStandardResult] = useState<
@@ -229,6 +233,18 @@ export default function RequestTablePage() {
     setAssetDetailsDialogOpen(true);
   }
 
+  // Accessory non-standard: selection dialog (search → pick/create), and the
+  // separate quantity-waiting dialog surfaced by the row's "Add stock" action.
+  function handleSelectAccessory(request: Request) {
+    setSelectedRequest(request);
+    setCreateAccessoryDialogOpen(true);
+  }
+
+  function handleAddAccessoryStock(request: Request) {
+    setSelectedRequest(request);
+    setAccessoryStockDialogOpen(true);
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
@@ -270,6 +286,8 @@ export default function RequestTablePage() {
             onReject={handleRejectClick}
             onCreateModel={handleCreateModel}
             onAssetDetails={handleAssetDetails}
+            onSelectAccessory={handleSelectAccessory}
+            onAddAccessoryStock={handleAddAccessoryStock}
             onMarkShipped={handleMarkShipped}
             onMarkReceived={handleMarkReceived}
             globalFilter={search}
@@ -301,6 +319,21 @@ export default function RequestTablePage() {
             onSuccess={loadRequests}
             currentUserName={currentUserName}
             averages={averages}
+          />
+
+          <CreateAccessoryDialog
+            request={selectedRequest}
+            open={createAccessoryDialogOpen}
+            onOpenChange={setCreateAccessoryDialogOpen}
+            onSuccess={loadRequests}
+            currentUserName={currentUserName}
+          />
+
+          <AccessoryStockDialog
+            request={selectedRequest}
+            open={accessoryStockDialogOpen}
+            onOpenChange={setAccessoryStockDialogOpen}
+            onSuccess={loadRequests}
           />
 
           <ShipDialog
