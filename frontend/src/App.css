@@ -136,3 +136,16 @@
     @apply font-sans;
   }
 }
+  ::view-transition-old(root), ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+/* THEME REVEAL — withThemeReveal() in src/lib/theme-transition.ts sets both of
+   these on <html> for the life of the transition. Pinning the collapsed circle
+   in CSS covers the gap between the snapshot being taken and the JS clip
+   animation starting, which otherwise shows one frame of the incoming theme
+   at full size. */
+html[data-theme-reveal="active"]::view-transition-new(root) {
+  clip-path: var(--theme-reveal-from, circle(0% at 50% 50%));
+}

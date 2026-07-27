@@ -273,24 +273,30 @@ router.put("/settings/standard-accessories/:categoryId", async (req, res, next) 
     const { options } = req.body ?? {};
     const validSlot = (v: unknown) =>
       v === null || v === undefined || (typeof v === "number" && Number.isFinite(v));
+    const validText = (v: unknown) =>
+      v === null || v === undefined || typeof v === "string";
     const validOption = (o: unknown) =>
       typeof o === "object" &&
       o !== null &&
       typeof (o as any).label === "string" &&
       (o as any).label.trim().length > 0 &&
       validSlot((o as any).primary) &&
-      validSlot((o as any).backup);
+      validSlot((o as any).backup) &&
+      validText((o as any).displayLabel) &&
+      validText((o as any).accessoryLabel);
 
     if (!Array.isArray(options) || !options.every(validOption)) {
       return res.status(400).json({
         success: false,
         message:
-          "Body must be { options: [{ label: string, primary: number|null, backup: number|null }] }",
+          "Body must be { options: [{ label: string, displayLabel?, accessoryLabel?, primary: number|null, backup: number|null }] }",
       });
     }
 
     const cleaned: AccessoryOptionConfig[] = options.map((o: any) => ({
       label: o.label,
+      displayLabel: o.displayLabel ?? null,
+      accessoryLabel: o.accessoryLabel ?? null,
       primary: o.primary ?? null,
       backup: o.backup ?? null,
     }));

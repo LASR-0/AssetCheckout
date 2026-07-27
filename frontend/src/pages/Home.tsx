@@ -22,11 +22,52 @@ import type { Request } from "@/types/requestType"
 //  is rendered app-wide from App.tsx, so this page no longer owns the
 //  min-h-screen flex column — App.tsx does. The root here is flex-grow
 //  so the page background fills the space between nav and footer.
+//
+//  TABLE-FEEL PASS: the three content cards (Start a request, Accessories,
+//  Your recent requests) now wear the same chrome as the settings tables
+//  (see components/settings/CollapsibleTableSection.tsx) — a tinted header
+//  bar in surface-container-low/30 with a hairline divider, then the body.
+//  CARD gained overflow-hidden so the tint clips to the rounded corners.
 
-const CARD = "bg-landing-card border border-landing-border rounded-xl";
+const CARD =
+  "bg-landing-card border border-landing-border rounded-xl overflow-hidden";
 const RAISED = "bg-landing-raised border border-landing-border rounded-lg";
 
+///  +-----------------------------------------------------------------+
+///  |                 SHARED: TINTED SECTION HEADER                   |
+///  +-----------------------------------------------------------------+
+//
+//  Mirrors CollapsibleTableSection's trigger row: tinted bar, hairline
+//  divider, optional right-aligned actions slot. Not collapsible — the
+//  home page sections are always open — so no trigger/chevron.
+//
+//  Type scale is a step down from the old text-xl headings so the cards
+//  read as table chrome rather than marketing sections; bump `text-base`
+//  back to `text-xl` if you'd rather keep the larger heading.
 
+function SectionHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 py-3 bg-surface-container-low/30 border-b border-outline/50">
+      <div className="flex flex-col min-w-0">
+        <h2 className="font-headline font-bold text-base text-on-background">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="text-info-light text-[13px] leading-snug">{subtitle}</p>
+        )}
+      </div>
+      {actions && <div className="shrink-0">{actions}</div>}
+    </div>
+  );
+}
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DATA: THE USER'S REQUESTS                      |
@@ -186,13 +227,13 @@ function Stat({
       className={`${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px] 
         ${attention ? "!border-status-error/50" : ""} 
         ${complete ? "!border-status-success/50" : ""} 
-        ${pending ? "!border-status-ship/50" : ""}`}
+        ${pending ? "!border-status-model/50" : ""}`}
     >
       <span
         className={`font-headline font-extrabold text-2xl 
           ${attention ? "text-status-error" : "" } 
           ${complete ? "text-status-success" : ""}
-          ${pending ? "text-status-ship" : ""}
+          ${pending ? "text-status-model" : ""}
           `}
       >
         {loading ? "–" : num}
@@ -212,6 +253,9 @@ function Stat({
 //  same source as AssetTypeSelector on the form. Homepage-grade states:
 //  quiet loading spinner, and a soft fallback (plain link to the form)
 //  if the catalogue can't be fetched — the form has its own full error UI.
+//
+//  Chrome: tinted SectionHeader + padded body. The tiles themselves are
+//  untouched.
 
 function QuickStart() {
   const [categories, setCategories] = useState<AssetCategory[]>([]);
@@ -238,55 +282,55 @@ function QuickStart() {
   }, []);
 
   return (
-    <section className={`${CARD} shadow-sm p-6 md:p-8 mb-8`}>
-      <div className="mb-5">
-        <h2 className="font-headline font-bold text-xl">Start a request</h2>
-        <p className="text-info-light text-[15px]">
-          Pick what you need to get going.
-        </p>
-      </div>
+    <section className={`${CARD} shadow-sm mb-8`}>
+      <SectionHeader
+        title="Start a request"
+        subtitle="Pick what you need to get going."
+      />
 
-      {loading && (
-        <div className="flex items-center py-8 font-semibold text-info-light text-sm">
-          <span className="animate-spin h-5 w-5 border-2 border-info-light border-t-transparent rounded-full mr-3" />
-          Loading asset types...
-        </div>
-      )}
+      <div className="p-5 md:p-6">
+        {loading && (
+          <div className="flex items-center py-8 font-semibold text-info-light text-sm">
+            <span className="animate-spin h-5 w-5 border-2 border-info-light border-t-transparent rounded-full mr-3" />
+            Loading asset types...
+          </div>
+        )}
 
-      {!loading && (error || categories.length === 0) && (
-        <p className="py-6 text-sm text-info-light">
-          Couldn't load the asset catalogue right now — you can still{" "}
-          <Link
-            to="/checkout"
-            className="font-semibold underline hover:text-on-background transition-colors"
-          >
-            start a request from the form
-          </Link>
-          .
-        </p>
-      )}
-
-      {!loading && !error && categories.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {categories.map((cat) => (
-            // FIXED: deep-link with the category id — the form validates it
-            // against its own fetched list before preselecting.
+        {!loading && (error || categories.length === 0) && (
+          <p className="py-6 text-sm text-info-light">
+            Couldn't load the asset catalogue right now — you can still{" "}
             <Link
-              key={cat.id}
-              to={`/checkout?categoryId=${cat.id}`}
-              className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+              to="/checkout"
+              className="font-semibold underline hover:text-on-background transition-colors"
             >
-              <span className="material-symbols-outlined !text-[28px]">
-                {iconForCategory(cat.name)}
-              </span>
-              <span className="font-bold text-[15px]">{cat.name}</span>
-              <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-                Request →
-              </span>
+              start a request from the form
             </Link>
-          ))}
-        </div>
-      )}
+            .
+          </p>
+        )}
+
+        {!loading && !error && categories.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {categories.map((cat) => (
+              // FIXED: deep-link with the category id — the form validates it
+              // against its own fetched list before preselecting.
+              <Link
+                key={cat.id}
+                to={`/checkout?categoryId=${cat.id}`}
+                className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+              >
+                <span className="material-symbols-outlined !text-[28px]">
+                  {iconForCategory(cat.name)}
+                </span>
+                <span className="font-bold text-[15px]">{cat.name}</span>
+                <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+                  Request →
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -299,12 +343,19 @@ function QuickStart() {
 //  requests table) with the derived fulfilment stage, so colours, icons,
 //  labels, and post-completion states (Assigned / Shipped / Ready to
 //  collect / Collected / Received) are identical site-wide.
+//
+//  The rows now sit inside a settings-style table shell: rounded-lg +
+//  border-outline container on bg-surface, a tinted header row in
+//  surface-container-low/20, and border-outline/10 hairlines between rows.
+//  "View all" moved into the card header's actions slot.
 
 function shortDate(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
   return `${d.getDate()} ${d.toLocaleDateString("en-AU", { month: "short" })}`;
 }
+
+const RECENT_GRID = "grid grid-cols-[1.6fr_0.8fr_0.8fr_1fr] gap-2";
 
 function RecentRequests({
   requests,
@@ -322,59 +373,68 @@ function RecentRequests({
     .slice(0, 4);
 
   return (
-    <section className={`${CARD} shadow-sm p-6 md:p-8 mb-8`} id="requests">
-      <div className="flex items-center mb-4">
-        <h2 className="font-headline font-bold text-xl">Your recent requests</h2>
-        <Link
-          to="/requests"
-          className="ml-auto text-sm font-semibold text-info-light hover:text-on-background transition-colors"
-        >
-          View all →
-        </Link>
-      </div>
+    <section className={`${CARD} shadow-sm mb-8`} id="requests">
+      <SectionHeader
+        title="Your recent requests"
+        subtitle="The last few things you've asked for."
+        actions={
+          <Link
+            to="/requests"
+            className="text-sm font-semibold text-info-light hover:text-on-background transition-colors"
+          >
+            View all →
+          </Link>
+        }
+      />
 
-      <div className="flex flex-col">
-        <div className="grid grid-cols-[1.6fr_0.8fr_0.8fr_1fr] gap-2 px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-info-light border-b border-outline/10">
-          <span>Asset</span>
-          <span>Requested</span>
-          <span>For</span>
-          <span>Status</span>
-        </div>
+      <div className="p-3 md:p-4">
+        <div className="rounded-lg border border-outline bg-surface/50 overflow-hidden">
+          <div
+            className={`${RECENT_GRID} px-3 py-2 bg-surface-container-low/20 font-mono text-[11px] uppercase tracking-wider text-info-light`}
+          >
+            <span>Asset</span>
+            <span>Requested</span>
+            <span>For</span>
+            <span>Status</span>
+          </div>
 
-        {loading && (
-          <p className="px-3 py-6 text-sm text-info-light">Loading…</p>
-        )}
+          {loading && (
+            <p className="px-3 py-6 text-sm text-info-light border-t border-outline/10">
+              Loading…
+            </p>
+          )}
 
-        {!loading && recent.length === 0 && (
-          <p className="px-3 py-6 text-sm text-info-light">
-            Nothing yet — start your first request above.
-          </p>
-        )}
+          {!loading && recent.length === 0 && (
+            <p className="px-3 py-6 text-sm text-info-light border-t border-outline/10">
+              Nothing yet — start your first request above.
+            </p>
+          )}
 
-        {!loading &&
-          recent.map((r) => (
-            <Link
-              key={r.id}
-              to="/requests"
-              className="grid grid-cols-[1.6fr_0.8fr_0.8fr_1fr] gap-2 items-center px-3 py-3 border-b border-outline/10 text-sm hover:bg-landing-raised transition-colors rounded-md"
-            >
-              <span className="flex items-center gap-2.5 font-semibold">
-                <span className="material-symbols-outlined !text-[18px] text-on-surface-variant">
-                  {iconForCategory(r.categoryName)}
+          {!loading &&
+            recent.map((r) => (
+              <Link
+                key={r.id}
+                to="/requests"
+                className={`${RECENT_GRID} items-center px-3 py-3 border-t border-outline text-sm hover:bg-surface-container-low/40 transition-colors`}
+              >
+                <span className="flex items-center gap-2.5 font-semibold">
+                  <span className="material-symbols-outlined !text-[18px] text-on-surface-variant">
+                    {iconForCategory(r.categoryName)}
+                  </span>
+                  {r.modelRequest?.modelName ?? r.categoryName}
                 </span>
-                {r.modelRequest?.modelName ?? r.categoryName}
-              </span>
-              <span className="text-on-surface-variant">
-                {shortDate(r.createdAt)}
-              </span>
-              <span className="text-on-surface-variant">
-                {r.userName === name ? "Yourself" : r.userName}
-              </span>
-              <span>
-                <StatusBadge status={deriveFulfilment(r).badgeKey} />
-              </span>
-            </Link>
-          ))}
+                <span className="text-on-surface-variant">
+                  {shortDate(r.createdAt)}
+                </span>
+                <span className="text-on-surface-variant">
+                  {r.userName === name ? "Yourself" : r.userName}
+                </span>
+                <span>
+                  <StatusBadge status={deriveFulfilment(r).badgeKey} />
+                </span>
+              </Link>
+            ))}
+        </div>
       </div>
     </section>
   );
@@ -459,6 +519,8 @@ function QuickLinks() {
 //  (L3 ∩ L1). Deliberately quiet: renders nothing until loaded, and nothing
 //  at all when the user has no eligible accessories (or the fetch fails) —
 //  the home page shouldn't carry an empty accessory card.
+//
+//  Chrome matches QuickStart: tinted SectionHeader + padded tile body.
 
 // TODO: confirm this matches your accessory form's actual route.
 const ACCESSORY_FORM_ROUTE = "/checkout-accessory";
@@ -487,30 +549,35 @@ function AccessoryQuickStart() {
   if (!loaded || categories.length === 0) return null;
 
   return (
-    <section className={`${CARD} shadow-sm p-6 md:p-8 mb-8`}>
-      <div className="mb-5">
-        <h2 className="font-headline font-bold text-xl">Accessories for your devices</h2>
-        <p className="text-info-light text-[15px]">
-          Based on the equipment assigned to you.
-        </p>
-      </div>
+    <section className={`${CARD} shadow-sm mb-8`}>
+      <SectionHeader
+        title="Accessories for your devices"
+        subtitle={
+          <span className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-0.5 text-status-pending text-[12px] font-semibold">
+            <span className="material-symbols-outlined !text-[14px]">info</span>
+            Based on the equipment assigned to you.
+          </span>
+        }
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {categories.map((cat) => (
-          <Link
-            key={cat.id}
-            to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-            className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
-          >
-            <span className="material-symbols-outlined !text-[28px]">
-              {iconForCategory(cat.name)}
-            </span>
-            <span className="font-bold text-[15px]">{cat.name}</span>
-            <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-              Request →
-            </span>
-          </Link>
-        ))}
+      <div className="p-5 md:p-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {categories.map((cat) => (
+            <Link
+              key={cat.id}
+              to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
+              className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+            >
+              <span className="material-symbols-outlined !text-[28px]">
+                {iconForCategory(cat.name)}
+              </span>
+              <span className="font-bold text-[15px]">{cat.name}</span>
+              <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+                Request →
+              </span>
+            </Link>
+          ))}
+        </div>
       </div>
     </section>
   );

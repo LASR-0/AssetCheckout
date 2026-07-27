@@ -26,12 +26,12 @@ export default function CollapsibleTableSection({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="rounded-lg border border-outline/20 bg-surface"
+      className="rounded-lg border border-outline bg-surface"
     >
       {/* The whole header bar is the trigger. The actions area stops
           propagation so its controls don't also toggle the section. */}
       <CollapsibleTrigger asChild>
-        <div className="flex items-center justify-between gap-3 p-3 hover:bg-surface-container-low/20 hover:cursor-pointer transition-colors rounded-t-lg">
+        <div className="flex items-center justify-between gap-3 p-3 bg-surface-container-low/20 hover:bg-surface-container-low/40 hover:cursor-pointer transition-colors rounded-t-lg">
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={`material-symbols-outlined !text-[18px] text-info-light transition-transform ${

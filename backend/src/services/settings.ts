@@ -18,6 +18,8 @@ export type StandardModelsConfig = Record<string, CategoryStandardModels>;
 // no choice on the form; the option labels are what requesters see.
 export type AccessoryOptionConfig = {
   label: string;
+  displayLabel?: string | null;
+  accessoryLabel?: string | null;
   primary: number | null; // representative Snipe accessory ID
   backup: number | null;
 };
@@ -154,6 +156,14 @@ function cleanAccessoryOptions(value: unknown): CategoryAccessoryOptions | null 
 
     options.push({
       label,
+      displayLabel:
+        typeof e.displayLabel === "string" && e.displayLabel.trim()
+          ? e.displayLabel.trim()
+          : null,
+      accessoryLabel:
+        typeof e.accessoryLabel === "string" && e.accessoryLabel.trim()
+          ? e.accessoryLabel.trim()
+          : null,
       primary: typeof e.primary === "number" ? e.primary : null,
       backup: typeof e.backup === "number" ? e.backup : null,
     });

@@ -230,17 +230,67 @@ function MapRow({
 
   return (
     <div className="rounded-lg border border-outline overflow-hidden">
-      {/* Header — asset category */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-surface/50 border-b border-outline/15">
-        <span className="material-symbols-outlined !text-base text-info-light">
-          {iconForCategory(assetCategory.name)}
-        </span>
-        <span className="text-sm font-semibold text-info-light">
-          {assetCategory.name}
-        </span>
+      {/* Header — asset category name (left) + Add trigger (right) */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-surface/50 border-b border-outline/15">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="material-symbols-outlined !text-base text-info-light">
+            {iconForCategory(assetCategory.name)}
+          </span>
+          <span className="text-sm font-semibold text-info-light truncate">
+            {assetCategory.name}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {saving && (
+            <span className="text-[11px] text-info-light/70">Saving…</span>
+          )}
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <button
+                disabled={saving}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-status-success/10 border border-dashed border-status-success/50 border-outline/40 text-status-success hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined !text-[13px]">
+                  add
+                </span>
+                Add
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 bg-surface p-2" align="end">
+              {pool.length === 0 ? (
+                <div className="text-sm text-info-light italic py-3 text-center">
+                  No requestable accessory categories. Configure these under
+                  Accessory Configuration first.
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {pool.map((acc) => (
+                    <label
+                      key={acc.id}
+                      className="flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer text-info-light"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={mappedSet.has(acc.id)}
+                        onChange={() => onToggle(acc.id)}
+                        disabled={saving}
+                        className="w-4 h-4 hover:cursor-pointer rounded"
+                      />
+                      <span className="material-symbols-outlined !text-base text-info-light">
+                        {iconForCategory(acc.name)}
+                      </span>
+                      <span className="flex-1">{acc.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
-      {/* Tags — click a tag to remove it; "Add" opens the picker */}
+      {/* Tags — click a tag to remove it */}
       <div className="flex flex-wrap items-center gap-1.5 px-3 py-3">
         {mappedIds.length === 0 && (
           <span className="text-xs text-info-light/60 italic">
@@ -278,51 +328,6 @@ function MapRow({
             </button>
           );
         })}
-
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <button
-              disabled={saving}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-outline/40 text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined !text-[13px]">add</span>
-              Add
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 bg-surface p-2" align="start">
-            {pool.length === 0 ? (
-              <div className="text-sm text-info-light italic py-3 text-center">
-                No requestable accessory categories. Configure these under
-                Accessory Configuration first.
-              </div>
-            ) : (
-              <div className="space-y-1 max-h-64 overflow-y-auto">
-                {pool.map((acc) => (
-                  <label
-                    key={acc.id}
-                    className="flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer text-info-light"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={mappedSet.has(acc.id)}
-                      onChange={() => onToggle(acc.id)}
-                      disabled={saving}
-                      className="w-4 h-4 hover:cursor-pointer rounded"
-                    />
-                    <span className="material-symbols-outlined !text-base text-info-light">
-                      {iconForCategory(acc.name)}
-                    </span>
-                    <span className="flex-1">{acc.name}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        {saving && (
-          <span className="text-[11px] text-info-light/70">Saving…</span>
-        )}
       </div>
     </div>
   );

@@ -155,9 +155,12 @@ export default function SettingsPage() {
       >
         {/* Page header */}
         <div className="mb-10 text-center">
-          <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-background mb-2">
-            Settings
-          </h1>
+          <div className="flex items-center mb-2 justify-center">
+            <span className="material-symbols-outlined text-on-background mx-5 !text-4xl"> display_settings </span>
+            <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-background">
+              Settings
+            </h1>
+          </div>
           <p className="text-info-light">
             Configure your workspace and asset lifecycle parameters. Changes save automatically.
           </p>
@@ -192,7 +195,7 @@ function SettingsSection({ icon, title, children }: SectionProps) {
     <section className="bg-surface-container-lowest shadow-md rounded-xl p-8 shadow-sm">
       <div className="flex items-center gap-3 mb-6">
         <span className="material-symbols-outlined text-on-background">{icon}</span>
-        <h2 className="font-headline text-xl font-bold text-info-light">{title}</h2>
+        <h2 className="font-headline text-xl font-bold text-on-background">{title}</h2>
       </div>
       {children}
     </section>

@@ -1,10 +1,14 @@
 import { Switch } from "@/components/ui/switch";
+import { withThemeReveal } from "@/lib/theme-transition";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  // onCheckedChange hands back the value, not the event, so the reveal origin
+  // has to come from a ref on the switch itself.
+  const switchRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -18,11 +22,13 @@ export default function ThemeSwitch() {
         <span className="material-symbols-outlined my-auto mr-5 text-theme-sun !text-[22px]"
               style={{ fontVariationSettings: `'FILL' 1` }}> sunny </span>
         <Switch
-            className="bg-theme-bg hover:cursor-pointer"
+            ref={switchRef}
+            className="bg-status-pending border-2 border-outline/80 hover:cursor-pointer"
             id=""
             checked={isDark}
             onCheckedChange={(checked) => {
-            setTheme(checked ? "dark" : "light");
+            const next = checked ? "dark" : "light";
+            withThemeReveal(next, () => setTheme(next), switchRef.current);
             }}
         />
         <span className="material-symbols-outlined ml-5 my-auto text-theme-moon !text-[22px]"

@@ -318,7 +318,7 @@ export default function FeedbackSettingsCard() {
           </p>
         </div>
         <Switch
-          className="hover:cursor-pointer shrink-0 rounded-full border-1 transition-colors data-[state=checked]:bg-status-success/25 data-[state=checked]:border-status-success data-[state=unchecked]:bg-status-error/25 data-[state=unchecked]:border-status-error"
+          className="hover:cursor-pointer shrink-0 rounded-full border-2 transition-colors data-[state=checked]:bg-status-success border-outline/70 data-[state=unchecked]:bg-status-error"
           checked={enabled}
           disabled={saving}
           onCheckedChange={handleToggle}

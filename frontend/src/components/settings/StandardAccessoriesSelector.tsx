@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogFooter,
+} from "@/components/dialogs/ResponsiveDialogWrapper";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import ComboboxField from "@/components/ui/comboboxfield";
 import {
   getAccessoriesByCategory,
@@ -26,23 +29,93 @@ import type {
  * Per-category configuration of the named options a requester chooses from
  * ("USB-C to Lightning", "Case", ...), each resolving to a primary + optional
  * backup accessory. The accessory analogue of StandardModelsSelector, but a
- * category holds a LIST of options rather than a single primary/backup, so
- * each expanded category is an editable list of option rows.
+ * category holds a LIST of options rather than a single primary/backup.
  *
- * Save model (per the settings design):
- *   - Label edits stage locally and commit on an explicit "Save options"
- *     button, so typing a label doesn't spam the replace-semantics endpoint.
- *   - Primary/backup picks auto-save immediately — BUT only when the block
- *     is clean. If a block has unsaved label edits, pick auto-save is gated
- *     off until Save flushes everything together, so a pick can't silently
- *     commit half-typed labels.
- *   - Every write sends the whole options array (PUT replace semantics).
+ * Each option also carries two OPTIONAL request-table labels — displayLabel
+ * (shown in place of the raw option name) and accessoryLabel (the correlating
+ * accessory, e.g. "iPad A16"). Both are free text, admin-only, and never seen
+ * by requesters; they only affect how the row reads in the request log. Blank
+ * falls back (displayLabel → the option label; accessoryLabel → the primary's
+ * Snipe name).
  *
- * The config is held in local state and updated optimistically; the PUT
- * echoes only { success }, so there's no returned config to adopt.
+ * LAYOUT — master/detail in the shared ResponsiveDialog:
+ *   - Desktop = Dialog, fixed height, two columns: category rail + the ONE
+ *     selected category's editor, each scrolling independently.
+ *   - Mobile = Drawer. ResponsiveDialogContent already wraps drawer children in
+ *     its own scroll container, so the mobile layout is a single flowing column
+ *     with NO inner scrollers — rail until a category is picked, editor (with a
+ *     back row) after.
+ *   - Option rows are collapsed to a summary line; one expands at a time.
+ *
+ * SAVE MODEL — nothing is written until "Save changes":
+ *   - EVERY mutation stages, including picks and deletes. An option removed
+ *     here is gone from the UI but still in Snipe until the flush.
+ *   - Save flushes all dirty categories in parallel and adopts the successful
+ *     ones into the parent config in ONE update. Failures keep their staged
+ *     edits and are named in the error.
+ *   - Discard (the header control) throws away every staged edit. Dismissing
+ *     with Esc or an outside click only closes — the staging survives, so a
+ *     misclick costs nothing. That asymmetry is deliberate: destructive intent
+ *     needs a deliberate target.
+ *
+ * Dirtiness is by CONTENT, not by presence of a staged entry: staging an edit
+ * that lands back on the saved value drops the staged entry, so the category
+ * goes clean again and its unsaved marker disappears.
  */
 
 const NONE_LABEL = "(none)";
+
+/**
+ * Compare two option lists for equality.
+ *
+ * Deliberately compares the RAW text (only treating null/undefined and "" as
+ * the same, since both render as an empty input) rather than trimmed text: a
+ * trimming comparison would call "Case " equal to "Case" and prune the staged
+ * entry mid-keystroke, snapping the user's trailing space out of the input.
+ */
+function sameText(a?: string | null, b?: string | null) {
+  return (a ?? "") === (b ?? "");
+}
+
+function optionsEqual(
+  a: AccessoryOptionConfig[],
+  b: AccessoryOptionConfig[]
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((opt, i) => {
+    const saved = b[i];
+    return (
+      sameText(opt.label, saved.label) &&
+      sameText(opt.displayLabel, saved.displayLabel) &&
+      sameText(opt.accessoryLabel, saved.accessoryLabel) &&
+      (opt.primary ?? null) === (saved.primary ?? null) &&
+      (opt.backup ?? null) === (saved.backup ?? null)
+    );
+  });
+}
+
+/**
+ * Normalise a working list into what actually gets sent. Options with empty
+ * labels are dropped — an unnamed option can't be shown to requesters — and
+ * blank display/accessory labels become null (the backend also cleans
+ * defensively).
+ */
+function cleanOptions(options: AccessoryOptionConfig[]): AccessoryOptionConfig[] {
+  return options
+    .map((o) => ({
+      ...o,
+      label: o.label.trim(),
+      displayLabel: o.displayLabel?.trim() ? o.displayLabel.trim() : null,
+      accessoryLabel: o.accessoryLabel?.trim() ? o.accessoryLabel.trim() : null,
+    }))
+    .filter((o) => o.label.length > 0);
+}
+
+/** "Cables", "Cables and Docks", "Cables, Docks and Mouses" */
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
 
 type Props = {
   /** Requestable accessory categories only — derived and owned by the parent. */
@@ -61,18 +134,24 @@ export default function StandardAccessoriesSelector({
   config,
   onConfigChange,
 }: Props) {
+  const isDesktop = useIsDesktop();
+
   const [open, setOpen] = useState(false);
   const [productsByCategory, setProductsByCategory] = useState<
     Record<number, AccessoryProductOption[]>
   >({});
-  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
-    new Set()
+  // Master/detail selection. null = show the rail (and, on desktop, an empty
+  // detail pane). Survives close/reopen along with `staged`.
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    null
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Staged label edits per category (categoryId → options with in-progress
-  // labels). A category present here is "dirty" and gates its pick auto-save.
+  // Working copies per category (categoryId → options with in-progress edits).
+  // An entry only exists while it DIFFERS from the saved config — stage() drops
+  // it the moment the two match again. Held here rather than inside the dialog,
+  // so dismissing and reopening loses nothing.
   const [staged, setStaged] = useState<
     Record<number, AccessoryOptionConfig[]>
   >({});
@@ -116,276 +195,514 @@ export default function StandardAccessoriesSelector({
     };
   }, [categories, productsByCategory]);
 
-  function toggleExpanded(categoryId: number) {
-    setExpandedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(categoryId)) next.delete(categoryId);
-      else next.add(categoryId);
-      return next;
-    });
+  /** The last-saved option list for a category. */
+  function savedOptionsFor(categoryId: number): AccessoryOptionConfig[] {
+    return config[String(categoryId)]?.options ?? [];
   }
 
   /** The working option list for a category: staged edits if dirty, else saved. */
   function optionsFor(categoryId: number): AccessoryOptionConfig[] {
     if (categoryId in staged) return staged[categoryId];
-    return config[String(categoryId)]?.options ?? [];
+    return savedOptionsFor(categoryId);
   }
 
-  const isDirty = (categoryId: number) => categoryId in staged;
+  /**
+   * Dirty = there's a staged list AND it differs from what's saved. The
+   * content check is belt-and-braces alongside the pruning in stage(): it also
+   * covers the staged list matching a config change that arrived from the
+   * parent.
+   */
+  function isDirty(categoryId: number): boolean {
+    if (!(categoryId in staged)) return false;
+    return !optionsEqual(staged[categoryId], savedOptionsFor(categoryId));
+  }
 
-  /** Stage a local edit (used by label typing + add/remove). */
+  /**
+   * Stage an edit. If it lands back on the saved state, drop the staged entry
+   * entirely so the category reads as clean — the two lists are identical, so
+   * nothing visible changes.
+   */
   function stage(categoryId: number, options: AccessoryOptionConfig[]) {
-    setStaged((prev) => ({ ...prev, [categoryId]: options }));
-  }
-
-  /** Persist a category's options; on success adopt into parent config + clear staged. */
-  async function persist(
-    categoryId: number,
-    options: AccessoryOptionConfig[]
-  ) {
-    // Drop options with empty labels before saving — an unnamed option can't
-    // be shown to requesters. (The backend also trims/dedupes defensively.)
-    const cleaned = options
-      .map((o) => ({ ...o, label: o.label.trim() }))
-      .filter((o) => o.label.length > 0);
-
-    const previousConfig = config;
-    // Optimistic: reflect immediately.
-    onConfigChange({
-      ...config,
-      [String(categoryId)]: { options: cleaned },
+    const saved = savedOptionsFor(categoryId);
+    setStaged((prev) => {
+      const next = { ...prev };
+      if (optionsEqual(options, saved)) delete next[categoryId];
+      else next[categoryId] = options;
+      return next;
     });
-
-    try {
-      setSaving(true);
-      setError(null);
-      await setStandardAccessoriesForCategory(categoryId, cleaned);
-      setStaged((prev) => {
-        const next = { ...prev };
-        delete next[categoryId];
-        return next;
-      });
-    } catch (err: any) {
-      onConfigChange(previousConfig); // roll back
-      setError(err.message || "Failed to save options");
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
   }
 
-  ///  ---- Row operations ----
+  ///  ---- Row operations (all staging, none of them write) ----
 
   function addOption(categoryId: number) {
-    const current = optionsFor(categoryId);
     stage(categoryId, [
-      ...current,
-      { label: "", primary: null, backup: null },
+      ...optionsFor(categoryId),
+      { label: "", displayLabel: null, accessoryLabel: null, primary: null, backup: null },
     ]);
   }
 
   function removeOption(categoryId: number, index: number) {
-    const current = optionsFor(categoryId);
-    const next = current.filter((_, i) => i !== index);
-    // Removal is structural — persist immediately rather than staging, unless
-    // there are pending label edits (then it folds into the staged set and
-    // the explicit Save commits it with the labels).
-    if (isDirty(categoryId)) {
-      stage(categoryId, next);
-    } else {
-      persist(categoryId, next);
-    }
-  }
-
-  function editLabel(categoryId: number, index: number, label: string) {
-    const current = optionsFor(categoryId).map((o, i) =>
-      i === index ? { ...o, label } : o
+    stage(
+      categoryId,
+      optionsFor(categoryId).filter((_, i) => i !== index)
     );
-    stage(categoryId, current); // staging marks the block dirty → gates picks
   }
 
-  function pickStandard(
+  function editField(
     categoryId: number,
     index: number,
-    field: "primary" | "backup",
-    value: number | null
+    patch: Partial<AccessoryOptionConfig>
   ) {
-    const current = optionsFor(categoryId).map((o, i) =>
-      i === index ? { ...o, [field]: value } : o
+    stage(
+      categoryId,
+      optionsFor(categoryId).map((o, i) => (i === index ? { ...o, ...patch } : o))
     );
-    // Auto-save picks ONLY on a clean block. On a dirty block, stage the pick
-    // and let the explicit Save flush picks + labels together.
-    if (isDirty(categoryId)) {
-      stage(categoryId, current);
-    } else {
-      persist(categoryId, current);
+  }
+
+  ///  ---- Commit / abandon ----
+
+  /**
+   * Flush every dirty category. One PUT each (the endpoint is per-category with
+   * replace semantics), fired in parallel, then a SINGLE config update for the
+   * ones that landed — looping onConfigChange would read a stale `config` from
+   * this closure and drop all but the last write.
+   */
+  async function saveAll() {
+    const payloads = categories
+      .filter((c) => isDirty(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        cleaned: cleanOptions(optionsFor(c.id)),
+      }));
+
+    if (payloads.length === 0) {
+      setOpen(false);
+      return;
     }
+
+    setSaving(true);
+    setError(null);
+
+    const results = await Promise.allSettled(
+      payloads.map((p) => setStandardAccessoriesForCategory(p.id, p.cleaned))
+    );
+
+    const saved = payloads.filter((_, i) => results[i].status === "fulfilled");
+    const failed = payloads.filter((_, i) => results[i].status === "rejected");
+
+    if (saved.length > 0) {
+      const nextConfig = { ...config };
+      for (const p of saved) nextConfig[String(p.id)] = { options: p.cleaned };
+      onConfigChange(nextConfig);
+
+      // Only the successful categories lose their staging; the rest stay dirty
+      // and editable so a retry doesn't start from scratch.
+      setStaged((prev) => {
+        const next = { ...prev };
+        for (const p of saved) delete next[p.id];
+        return next;
+      });
+    }
+
+    setSaving(false);
+
+    if (failed.length > 0) {
+      results.forEach((r) => {
+        if (r.status === "rejected") console.error(r.reason);
+      });
+      setError(
+        `Couldn't save ${joinNames(failed.map((p) => p.name))}. Those changes are still here — try again.`
+      );
+      return;
+    }
+
+    setOpen(false);
   }
 
-  function saveCategory(categoryId: number) {
-    persist(categoryId, optionsFor(categoryId));
+  /** Throw away every staged edit and close. Only reachable from the header control. */
+  function discardAll() {
+    setStaged({});
+    setError(null);
+    setOpen(false);
   }
 
-  // Count categories with at least one configured (saved) option.
+  /** Esc / outside click / the drawer swipe. Closes, keeps staging. */
+  function handleOpenChange(next: boolean) {
+    if (saving) return;
+    setOpen(next);
+  }
+
+  ///  ---- Derived ----
+
+  // Resolve the selection against the live list: a category that stops being
+  // requestable while selected falls back to the rail rather than an orphan pane.
+  const selectedCategory =
+    selectedCategoryId === null
+      ? null
+      : categories.find((c) => c.id === selectedCategoryId) ?? null;
+
+  // Categories with at least one PERSISTED option.
   const configuredCount = categories.filter(
     (c) => (config[String(c.id)]?.options?.length ?? 0) > 0
   ).length;
 
+  const dirtyCount = categories.filter((c) => isDirty(c.id)).length;
+
+  const rail = (
+    <CategoryRail
+      categories={categories}
+      selectedId={selectedCategory?.id ?? null}
+      isDesktop={isDesktop}
+      countFor={(id) => optionsFor(id).length}
+      dirtyFor={isDirty}
+      onSelect={setSelectedCategoryId}
+    />
+  );
+
+  const pane =
+    selectedCategory === null ? null : (
+      <CategoryPane
+        // Remounts per category, which resets the row expansion for free.
+        key={selectedCategory.id}
+        category={selectedCategory}
+        options={optionsFor(selectedCategory.id)}
+        products={productsByCategory[selectedCategory.id] ?? []}
+        saving={saving}
+        // Desktop owns its scrolling; the drawer's wrapper owns it on mobile.
+        scrollable={isDesktop}
+        showBack={!isDesktop}
+        onBack={() => setSelectedCategoryId(null)}
+        onAdd={() => addOption(selectedCategory.id)}
+        onEdit={(i, patch) => editField(selectedCategory.id, i, patch)}
+        onRemove={(i) => removeOption(selectedCategory.id, i)}
+      />
+    );
+
   return (
-    <div className="space-y-2 mt-2 pt-3">
+    <div className="space-y-2 pt-3">
       <div className="text-xs font-semibold text-info-light uppercase tracking-wider px-3">
         Standard accessories
       </div>
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button className="w-full gap-10 border border-outline text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between">
-            <span>
-              {loading
-                ? "Loading..."
-                : `${configuredCount} of ${categories.length} configured`}
-            </span>
-            <span className="material-symbols-outlined !text-base">tune</span>
-          </button>
-        </PopoverTrigger>
-
-        <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] bg-surface p-2"
-          align="end"
-        >
-          {loading && (
-            <div className="text-sm text-info-light italic py-3 text-center">
-              Loading...
-            </div>
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full gap-10 border border-outline text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between"
+      >
+        <span>
+          {loading
+            ? "Loading..."
+            : `${configuredCount} of ${categories.length} configured`}
+          {dirtyCount > 0 && (
+            <span className="text-amber-500"> · {dirtyCount} unsaved</span>
           )}
+        </span>
+        <span className="material-symbols-outlined !text-base">tune</span>
+      </button>
+
+      <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+        <ResponsiveDialogContent
+          className={
+            isDesktop
+              ? // [&>button]:hidden drops DialogContent's built-in close X — the
+                // header carries a labelled Discard in its place, so the corner
+                // control can't be mistaken for a plain dismiss.
+                "flex flex-col p-0 gap-0 bg-surface !max-w-none w-[min(1280px,calc(100vw-4rem))] h-[min(640px,calc(100vh-8rem))] [&>button]:hidden"
+              : "bg-surface max-h-[85vh]"
+          }
+        >
+          <ResponsiveDialogHeader
+            className={
+              isDesktop
+                ? "shrink-0 px-4 py-3 border-b border-outline text-left"
+                : "px-4 pt-4 pb-2 text-left"
+            }
+          >
+            <div className="flex items-center gap-3">
+              <ResponsiveDialogTitle className="flex-1 text-sm font-semibold text-on-surface-variant">
+                Standard accessories
+              </ResponsiveDialogTitle>
+
+              <button
+                onClick={dirtyCount > 0 ? discardAll : () => setOpen(false)}
+                disabled={saving}
+                className="shrink-0 flex items-center gap-1 text-xs font-semibold text-info-light hover:text-modal-error hover:cursor-pointer disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined !text-base">
+                  close
+                </span>
+                {dirtyCount > 0 ? "Discard changes" : "Close"}
+              </button>
+            </div>
+          </ResponsiveDialogHeader>
 
           {error && (
-            <div className="text-xs text-error bg-error-background rounded-md p-2 mb-2">
+            <div className="shrink-0 text-xs text-error bg-error-background px-4 py-2">
               {error}
             </div>
           )}
 
+          {loading && (
+            <div className="px-4 py-10 text-center text-sm text-info-light italic">
+              Loading...
+            </div>
+          )}
+
           {!loading && categories.length === 0 && (
-            <div className="text-sm text-info-light italic py-3 text-center">
+            <div className="px-6 py-10 text-center text-sm text-info-light italic">
               No requestable categories. Configure these first.
             </div>
           )}
 
+          {!loading &&
+            categories.length > 0 &&
+            (isDesktop ? (
+              <div className="flex-1 min-h-0 grid grid-cols-[220px_minmax(0,1fr)]">
+                {rail}
+                <div className="flex min-h-0 flex-col">
+                  {pane ?? (
+                    <div className="flex-1 grid place-items-center px-6 text-center text-sm text-info-light italic">
+                      Select a category to configure its options.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              // Drawer: one pane at a time, natural height, no inner scrollers.
+              <div>{pane ?? rail}</div>
+            ))}
+
           {!loading && categories.length > 0 && (
-            <div className="space-y-1 max-h-96 overflow-y-auto">
-              {categories.map((cat) => {
-                const isExpanded = expandedCategories.has(cat.id);
-                const options = optionsFor(cat.id);
-                const products = productsByCategory[cat.id] ?? [];
-                const dirty = isDirty(cat.id);
-                const icon = iconForCategory(cat.name);
-
-                return (
-                  <div key={cat.id} className="rounded-md overflow-hidden">
-                    <button
-                      onClick={() => toggleExpanded(cat.id)}
-                      className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer text-info-light"
-                    >
-                      <span className="material-symbols-outlined !text-base text-info-light">
-                        {icon}
-                      </span>
-                      <span className="flex-1 text-left">{cat.name}</span>
-                      {options.length > 0 && (
-                        <span className="text-xs text-on-surface-variant">
-                          {options.length}{" "}
-                          {options.length === 1 ? "option" : "options"}
-                        </span>
-                      )}
-                      {dirty && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-amber-500">
-                          Unsaved
-                        </span>
-                      )}
-                      <span
-                        className="material-symbols-outlined !text-base text-info-light transition-transform"
-                        style={{
-                          transform: isExpanded
-                            ? "rotate(180deg)"
-                            : "rotate(0deg)",
-                        }}
-                      >
-                        expand_more
-                      </span>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="px-3 py-3 space-y-4 bg-surface-container/40 rounded-md">
-                        {products.length === 0 ? (
-                          <div className="text-xs text-info-light italic">
-                            No accessories in this category to configure.
-                          </div>
-                        ) : (
-                          <>
-                            {options.length === 0 && (
-                              <div className="text-xs text-info-light italic">
-                                No options yet. Add one below — requesters pick
-                                from these; "Something else" is always offered
-                                automatically.
-                              </div>
-                            )}
-
-                            {options.map((opt, index) => (
-                              <OptionRow
-                                key={index}
-                                categoryId={cat.id}
-                                index={index}
-                                option={opt}
-                                products={products}
-                                disabled={saving}
-                                onLabelChange={(v) =>
-                                  editLabel(cat.id, index, v)
-                                }
-                                onPrimaryChange={(v) =>
-                                  pickStandard(cat.id, index, "primary", v)
-                                }
-                                onBackupChange={(v) =>
-                                  pickStandard(cat.id, index, "backup", v)
-                                }
-                                onRemove={() => removeOption(cat.id, index)}
-                              />
-                            ))}
-
-                            <div className="flex items-center justify-between pt-1">
-                              <button
-                                onClick={() => addOption(cat.id)}
-                                disabled={saving}
-                                className="text-xs font-semibold text-info-light hover:text-modal-text-accent hover:cursor-pointer flex items-center gap-1 disabled:opacity-50"
-                              >
-                                <span className="material-symbols-outlined !text-sm">
-                                  add
-                                </span>
-                                Add option
-                              </button>
-
-                              {dirty && (
-                                <button
-                                  onClick={() => saveCategory(cat.id)}
-                                  disabled={saving}
-                                  className="px-4 py-1.5 rounded-md text-xs font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-50"
-                                >
-                                  Save options
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveDialogFooter
+              className={
+                isDesktop
+                  ? "shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-t border-outline bg-surface-container-low/30"
+                  : "px-4 pb-4 pt-2 gap-2"
+              }
+            >
+              <span className="flex-1 text-xs mx-5 text-info-light">
+                {dirtyCount === 0
+                  ? "No unsaved changes"
+                  : `${dirtyCount} ${
+                      dirtyCount === 1 ? "category" : "categories"
+                    } with unsaved changes`}
+              </span>
+              <button
+                onClick={saveAll}
+                disabled={saving || dirtyCount === 0}
+                className="shrink-0 px-5 py-2 mx-5 my-5 rounded-md text-xs font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </ResponsiveDialogFooter>
           )}
-        </PopoverContent>
-      </Popover>
-
-      {saving && <div className="text-xs text-info-light px-3">Saving...</div>}
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </div>
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       CATEGORY RAIL                             |
+///  +-----------------------------------------------------------------+
+//
+//  The master half. A column on desktop (its own scroller, tinted a step
+//  darker than the editor so the two halves read as separate surfaces); the
+//  drawer's first screen on mobile, where each row gets a chevron because
+//  tapping navigates rather than selects in place.
+///  +-----------------------------------------------------------------+
+
+function CategoryRail({
+  categories,
+  selectedId,
+  isDesktop,
+  countFor,
+  dirtyFor,
+  onSelect,
+}: {
+  categories: AccessoryCategory[];
+  selectedId: number | null;
+  isDesktop: boolean;
+  countFor: (categoryId: number) => number;
+  dirtyFor: (categoryId: number) => boolean;
+  onSelect: (categoryId: number) => void;
+}) {
+  return (
+    <div
+      className={
+        isDesktop
+          ? "min-h-0 overflow-y-auto overscroll-contain border-r border-outline p-2 bg-surface-container-low/30"
+          : "px-2 py-1 bg-surface-container-low/30"
+      }
+    >
+      {categories.map((cat) => {
+        const count = countFor(cat.id);
+        const dirty = dirtyFor(cat.id);
+        const active = isDesktop && selectedId === cat.id;
+
+        return (
+          <button
+            key={cat.id}
+            onClick={() => onSelect(cat.id)}
+            className={`w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:cursor-pointer text-left ${
+              active
+                ? "bg-surface text-on-surface-variant"
+                : "text-info-light hover:brightness-95 dark:hover:brightness-150"
+            }`}
+          >
+            <span className="material-symbols-outlined !text-base shrink-0">
+              {iconForCategory(cat.name)}
+            </span>
+            <span className="flex-1 truncate">{cat.name}</span>
+            {dirty ? (
+              <span
+                aria-label="Unsaved changes"
+                className="shrink-0 size-1.5 rounded-full bg-amber-500"
+              />
+            ) : (
+              count > 0 && (
+                <span className="shrink-0 text-xs text-on-surface-variant">
+                  {count}
+                </span>
+              )
+            )}
+            {!isDesktop && (
+              <span className="material-symbols-outlined !text-base shrink-0 text-info-light">
+                chevron_right
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       CATEGORY PANE                             |
+///  +-----------------------------------------------------------------+
+//
+//  The detail half: a header (back on mobile, name, Add) over the option rows.
+//  Purely presentational — every mutation is a callback, all state lives in the
+//  parent except which row is open. `scrollable` decides whether the body owns
+//  a scroll region (desktop) or flows into the drawer's own scroller (mobile).
+///  +-----------------------------------------------------------------+
+
+function CategoryPane({
+  category,
+  options,
+  products,
+  saving,
+  scrollable,
+  showBack,
+  onBack,
+  onAdd,
+  onEdit,
+  onRemove,
+}: {
+  category: AccessoryCategory;
+  options: AccessoryOptionConfig[];
+  products: AccessoryProductOption[];
+  saving: boolean;
+  scrollable: boolean;
+  showBack: boolean;
+  onBack: () => void;
+  onAdd: () => void;
+  onEdit: (index: number, patch: Partial<AccessoryOptionConfig>) => void;
+  onRemove: (index: number) => void;
+}) {
+  // One row open at a time. Indices are positional, so add/remove has to keep
+  // this in step or the wrong row stays open after the list shifts.
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const empty = products.length === 0;
+
+  function handleAdd() {
+    setExpandedIndex(options.length); // the index the new row will occupy
+    onAdd();
+  }
+
+  function handleRemove(index: number) {
+    setExpandedIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      return prev > index ? prev - 1 : prev;
+    });
+    onRemove(index);
+  }
+
+  return (
+    <>
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-outline bg-surface-container-low/30">
+        {showBack && (
+          <button
+            onClick={onBack}
+            aria-label="Back to categories"
+            className="shrink-0 text-info-light hover:cursor-pointer"
+          >
+            <span className="material-symbols-outlined !text-base">
+              arrow_back
+            </span>
+          </button>
+        )}
+
+        <span className="material-symbols-outlined !text-base text-info-light shrink-0">
+          {iconForCategory(category.name)}
+        </span>
+        <span className="flex-1 truncate text-sm text-on-surface-variant">
+          {category.name}
+        </span>
+
+        {!empty && (
+          <button
+            onClick={handleAdd}
+            disabled={saving}
+            className="shrink-0 text-xs font-semibold text-info-light hover:text-status-success hover:cursor-pointer flex items-center gap-1 disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined !text-sm">add</span>
+            Add option
+          </button>
+        )}
+      </div>
+
+      <div
+        className={`px-3 py-3 space-y-2 ${
+          scrollable ? "flex-1 min-h-0 overflow-y-auto overscroll-contain" : ""
+        }`}
+      >
+        {empty ? (
+          <div className="text-xs text-info-light italic">
+            No accessories in this category to configure.
+          </div>
+        ) : (
+          <>
+            {options.length === 0 && (
+              <div className="text-xs text-info-light italic">
+                No options yet. Add one above — requesters pick from these;
+                "Something else" is always offered automatically.
+              </div>
+            )}
+
+            {options.map((opt, index) => (
+              <OptionRow
+                key={index}
+                categoryId={category.id}
+                index={index}
+                option={opt}
+                products={products}
+                disabled={saving}
+                expanded={expandedIndex === index}
+                wide={scrollable}
+                onToggle={() =>
+                  setExpandedIndex((prev) => (prev === index ? null : index))
+                }
+                onEdit={(patch) => onEdit(index, patch)}
+                onRemove={() => handleRemove(index)}
+              />
+            ))}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -393,11 +710,9 @@ export default function StandardAccessoriesSelector({
 ///  |                        OPTION ROW                               |
 ///  +-----------------------------------------------------------------+
 //
-//  One named option: label text + primary picker + backup picker + remove.
-//  Primary and backup exclude each other (a product can't be both slots of
-//  the same option). Each picker resolves its saved id back to a product
-//  group; an id no longer in the catalog renders as a missing-state entry
-//  the admin can see and re-pick.
+//  Collapsed: one line — name plus the primary it resolves to. Expanded: the
+//  label, both request-table labels, and the two pickers. Primary and backup
+//  exclude each other (a product can't be both slots of the same option).
 ///  +-----------------------------------------------------------------+
 
 function OptionRow({
@@ -406,9 +721,10 @@ function OptionRow({
   option,
   products,
   disabled,
-  onLabelChange,
-  onPrimaryChange,
-  onBackupChange,
+  expanded,
+  wide,
+  onToggle,
+  onEdit,
   onRemove,
 }: {
   categoryId: number;
@@ -416,21 +732,60 @@ function OptionRow({
   option: AccessoryOptionConfig;
   products: AccessoryProductOption[];
   disabled?: boolean;
-  onLabelChange: (value: string) => void;
-  onPrimaryChange: (value: number | null) => void;
-  onBackupChange: (value: number | null) => void;
+  expanded: boolean;
+  wide: boolean;
+  onToggle: () => void;
+  onEdit: (patch: Partial<AccessoryOptionConfig>) => void;
   onRemove: () => void;
 }) {
+  const title = option.label.trim() || "Untitled option";
+
+  // Summary of what this option resolves to. Mirrors ProductSlot's three cases
+  // so the collapsed line never disagrees with the picker underneath it.
+  const primaryProduct =
+    option.primary !== null
+      ? findProductBySavedId(products, option.primary)
+      : null;
+  const summary =
+    option.primary === null
+      ? "No accessory set"
+      : primaryProduct
+      ? productPickerLabel(primaryProduct)
+      : `Saved accessory #${option.primary} no longer in catalog`;
+  const summaryMuted = option.primary === null || primaryProduct === null;
+
   return (
-    <div className="border border-outline/15 rounded-lg p-3 space-y-3">
-      <div className="flex items-center gap-2">
-        <input
-          value={option.label}
-          disabled={disabled}
-          placeholder="Option label (e.g. USB-C to Lightning)"
-          onChange={(e) => onLabelChange(e.target.value)}
-          className="flex-1 bg-surface border border-outline/20 rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
-        />
+    <div className="border border-outline rounded-lg overflow-hidden">
+      <div className="flex bg-surface-container-low/30 items-center gap-2 px-3 py-2">
+        <button
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className="flex-1 min-w-0 flex items-center gap-2 text-left hover:cursor-pointer"
+        >
+          <span
+            className="material-symbols-outlined !text-base shrink-0 text-info-light transition-transform"
+            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+          >
+            chevron_right
+          </span>
+          <span
+            className={`shrink-0 text-sm ${
+              option.label.trim()
+                ? "text-on-surface-variant"
+                : "text-info-light italic"
+            }`}
+          >
+            {title}
+          </span>
+          <span
+            className={`flex-1 min-w-0 truncate text-xs ${
+              summaryMuted ? "text-info-light italic" : "text-info-light"
+            }`}
+          >
+            {summary}
+          </span>
+        </button>
+
         <button
           onClick={onRemove}
           disabled={disabled}
@@ -441,24 +796,68 @@ function OptionRow({
         </button>
       </div>
 
-      <ProductSlot
-        label="Primary"
-        keyId={`primary-${categoryId}-${index}`}
-        value={option.primary}
-        products={products}
-        excludeId={option.backup}
-        disabled={disabled}
-        onChange={onPrimaryChange}
-      />
-      <ProductSlot
-        label="Backup"
-        keyId={`backup-${categoryId}-${index}`}
-        value={option.backup}
-        products={products}
-        excludeId={option.primary}
-        disabled={disabled}
-        onChange={onBackupChange}
-      />
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-outline">
+          <label className="block">
+            <span className="block text-xs font-medium text-info-light mb-1">
+              Option label
+            </span>
+            <input
+              value={option.label}
+              disabled={disabled}
+              placeholder="What the requester sees"
+              onChange={(e) => onEdit({ label: e.target.value })}
+              className="w-full bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+            />
+          </label>
+
+          {/* Optional request-table labels. Blank falls back (display → option
+              label; accessory → the primary's Snipe name). Requesters never see
+              these — they only shape how the row reads in the request log. */}
+          <div className="space-y-1.5">
+            <span className="block text-[11px] font-medium text-info-light/70">
+              Request-table labels (optional)
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={option.displayLabel ?? ""}
+                disabled={disabled}
+                placeholder="Type"
+                onChange={(e) => onEdit({ displayLabel: e.target.value })}
+                className="bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+              />
+              <input
+                value={option.accessoryLabel ?? ""}
+                disabled={disabled}
+                placeholder="Name"
+                onChange={(e) => onEdit({ accessoryLabel: e.target.value })}
+                className="bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          <div className={`grid gap-2 ${wide ? "grid-cols-2" : "grid-cols-1"}`}>
+            <ProductSlot
+              label="Primary"
+              keyId={`primary-${categoryId}-${index}`}
+              value={option.primary}
+              products={products}
+              excludeId={option.backup}
+              disabled={disabled}
+              onChange={(v) => onEdit({ primary: v })}
+            />
+            <ProductSlot
+              label="Backup"
+              keyId={`backup-${categoryId}-${index}`}
+              value={option.backup}
+              products={products}
+              excludeId={option.primary}
+              disabled={disabled}
+              onChange={(v) => onEdit({ backup: v })}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -552,11 +951,6 @@ function ProductSlot({
           onChange(id ?? null);
         }}
       />
-      {missing && (
-        <p className="text-[11px] text-amber-500 mt-1">
-          The saved accessory was removed from Snipe. Pick a replacement.
-        </p>
-      )}
     </label>
   );
 }

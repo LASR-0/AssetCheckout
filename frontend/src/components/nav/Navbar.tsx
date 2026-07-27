@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { withThemeReveal } from "@/lib/theme-transition";
 
 export default function Navbar() {
   const location = useLocation();
@@ -146,10 +147,16 @@ export default function Navbar() {
           {mounted && (
             <button
               type="button"
-              onClick={() => setTheme(isDark ? "light" : "dark")}
+              onClick={(e) => {
+                const next = isDark ? "light" : "dark";
+                // Origin is the button itself, so the new theme grows out of
+                // the control that was pressed.
+                withThemeReveal(next, () => setTheme(next), e.currentTarget);
+              }}
               aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
               className={`${ICON_BUTTON} text-nav-tab hover:text-nav-tab-selected`}
             >
+
               <span
                 className="material-symbols-outlined !text-[22px]"
                 style={{ fontVariationSettings: `'FILL' 1` }}

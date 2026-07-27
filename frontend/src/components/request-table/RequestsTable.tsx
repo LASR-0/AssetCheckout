@@ -33,20 +33,73 @@ type Props = {
   onMarkReadyForCollection: (request: Request) => void;
 };
 
-const globalFilterFn = (row: Row<Request>, _columnId: string, filterValue: string) => {
-  if (!filterValue) return true;
-  const term = filterValue.toLowerCase();
-  const r = row.original;
+/**
+ * Keys excluded from the deep search walk. These are all technically strings
+ * or numbers, but matching on them produces near-universal false positives
+ * rather than useful hits:
+ *   - `id` / anything ending in `Id` — a single typed digit would match most
+ *     rows via snipeAccessoryId, linkedAssetId, etc.
+ *   - anything ending in `At` — raw ISO timestamps, so "2026" or "07" matches
+ *     nearly every request. createdAt is instead matched on its *rendered*
+ *     locale date below, which is what the user actually sees in the column.
+ *   - `trackingUrl` — long opaque URLs full of incidental substrings.
+ */
+function isNoiseKey(key: string): boolean {
   return (
-    !!r.userName?.toLowerCase().includes(term) ||
-    !!r.categoryName?.toLowerCase().includes(term) ||
-    !!r.reason?.toLowerCase().includes(term) ||
-    !!r.manager?.toLowerCase().includes(term) ||
-    r.status.toLowerCase().includes(term) ||
-    !!r.modelRequest?.modelName?.toLowerCase().includes(term) ||
-    !!r.modelRequest?.manufacturer?.toLowerCase().includes(term) ||
-    (r.modelRequest?.price != null && r.modelRequest.price.toString().includes(term))
+    key === "id" ||
+    key.endsWith("Id") ||
+    key.endsWith("At") ||
+    key === "trackingUrl"
   );
+}
+
+/**
+ * Recursively test every meaningful leaf value on the object. Covers the
+ * fields the old hand-written filter missed — requestKind, accessoryOption /
+ * accessoryOptionDisplay, accessoryLinkedLabel, accessoryRemaining,
+ * numberOption, reuseNumberPhone, needsShipping, requestType, and anything
+ * nested under modelRequest — without needing to be updated each time the
+ * Request shape grows a field.
+ */
+function deepMatch(value: unknown, needle: string): boolean {
+  if (value == null) return false;
+
+  if (Array.isArray(value)) {
+    return value.some((v) => deepMatch(v, needle));
+  }
+
+  if (value instanceof Date) {
+    return value.toLocaleDateString().toLowerCase().includes(needle);
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).some(
+      ([key, v]) => !isNoiseKey(key) && deepMatch(v, needle)
+    );
+  }
+
+  // Primitives — strings, numbers, booleans all get stringified so a search
+  // for "true", "0", or an enum value like "non_standard" behaves sensibly.
+  return String(value).toLowerCase().includes(needle);
+}
+
+const globalFilterFn = (
+  row: Row<Request>,
+  _columnId: string,
+  filterValue: string
+) => {
+  const needle = String(filterValue ?? "").trim().toLowerCase();
+  if (!needle) return true;
+
+  const r = row.original;
+
+  // Match the date as it's rendered in the Date column, not as stored.
+  if (r.createdAt) {
+    const shown = new Date(r.createdAt).toLocaleDateString().toLowerCase();
+    if (shown.includes(needle)) return true;
+  }
+
+  return deepMatch(r, needle);
 };
 
 export default function RequestsTable({

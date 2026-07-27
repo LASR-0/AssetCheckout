@@ -46,7 +46,7 @@ import { Badge } from "@/components/ui/statusbadge";
 ///  +-----------------------------------------------------------------+
 
 const SELECT_TRIGGER =
-  "h-10 w-full text-on-surface-variant bg-surface-container-low border border-outline text-sm rounded-lg";
+  "h-10 w-full text-on-surface-variant bg-surface-container-low/40 border border-outline text-sm rounded-lg";
 const SELECT_CONTENT =
   "bg-surface-container-low border border-outline text-on-surface-variant";
 const SELECT_ITEM = "text-sm focus:bg-shadcn-background focus:text-shadcn-text";
@@ -221,7 +221,7 @@ export default function ScheduledJobRow({
       className="rounded-lg border border-outline bg-surface"
     >
       {/* Collapsed summary row */}
-      <div className="flex items-center justify-between gap-3 p-3">
+      <div className="flex items-center justify-between bg-surface-container-low/50 gap-3 p-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-on-background text-sm">{label}</span>
@@ -315,7 +315,7 @@ export default function ScheduledJobRow({
                         active={dryRun}
                         disabled={savingDryRun}
                         onClick={() => onToggleDryRun(true)}
-                        activeClass="bg-green-500 text-white shadow-sm"
+                        activeClass="bg-status-success/10 border border-status-success text-status-success shadow-sm"
                       >
                         <span className="inline-flex items-center gap-1">
                           <span className="material-symbols-outlined !text-[14px]">
@@ -328,7 +328,7 @@ export default function ScheduledJobRow({
                         active={!dryRun}
                         disabled={savingDryRun}
                         onClick={() => onToggleDryRun(false)}
-                        activeClass="bg-red-500 text-white shadow-sm"
+                        activeClass="bg-status-error/10 border border-status-error text-status-error shadow-sm"
                       >
                         Live
                       </PillButton>
@@ -340,7 +340,7 @@ export default function ScheduledJobRow({
                   <span className="text-xs font-medium tracking-wider uppercase text-info-light mb-1">
                     Cron Expression
                   </span>
-                  <code className="px-3 py-1.5 rounded-md bg-blue-500/10 text-blue-400 text-sm font-mono">
+                  <code className="px-3 py-1.5 rounded-md bg-status-collect/10 border border-status-awaiting-it text-status-collect text-sm font-mono">
                     {previewCron}
                   </code>
                 </div>
@@ -374,7 +374,7 @@ export default function ScheduledJobRow({
                 <button
                   onClick={handleSave}
                   disabled={isSaving || !thresholdsValid}
-                  className="shrink-0 inline-flex items-center gap-1 px-5 py-2 text-sm font-medium rounded-md text-blue-400 bg-blue-500/10 border-1 border-blue-500/0 hover:border-blue-500/50 hover:brightness-70 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-50 transition-all"
+                  className="shrink-0 inline-flex items-center gap-1 px-5 py-2 text-sm font-medium rounded-md text-status-collect bg-status-awaiting-it/10 border-1 border-status-awaiting-it hover:brightness-70 dark:hover:brightness-150 hover:cursor-pointer disabled:opacity-50 transition-all"
                 >
                   {isSaving ? "Saving…" : "Save Changes"}
                   <span
@@ -555,7 +555,7 @@ function ToggleGroup({
       <span className="text-xs font-medium tracking-wider uppercase text-info-light mb-1">
         {label}
       </span>
-      <div className="inline-flex p-1 bg-surface-container rounded-lg">{children}</div>
+      <div className="inline-flex p-1 bg-surface-container-low/50 rounded-lg">{children}</div>
     </div>
   );
 }
@@ -694,7 +694,7 @@ function ThresholdField({
         step="1"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 w-full text-on-surface-variant bg-surface-container-low border border-outline/20 text-sm rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+        className="h-10 w-full text-on-surface-variant bg-surface-container-low/40 border border-outline text-sm rounded-lg px-3 focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
       />
     </label>
   );

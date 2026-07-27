@@ -1,6 +1,7 @@
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
+import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
 import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -102,7 +103,7 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
           <TooltipTrigger asChild>
             <button
               onClick={onClick}
-              className={`group/icon ${color} ${hoverBg} ${border} border-1 rounded-full px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center justify-center whitespace-nowrap text-xs font-semibold`}
+              className={`group/icon ${color} ${hoverBg} ${border} border-2 rounded-lg shadow-sm px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center hover:shadow-md justify-center whitespace-nowrap text-xs font-semibold`}
             >
               <span className="material-symbols-outlined !text-[16px] hover:cursor-pointer icon-fill-hover transition-all">
                 {icon}
@@ -431,17 +432,40 @@ export const columns: ColumnDef<Request>[] = [
             <span className="text-sm font-medium text-on-surface-variant">
               {r.categoryName}
             </span>
-            {/* Kind badge — distinguishes accessory rows at a glance. */}
-            {isAccessory && (
+            {/* Kind badge — distinguishes asset vs accessory rows at a glance.
+                Icon comes from the same category→icon lookup the request
+                forms use, so a "Headphones" accessory badge shows
+                headphones rather than a generic accessory glyph. */}
+            {isAccessory ? (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-model/10 text-status-model border border-status-model/30">
-                <span className="material-symbols-outlined !text-[11px]">cable</span>
+                <span className="material-symbols-outlined !text-[11px]">
+                  {iconForCategory(r.categoryName)}
+                </span>
                 Accessory
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-collect/10 text-status-collect border border-status-collect/30">
+                <span className="material-symbols-outlined !text-[11px]">
+                  {iconForCategory(r.categoryName)}
+                </span>
+                Asset
               </span>
             )}
           </div>
-          {/* accessoryOption: the named option the requester chose (accessories). */}
-          {isAccessory && r.accessoryOption && (
-            <span className="text-xs text-info-light">{r.accessoryOption}</span>
+          {/* Line 2: the option's display label (falls back to the raw option),
+              styled to match the Call & text / New number / Existing number
+              rows below — check icon + text. */}
+          {isAccessory && (r.accessoryOptionDisplay ?? r.accessoryOption) && (
+            <span className="inline-flex items-center gap-1 text-xs text-info-light">
+              <span className="material-symbols-outlined !text-[14px] text-status-success">check</span>
+              {r.accessoryOptionDisplay ?? r.accessoryOption}
+            </span>
+          )}
+          {/* Line 3: the correlating accessory — admin label, else Snipe name. */}
+          {isAccessory && r.accessoryLinkedLabel && (
+            <span className="text-xs text-info-light/70">
+              {r.accessoryLinkedLabel}
+            </span>
           )}
           {r.callText && (
             <span className="inline-flex items-center gap-1 text-xs text-info-light">

@@ -39,9 +39,9 @@ import {
 ///  +-----------------------------------------------------------------+
 
 const INPUT_CLASS_NORMAL =
-  "text-on-surface-variant bg-success-form !ring-purple-900 p-2 h-12 border-1 !border-outline w-full";
+  "text-on-surface-variant bg-surface-container-low/30 !ring-purple-900 p-2 h-12 border-1 !border-outline w-full";
 const INPUT_CLASS_COMPACT =
-  "text-on-surface-variant bg-surface border border-outline/20 !ring-purple-900 px-2 py-1.5 text-sm w-full";
+  "text-on-surface-variant bg-surface-container-low/30 border border-outline !ring-purple-900 px-2 py-1.5 text-sm w-full";
 
 const CONTENT_CLASS_NORMAL =
   "bg-surface !outline-0 !ring-0 !border-1 !border-gray-200 !text-gray-400 mt-3 hover:cursor-pointer";

@@ -16,6 +16,8 @@ export type AccessoryCategory = {
 
 export type AccessoryOptionConfig = {
   label: string;
+  displayLabel?: string | null;
+  accessoryLabel?: string | null;
   primary: number | null;
   backup: number | null;
 };

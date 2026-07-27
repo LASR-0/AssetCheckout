@@ -30,6 +30,8 @@ export interface Request {
   // Freshness is bounded by the accessory cache TTL, not real-time.
   accessoryRemaining?: number | null;
   accessoryLocationName?: string | null;
+  accessoryOptionDisplay?: string | null;
+  accessoryLinkedLabel?: string | null;
 
   reason?: string;
   manager?: string;

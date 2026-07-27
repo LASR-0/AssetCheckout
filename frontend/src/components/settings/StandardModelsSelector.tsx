@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/dialogs/ResponsiveDialogWrapper";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import ComboboxField from "@/components/ui/comboboxfield";
 import { getModelsForCategory } from "@/api/categories";
 import {
@@ -25,8 +27,18 @@ import type { StandardModelsConfig } from "@/types/settingsType";
  * category that gets disabled is retained (so re-enabling restores it) but is
  * excluded from the "X of Y configured" count while hidden.
  *
- * Each category is its own collapsible section to keep the popover height
- * manageable when the org has many categories. Auto-saves on change.
+ * LAYOUT — master/detail in the shared ResponsiveDialog, matching
+ * StandardAccessoriesSelector:
+ *   - Desktop = Dialog, fixed height, category rail + the ONE selected
+ *     category's pickers, each column scrolling independently.
+ *   - Mobile = Drawer. ResponsiveDialogContent already wraps drawer children in
+ *     its own scroll container, so the mobile layout is a single flowing column
+ *     with NO inner scrollers — rail until a category is picked, pickers (with
+ *     a back row) after.
+ *
+ * Unlike the accessories editor there's no staging or explicit commit here: a
+ * category is just a primary + an optional backup, so each pick auto-saves on
+ * change exactly as it did before.
  */
 
 const NONE_LABEL = "(none)";
@@ -42,10 +54,12 @@ export default function StandardModelsSelector({
   categories,
   categoriesLoading,
 }: Props) {
+  const isDesktop = useIsDesktop();
+
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<StandardModelsConfig>({});
   const [modelsByCategory, setModelsByCategory] = useState<Record<number, CategoryModel[]>>({});
-  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,18 +129,6 @@ export default function StandardModelsSelector({
     };
   }, [categories, modelsByCategory]);
 
-  function toggleExpanded(categoryId: number) {
-    setExpandedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
-      } else {
-        next.add(categoryId);
-      }
-      return next;
-    });
-  }
-
   async function updateCategoryStandard(
     categoryId: number,
     field: "primary" | "backup",
@@ -155,6 +157,13 @@ export default function StandardModelsSelector({
     }
   }
 
+  // Resolve the selection against the live list: a category that stops being
+  // requestable while selected falls back to the rail rather than an orphan pane.
+  const selectedCategory =
+    selectedCategoryId === null
+      ? null
+      : categories.find((c) => c.id === selectedCategoryId) ?? null;
+
   // Count only categories that are currently requestable. Config entries for
   // disabled categories are retained in state but must not inflate the count
   // (previously produced "5 of 4 configured").
@@ -162,124 +171,292 @@ export default function StandardModelsSelector({
     (c) => (config[String(c.id)]?.primary ?? null) !== null
   ).length;
 
+  const rail = (
+    <CategoryRail
+      categories={categories}
+      selectedId={selectedCategory?.id ?? null}
+      isDesktop={isDesktop}
+      configFor={(id) => config[String(id)] ?? { primary: null, backup: null }}
+      onSelect={setSelectedCategoryId}
+    />
+  );
+
+  const pane =
+    selectedCategory === null ? null : (
+      <CategoryPane
+        category={selectedCategory}
+        catConfig={
+          config[String(selectedCategory.id)] ?? { primary: null, backup: null }
+        }
+        models={modelsByCategory[selectedCategory.id] ?? []}
+        saving={saving}
+        // Desktop owns its scrolling; the drawer's wrapper owns it on mobile.
+        scrollable={isDesktop}
+        showBack={!isDesktop}
+        onBack={() => setSelectedCategoryId(null)}
+        onChange={(field, value) =>
+          updateCategoryStandard(selectedCategory.id, field, value)
+        }
+      />
+    );
+
   return (
     <div className="space-y-2 mt-2 pt-3">
       <div className="text-xs font-semibold text-info-light uppercase tracking-wider px-3">
         Standard models
       </div>
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button className="w-full gap-10 border border-outline text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between">
-            <span>
-              {loading
-                ? "Loading..."
-                : `${configuredCount} of ${categories.length} configured`}
-            </span>
-            <span className="material-symbols-outlined !text-base">tune</span>
-          </button>
-        </PopoverTrigger>
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full gap-10 border border-outline text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between"
+      >
+        <span>
+          {loading
+            ? "Loading..."
+            : `${configuredCount} of ${categories.length} configured`}
+        </span>
+        <span className="material-symbols-outlined !text-base">tune</span>
+      </button>
 
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] bg-surface p-2" align="end">
-          {loading && (
-            <div className="text-sm text-info-light italic py-3 text-center">
-              Loading...
+      <ResponsiveDialog open={open} onOpenChange={setOpen}>
+        <ResponsiveDialogContent
+          className={
+            isDesktop
+              ? // [&>button]:hidden drops DialogContent's built-in close X in
+                // favour of the labelled control in the header, so this reads
+                // the same as the accessories dialog.
+                "flex flex-col p-0 gap-0 bg-surface !max-w-none w-[min(1280px,calc(100vw-4rem))] h-[min(640px,calc(100vh-8rem))] [&>button]:hidden"
+              : "bg-surface max-h-[85vh]"
+          }
+        >
+          <ResponsiveDialogHeader
+            className={
+              isDesktop
+                ? "shrink-0 px-4 py-3 border-b border-outline text-left"
+                : "px-4 pt-4 pb-2 text-left"
+            }
+          >
+            <div className="flex items-center gap-3">
+              <ResponsiveDialogTitle className="flex-1 text-sm font-semibold text-on-surface-variant">
+                Standard models
+              </ResponsiveDialogTitle>
+
+              {saving && (
+                <span className="shrink-0 text-xs text-info-light">
+                  Saving...
+                </span>
+              )}
+
+              <button
+                onClick={() => setOpen(false)}
+                className="shrink-0 flex items-center gap-1 text-xs font-semibold text-info-light hover:text-modal-error hover:cursor-pointer"
+              >
+                <span className="material-symbols-outlined !text-base">
+                  close
+                </span>
+                Close
+              </button>
             </div>
-          )}
+          </ResponsiveDialogHeader>
 
           {error && (
-            <div className="text-xs text-error bg-error-background rounded-md p-2 mb-2">
+            <div className="shrink-0 text-xs text-error bg-error-background px-4 py-2">
               {error}
             </div>
           )}
 
+          {loading && (
+            <div className="px-4 py-10 text-center text-sm text-info-light italic">
+              Loading...
+            </div>
+          )}
+
           {!loading && categories.length === 0 && (
-            <div className="text-sm text-info-light italic py-3 text-center">
+            <div className="px-6 py-10 text-center text-sm text-info-light italic">
               No requestable categories. Configure these first.
             </div>
           )}
 
-          {!loading && categories.length > 0 && (
-            <div className="space-y-1 max-h-96 overflow-y-auto">
-              {categories.map((cat) => {
-                const isExpanded = expandedCategories.has(cat.id);
-                const catConfig = config[String(cat.id)] ?? { primary: null, backup: null };
-                const models = modelsByCategory[cat.id] ?? [];
-                const icon = iconForCategory(cat.name);
-
-                return (
-                  <div key={cat.id} className="rounded-md overflow-hidden">
-                    {/* Category header — clickable to expand/collapse */}
-                    <button
-                      onClick={() => toggleExpanded(cat.id)}
-                      className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer text-info-light"
-                    >
-                      <span className="material-symbols-outlined !text-base text-info-light">
-                        {icon}
-                      </span>
-                      <span className="flex-1 text-left">{cat.name}</span>
-                      {catConfig.primary !== null && (
-                        <span className="text-xs text-on-surface-variant">
-                          {catConfig.backup !== null ? "P + B" : "P"}
-                        </span>
-                      )}
-                      <span
-                        className="material-symbols-outlined !text-base text-info-light transition-transform"
-                        style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-                      >
-                        expand_more
-                      </span>
-                    </button>
-
-                    {/* Expanded body — primary + backup pickers */}
-                    {isExpanded && (
-                      <div className="px-3 py-3 space-y-3 bg-surface-container/40 rounded-md">
-                        {models.length === 0 ? (
-                          <div className="text-xs text-info-light italic">
-                            No models in this category.
-                          </div>
-                        ) : (
-                          <>
-                            <ModelSlot
-                              label="Primary"
-                              categoryId={cat.id}
-                              field="primary"
-                              value={catConfig.primary}
-                              models={models}
-                              excludeId={catConfig.backup}
-                              disabled={saving}
-                              onChange={(v) =>
-                                updateCategoryStandard(cat.id, "primary", v)
-                              }
-                            />
-                            <ModelSlot
-                              label="Backup"
-                              categoryId={cat.id}
-                              field="backup"
-                              value={catConfig.backup}
-                              models={models}
-                              excludeId={catConfig.primary}
-                              disabled={saving}
-                              onChange={(v) =>
-                                updateCategoryStandard(cat.id, "backup", v)
-                              }
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-
-      {saving && (
-        <div className="text-xs text-info-light px-3">Saving...</div>
-      )}
+          {!loading &&
+            categories.length > 0 &&
+            (isDesktop ? (
+              <div className="flex-1 min-h-0 grid grid-cols-[220px_minmax(0,1fr)]">
+                {rail}
+                <div className="flex min-h-0 flex-col">
+                  {pane ?? (
+                    <div className="flex-1 grid place-items-center px-6 text-center text-sm text-info-light italic">
+                      Select a category to set its standard model.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              // Drawer: one pane at a time, natural height, no inner scrollers.
+              <div>{pane ?? rail}</div>
+            ))}
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </div>
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       CATEGORY RAIL                             |
+///  +-----------------------------------------------------------------+
+//
+//  The master half. A column on desktop (its own scroller, tinted a step
+//  darker than the detail side so the two halves read as separate surfaces);
+//  the drawer's first screen on mobile, where each row gets a chevron because
+//  tapping navigates rather than selects in place.
+//
+//  The P / P + B badge is carried over from the old accordion header.
+///  +-----------------------------------------------------------------+
+
+function CategoryRail({
+  categories,
+  selectedId,
+  isDesktop,
+  configFor,
+  onSelect,
+}: {
+  categories: AssetCategory[];
+  selectedId: number | null;
+  isDesktop: boolean;
+  configFor: (categoryId: number) => { primary: number | null; backup: number | null };
+  onSelect: (categoryId: number) => void;
+}) {
+  return (
+    <div
+      className={
+        isDesktop
+          ? "min-h-0 overflow-y-auto overscroll-contain border-r border-outline p-2 bg-surface-container-low/30"
+          : "px-2 py-1 bg-surface-container-low/30"
+      }
+    >
+      {categories.map((cat) => {
+        const catConfig = configFor(cat.id);
+        const active = isDesktop && selectedId === cat.id;
+
+        return (
+          <button
+            key={cat.id}
+            onClick={() => onSelect(cat.id)}
+            className={`w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:cursor-pointer text-left ${
+              active
+                ? "bg-surface text-on-surface-variant"
+                : "text-info-light hover:brightness-95 dark:hover:brightness-150"
+            }`}
+          >
+            <span className="material-symbols-outlined !text-base shrink-0">
+              {iconForCategory(cat.name)}
+            </span>
+            <span className="flex-1 truncate">{cat.name}</span>
+            {catConfig.primary !== null && (
+              <span className="shrink-0 text-xs text-on-surface-variant">
+                {catConfig.backup !== null ? "P + B" : "P"}
+              </span>
+            )}
+            {!isDesktop && (
+              <span className="material-symbols-outlined !text-base shrink-0 text-info-light">
+                chevron_right
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |                       CATEGORY PANE                             |
+///  +-----------------------------------------------------------------+
+//
+//  The detail half: a header (back on mobile, category name) over the primary
+//  and backup pickers. Purely presentational — the write happens in the
+//  parent's auto-save. `scrollable` decides whether the body owns a scroll
+//  region (desktop) or flows into the drawer's own scroller (mobile).
+///  +-----------------------------------------------------------------+
+
+function CategoryPane({
+  category,
+  catConfig,
+  models,
+  saving,
+  scrollable,
+  showBack,
+  onBack,
+  onChange,
+}: {
+  category: AssetCategory;
+  catConfig: { primary: number | null; backup: number | null };
+  models: CategoryModel[];
+  saving: boolean;
+  scrollable: boolean;
+  showBack: boolean;
+  onBack: () => void;
+  onChange: (field: "primary" | "backup", value: number | null) => void;
+}) {
+  return (
+    <>
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-outline bg-surface-container-low/30">
+        {showBack && (
+          <button
+            onClick={onBack}
+            aria-label="Back to categories"
+            className="shrink-0 text-info-light hover:cursor-pointer"
+          >
+            <span className="material-symbols-outlined !text-base">
+              arrow_back
+            </span>
+          </button>
+        )}
+
+        <span className="material-symbols-outlined !text-base text-info-light shrink-0">
+          {iconForCategory(category.name)}
+        </span>
+        <span className="flex-1 truncate text-sm text-on-surface-variant">
+          {category.name}
+        </span>
+      </div>
+
+      <div
+        className={`px-3 py-3 ${
+          scrollable ? "flex-1 min-h-0 overflow-y-auto overscroll-contain" : ""
+        }`}
+      >
+        {models.length === 0 ? (
+          <div className="text-xs text-info-light italic">
+            No models in this category.
+          </div>
+        ) : (
+          <div
+            className={`grid gap-3 ${scrollable ? "grid-cols-2" : "grid-cols-1"}`}
+          >
+            <ModelSlot
+              label="Primary"
+              categoryId={category.id}
+              field="primary"
+              value={catConfig.primary}
+              models={models}
+              excludeId={catConfig.backup}
+              disabled={saving}
+              onChange={(v) => onChange("primary", v)}
+            />
+            <ModelSlot
+              label="Backup"
+              categoryId={category.id}
+              field="backup"
+              value={catConfig.backup}
+              models={models}
+              excludeId={catConfig.primary}
+              disabled={saving}
+              onChange={(v) => onChange("backup", v)}
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -325,7 +502,7 @@ function ModelSlot({
     <label className="block">
       <span className="block text-xs font-medium text-info-light mb-1">{label}</span>
       <ComboboxField
-        size="compact"
+        size="normal"
         keyHint={`${field}-${categoryId}-${value ?? "none"}`}
         items={models.map((m) => m.name)}
         defaultValue={initialName}

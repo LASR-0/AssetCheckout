@@ -6,6 +6,7 @@ import {
   getTierValues,
 } from "../services/snipeitassets.js";
 import { getAllAccessories } from "../services/snipeitaccessories.js";
+import { getStandardAccessories } from "../services/settings.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import { createRequest } from "../services/request.js";
@@ -88,15 +89,20 @@ router.get("/averages", async (req, res, next) => {
  * case-insensitivity workaround), consistent with how manager/requester
  * matching works elsewhere.
  *
- * Accessory enrichment: each ACCESSORY request that has a selected accessory
- * (modelRequest.snipeAccessoryId) is annotated with the accessory's LIVE
- * remaining stock (accessoryRemaining), resolved in-memory from the cached
- * accessory catalog — one cache read for the whole page, no per-row API
- * calls. This drives the "Add stock" row action, which shows whenever the
- * selected accessory has 0 available, so repeat requests for a drained
- * accessory each re-surface it. Freshness is bounded by the accessory cache
- * TTL (10 min) / its refresh job, not real-time. Non-accessory rows and
- * accessory rows without a selection get accessoryRemaining: null.
+ * Accessory enrichment (best-effort, one catalog read + one settings read
+ * for the whole page, freshness bounded by the accessory cache TTL ~10 min):
+ *   - accessoryRemaining / accessoryLocationName: for an accessory request
+ *     with a SELECTED accessory (modelRequest.snipeAccessoryId), the live
+ *     remaining stock + the selected record's site. Drives the "Add stock"
+ *     row action, which shows whenever remaining is 0, so repeat requests for
+ *     a drained accessory each re-surface it.
+ *   - accessoryOptionDisplay / accessoryLinkedLabel: the request-type column's
+ *     two lower lines. From the chosen option (matched by accessoryOption in
+ *     standard_accessories), the option's displayLabel (line 2, falls back to
+ *     the raw option label) and the linked accessory's label (line 3 — the
+ *     admin's accessoryLabel, else the option primary's catalog name).
+ *   - All four are null for non-accessory rows; accessoryRemaining/Location
+ *     are also null for accessory rows without a selection.
  */
 router.get("/", async (req, res, next) => {
   try {
@@ -139,45 +145,87 @@ router.get("/", async (req, res, next) => {
       );
     }
 
-    // Enrich visible accessory rows with live remaining stock. Only fetch the
-    // catalog if there's at least one accessory request with a selection to
-    // resolve — asset-only pages skip the cache read entirely.
-    const needsAccessoryStock = visible.some(
-      (r) => r.requestKind === "ACCESSORY" && r.modelRequest?.snipeAccessoryId != null
+    // Enrich accessory rows: live stock (drives "Add stock") plus the two
+    // display labels for the request-type column. One catalog read + one
+    // config read for the whole page; best-effort, TTL-bounded freshness.
+    const accessoryRows = visible.filter((r) => r.requestKind === "ACCESSORY");
+    const needsStock = accessoryRows.some(
+      (r) => r.modelRequest?.snipeAccessoryId != null
     );
+    const needsLabels = accessoryRows.some((r) => r.accessoryOption != null);
 
-    let catalogById: Map<number, { remaining: number; locationName: string | null }> | null =
-      null;
-    if (needsAccessoryStock) {
+    let catalogById:
+      | Map<number, { remaining: number; locationName: string | null; name: string }>
+      | null = null;
+    let standardAccessories:
+      | Awaited<ReturnType<typeof getStandardAccessories>>
+      | null = null;
+
+    if (needsStock || needsLabels) {
       try {
-        const catalog = await getAllAccessories();
+        const [catalog, config] = await Promise.all([
+          getAllAccessories(),
+          getStandardAccessories(),
+        ]);
         catalogById = new Map(
           catalog.map((a) => [
             a.id,
-            { remaining: a.remaining, locationName: a.locationName },
+            { remaining: a.remaining, locationName: a.locationName, name: a.name },
           ])
         );
+        standardAccessories = config;
       } catch (err) {
-        // Enrichment is best-effort: if the accessory catalog is unreachable,
-        // fall back to null rather than failing the whole request list. The
-        // "Add stock" action just won't re-derive until the next successful
-        // load — the request list itself stays functional.
-        console.error("[requests] accessory stock enrichment failed:", err);
+        // Best-effort: on failure the labels/stock fall back to null rather
+        // than failing the whole request list. The "Add stock" action just
+        // won't re-derive until the next successful load — the request list
+        // itself stays functional.
+        console.error("[requests] accessory enrichment failed:", err);
       }
     }
 
     const enriched = visible.map((r) => {
+      if (r.requestKind !== "ACCESSORY") {
+        return {
+          ...r,
+          accessoryRemaining: null,
+          accessoryLocationName: null,
+          accessoryOptionDisplay: null,
+          accessoryLinkedLabel: null,
+        };
+      }
+
+      // Live stock of the SELECTED accessory (drives "Add stock").
       const snipeAccessoryId = r.modelRequest?.snipeAccessoryId ?? null;
-      const hit =
-        r.requestKind === "ACCESSORY" &&
-        snipeAccessoryId != null &&
-        catalogById !== null
+      const stock =
+        snipeAccessoryId != null && catalogById
           ? catalogById.get(snipeAccessoryId) ?? null
           : null;
+
+      // Chosen option → line-2 display label + line-3 linked-accessory label.
+      // Line 3 prefers the admin's accessoryLabel, else the option primary's
+      // catalog name.
+      let accessoryOptionDisplay: string | null = r.accessoryOption ?? null;
+      let accessoryLinkedLabel: string | null = null;
+      if (standardAccessories && r.accessoryOption) {
+        const opt = (standardAccessories[String(r.categoryId)]?.options ?? []).find(
+          (o) => o.label === r.accessoryOption
+        );
+        if (opt) {
+          accessoryOptionDisplay = opt.displayLabel ?? r.accessoryOption;
+          accessoryLinkedLabel =
+            opt.accessoryLabel ??
+            (opt.primary != null && catalogById
+              ? catalogById.get(opt.primary)?.name ?? null
+              : null);
+        }
+      }
+
       return {
         ...r,
-        accessoryRemaining: hit ? hit.remaining : null,
-        accessoryLocationName: hit ? hit.locationName : null,
+        accessoryRemaining: stock ? stock.remaining : null,
+        accessoryLocationName: stock ? stock.locationName : null,
+        accessoryOptionDisplay,
+        accessoryLinkedLabel,
       };
     });
 
