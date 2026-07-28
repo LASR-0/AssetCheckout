@@ -104,6 +104,10 @@ export default function AccessoryRequestFormPage() {
       setError("Please select an approver.");
       return;
     }
+    if (formState.userId === formState.managerId) {
+      setError("Requester cannot be the same as the approver.");
+      return;
+    }
     // Only require a pick when this category actually offers choices.
     if (
       optionLabels.length > 0 &&
