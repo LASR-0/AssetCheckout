@@ -201,7 +201,23 @@ export default function RequestsTable({
               rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-surface-container-low/20 transition-colors border-b border-outline group"
+                  // Non-standard rows carry a left accent so they are findable
+                  // by scanning the edge of the table rather than by reading
+                  // the reason cell. Driven off requestType, never off the
+                  // presence of reason text.
+                  //
+                  // `primary` (brand) rather than a status-* token on purpose:
+                  // every status token is bound to a lifecycle stage, so an
+                  // amber or green accent would read as "pending"/"completed".
+                  // Non-standard is an attribute of the request, not a stage.
+                  //
+                  // Standard rows get the same 4px border in transparent so
+                  // the first column stays aligned across the table.
+                  className={`hover:bg-surface-container-low/20 transition-colors border-b border-outline group border-l-4 ${
+                    row.original.requestType === "NON_STANDARD"
+                      ? "border-l-primary"
+                      : "border-l-transparent"
+                  }`}
                 >
                   {row.getVisibleCells().map((cell) => {
                     const tdExtra = cell.column.columnDef.meta?.tdClass ?? "";

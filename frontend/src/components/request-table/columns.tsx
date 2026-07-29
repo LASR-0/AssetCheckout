@@ -553,7 +553,21 @@ export const columns: ColumnDef<Request>[] = [
     // Constrained so long reasons wrap inside a fixed width instead of
     // squeezing the actions column and overflowing the pill buttons.
     cell: ({ row }) => (
-      <div className="max-w-[220px]">
+      <div className="max-w-[220px] flex flex-col gap-1 items-start">
+        {/* Names what the row accent means, so the accent doesn't have to be
+            learned. Lives here rather than in the Request Type cell: that
+            cell already stacks up to six lines and carries the Asset /
+            Accessory kind badge, and a second badge beside it would read as
+            noise rather than emphasis. The reason is also the thing a
+            non-standard request exists to explain, so this is its natural home. */}
+        {row.original.requestType === "NON_STANDARD" && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/30">
+            <span className="material-symbols-outlined !text-[11px]">
+              tune
+            </span>
+            Non-standard
+          </span>
+        )}
         <ReasonCell text={row.original.reason} />
       </div>
     ),
