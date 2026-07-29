@@ -60,7 +60,9 @@ import type {
  *
  * Dirtiness is by CONTENT, not by presence of a staged entry: staging an edit
  * that lands back on the saved value drops the staged entry, so the category
- * goes clean again and its unsaved marker disappears.
+ * goes clean again and its unsaved marker disappears. Specifically it is the
+ * content that would be SENT (post-cleanOptions), so a row that carries nothing
+ * yet — no label — is not a pending change and does not arm Save.
  */
 
 const NONE_LABEL = "(none)";
@@ -148,6 +150,14 @@ export default function StandardAccessoriesSelector({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Categories whose product fetch rejected. Held so a persistent failure is
+  // excluded from `missing` below — otherwise the effect would re-run on every
+  // productsByCategory change and retry it forever. Cleared when the dialog is
+  // opened, which makes reopening a retry rather than needing a page reload.
+  const [failedProductLoads, setFailedProductLoads] = useState<Set<number>>(
+    () => new Set()
+  );
+
   // Working copies per category (categoryId → options with in-progress edits).
   // An entry only exists while it DIFFERS from the saved config — stage() drops
   // it the moment the two match again. Held here rather than inside the dialog,
@@ -161,39 +171,62 @@ export default function StandardAccessoriesSelector({
   // Lazily fetch + group the product catalog for any visible category we
   // haven't cached. Runs again when the category list changes so a newly
   // re-enabled category gets its products without a refresh.
+  //
+  // Settled per category, not all-or-nothing: this used to be Promise.all, so
+  // a single failing category discarded the whole batch and left EVERY picker
+  // empty — with no recovery, since a rejected fetch leaves the deps unchanged
+  // and the effect never re-runs. Now the ones that load are kept and only the
+  // failures are named.
   useEffect(() => {
-    const missing = categories.filter((c) => !(c.id in productsByCategory));
+    const missing = categories.filter(
+      (c) => !(c.id in productsByCategory) && !failedProductLoads.has(c.id)
+    );
     if (missing.length === 0) return;
 
     let cancelled = false;
     (async () => {
-      try {
-        const lists = await Promise.all(
-          missing.map(async (c) => ({
-            categoryId: c.id,
-            products: groupAccessoryProducts(
-              await getAccessoriesByCategory(c.id)
-            ),
-          }))
-        );
-        if (cancelled) return;
+      const results = await Promise.allSettled(
+        missing.map(async (c) => ({
+          categoryId: c.id,
+          products: groupAccessoryProducts(await getAccessoriesByCategory(c.id)),
+        }))
+      );
+      if (cancelled) return;
+
+      const loaded = results.flatMap((r) =>
+        r.status === "fulfilled" ? [r.value] : []
+      );
+      const failed = missing.filter((_, i) => results[i].status === "rejected");
+
+      if (loaded.length > 0) {
         setProductsByCategory((prev) => {
           const next = { ...prev };
-          for (const entry of lists) next[entry.categoryId] = entry.products;
+          for (const entry of loaded) next[entry.categoryId] = entry.products;
           return next;
         });
-      } catch (err) {
-        if (!cancelled) {
-          setError("Failed to load accessories for one or more categories");
-          console.error(err);
-        }
+      }
+
+      if (failed.length > 0) {
+        results.forEach((r) => {
+          if (r.status === "rejected") console.error(r.reason);
+        });
+        setFailedProductLoads((prev) => {
+          const next = new Set(prev);
+          for (const c of failed) next.add(c.id);
+          return next;
+        });
+        setError(
+          `Couldn't load accessories for ${joinNames(
+            failed.map((c) => c.name)
+          )}. Close and reopen to retry.`
+        );
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [categories, productsByCategory]);
+  }, [categories, productsByCategory, failedProductLoads]);
 
   /** The last-saved option list for a category. */
   function savedOptionsFor(categoryId: number): AccessoryOptionConfig[] {
@@ -207,14 +240,28 @@ export default function StandardAccessoriesSelector({
   }
 
   /**
-   * Dirty = there's a staged list AND it differs from what's saved. The
-   * content check is belt-and-braces alongside the pruning in stage(): it also
-   * covers the staged list matching a config change that arrived from the
-   * parent.
+   * Dirty = there's a staged list AND it differs from what would actually be
+   * SENT. Compared after cleanOptions on both sides, which is the point: a
+   * freshly added row with no label yet is dropped by cleanOptions, so it is
+   * not a pending change and must not be counted as one. Previously the raw
+   * comparison marked the category dirty, enabled Save, fired a PUT that wrote
+   * back the identical list, and the blank row vanished with no explanation.
+   *
+   * Note this is deliberately a different comparison from the pruning in
+   * stage(), which stays RAW so that in-progress text (a trailing space, say)
+   * survives in the input instead of being snapped away mid-keystroke. The two
+   * answer different questions: stage() asks "is there anything to hold onto",
+   * this asks "is there anything to save".
+   *
+   * The content check is also belt-and-braces: it covers a staged list that
+   * matches a config change which arrived from the parent.
    */
   function isDirty(categoryId: number): boolean {
     if (!(categoryId in staged)) return false;
-    return !optionsEqual(staged[categoryId], savedOptionsFor(categoryId));
+    return !optionsEqual(
+      cleanOptions(staged[categoryId]),
+      cleanOptions(savedOptionsFor(categoryId))
+    );
   }
 
   /**
@@ -333,6 +380,17 @@ export default function StandardAccessoriesSelector({
     setOpen(next);
   }
 
+  /**
+   * Open the dialog, clearing any previous error and forgetting which product
+   * fetches failed so they are attempted again. Staged edits are untouched —
+   * reopening is a retry, never a reset.
+   */
+  function openDialog() {
+    setError(null);
+    setFailedProductLoads(new Set());
+    setOpen(true);
+  }
+
   ///  ---- Derived ----
 
   // Resolve the selection against the live list: a category that stops being
@@ -386,7 +444,7 @@ export default function StandardAccessoriesSelector({
       </div>
 
       <button
-        onClick={() => setOpen(true)}
+        onClick={openDialog}
         className="w-full gap-10 border border-outline text-left px-3 py-2 text-sm rounded-md bg-surface text-info-light hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer flex items-center justify-between"
       >
         <span>
