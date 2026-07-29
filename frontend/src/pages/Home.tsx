@@ -522,8 +522,8 @@ function QuickLinks() {
 //
 //  Chrome matches QuickStart: tinted SectionHeader + padded tile body.
 
-// TODO: confirm this matches your accessory form's actual route.
-const ACCESSORY_FORM_ROUTE = "/checkout-accessory";
+// Must stay in step with the route registered in App.tsx.
+const ACCESSORY_FORM_ROUTE = "/accessories";
 
 function AccessoryQuickStart() {
   const [categories, setCategories] = useState<AccessoryCategory[]>([]);
