@@ -15,6 +15,48 @@ import { ChevronDownIcon, XIcon, CheckIcon } from "lucide-react"
 
 const Combobox = ComboboxPrimitive.Root
 
+///  +-----------------------------------------------------------------+
+///  |            WHEEL SCROLL INSIDE A RADIX DIALOG                   |
+///  +-----------------------------------------------------------------+
+//
+//  Radix's Dialog locks page scrolling with react-remove-scroll, which
+//  registers a non-passive `wheel` listener on `document` and passes the
+//  dialog content as its only "shard" (an allowed subtree). Any wheel event
+//  whose target is neither inside the lock container nor inside a shard is
+//  unconditionally preventDefault()-ed — see react-remove-scroll's
+//  SideEffect.js, `shouldStop = !noIsolation`.
+//
+//  This popup is portaled to <body>, so it is outside both. The result: the
+//  option list cannot be scrolled with the wheel or trackpad, while dragging
+//  its scrollbar still works (a drag is not a wheel event). That asymmetry is
+//  the tell.
+//
+//  Fix: stop the wheel event at the popup so it never reaches the listener on
+//  document. Bubble phase, not capture, so descendants still see their own
+//  events; native scrolling is untouched because stopPropagation does not
+//  preventDefault. Scroll chaining to the page behind is already handled by
+//  `overscroll-contain` on ComboboxList.
+//
+//  Portaling into the dialog instead would also satisfy react-remove-scroll,
+//  but DialogContent is overflow-hidden AND transformed (so it forms a
+//  containing block even for fixed positioning) — dropdowns near the dialog
+//  edge would clip. Hence stopping the event rather than moving the popup.
+///  +-----------------------------------------------------------------+
+
+const stopWheelPropagation = (event: WheelEvent) => event.stopPropagation()
+
+/** Ref callback for the popup element. The popup mounts only while the
+ *  combobox is open, so this has to be a ref callback — an effect keyed on
+ *  mount would run while the node is still absent and never see it. Relies on
+ *  React 19 ref-callback cleanup. */
+function useStopWheel() {
+  return React.useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    node.addEventListener("wheel", stopWheelPropagation)
+    return () => node.removeEventListener("wheel", stopWheelPropagation)
+  }, [])
+}
+
 function ComboboxValue({ ...props }: ComboboxPrimitive.Value.Props) {
   return <ComboboxPrimitive.Value data-slot="combobox-value" {...props} />
 }
@@ -99,6 +141,8 @@ function ComboboxContent({
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor" 
   >) {
+  const stopWheelRef = useStopWheel()
+
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
@@ -111,6 +155,7 @@ function ComboboxContent({
         className="isolate z-50"
       >
         <ComboboxPrimitive.Popup
+          ref={stopWheelRef}
           data-slot="combobox-content"
           data-chips={!!anchor}
           className={cn("group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[chips=true]:min-w-(--anchor-width) data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 *:data-[slot=input-group]:m-1 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:border-input/30 *:data-[slot=input-group]:bg-input/30 *:data-[slot=input-group]:shadow-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
