@@ -16,6 +16,7 @@ import CreateAccessoryDialog from "@/components/dialogs/CreateAccessoryDialog";
 import AccessoryStockDialog from "@/components/dialogs/AccessoryStockDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
 import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
+import ConfirmOnBehalfApprovalDialog from "@/components/dialogs/ConfirmOnBehalfApprovalDialog";
 
 export default function RequestTablePage() {
   const [requests, setRequests] = useState<Request[]>([]);
@@ -41,6 +42,12 @@ export default function RequestTablePage() {
   const [accessoryStockDialogOpen, setAccessoryStockDialogOpen] = useState(false);
   const [standardResultOpen, setStandardResultOpen] = useState(false);
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
+
+  // Admin-approving-for-a-manager confirmation. Separate from the misnamed
+  // `approveDialogOpen` above, which drives CreateModelDialog.
+  const [onBehalfOpen, setOnBehalfOpen] = useState(false);
+  const [onBehalfPending, setOnBehalfPending] = useState(false);
+  const [onBehalfError, setOnBehalfError] = useState<string | null>(null);
   const [standardResult, setStandardResult] = useState<
     | { type: "success"; stage: "SHIPPED" | "READY_FOR_COLLECTION"; userName: string; categoryName: string }
     | { type: "error"; message: string }
@@ -106,17 +113,64 @@ export default function RequestTablePage() {
   // -----------------------------
   // ACTIONS
   // -----------------------------
-  async function handleApprove(request: Request) {
-    try {
-      await apiFetch<{
-        type: "STANDARD" | "NON_STANDARD";
-        stage?: "MANAGER" | "ADMIN";
-        message: string;
-      }>(`/api/approval/${request.id}/approve`, {
-        method: "POST",
-      });
+  /**
+   * True when this admin would be standing in for a manager who hasn't
+   * answered yet. That is the one approval on this table that isn't the
+   * actor's own decision, so it gets a confirmation step. An admin's own IT
+   * sign-off at the second stage is routine and deliberately NOT gated.
+   */
+  function isOnBehalfApproval(request: Request) {
+    return role === "ADMIN" && request.status === "PENDING";
+  }
 
-      await loadRequests();
+  /** The approve POST plus refresh. Throws, so each caller can surface the
+   *  failure where the user is looking — inline in the on-behalf dialog, or
+   *  the pre-existing result-dialog/alert path. */
+  async function approveRequest(request: Request) {
+    await apiFetch<{
+      type: "STANDARD" | "NON_STANDARD";
+      stage?: "MANAGER" | "ADMIN";
+      message: string;
+    }>(`/api/approval/${request.id}/approve`, {
+      method: "POST",
+    });
+
+    await loadRequests();
+  }
+
+  /** Confirm handler for the on-behalf dialog. Closes only on success; a
+   *  failure keeps the dialog open with the reason so the admin can retry
+   *  rather than being dropped back to an unchanged-looking row. */
+  async function handleConfirmOnBehalfApprove() {
+    if (!selectedRequest) return;
+
+    setOnBehalfPending(true);
+    setOnBehalfError(null);
+    try {
+      await approveRequest(selectedRequest);
+      setOnBehalfOpen(false);
+      setSelectedRequest(null);
+    } catch (err) {
+      setOnBehalfError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Approval failed. Please try again."
+      );
+    } finally {
+      setOnBehalfPending(false);
+    }
+  }
+
+  async function handleApprove(request: Request) {
+    if (isOnBehalfApproval(request)) {
+      setSelectedRequest(request);
+      setOnBehalfError(null);
+      setOnBehalfOpen(true);
+      return;
+    }
+
+    try {
+      await approveRequest(request);
     } catch (err: any) {
       if (request.requestType === "STANDARD") {
         setStandardResult({ type: "error", message: err.message || "Approval failed." });
@@ -302,6 +356,32 @@ export default function RequestTablePage() {
             open={rejectDialogOpen}
             onOpenChange={setRejectDialogOpen}
             onConfirm={handleConfirmReject}
+            // Only defined when the admin is rejecting ahead of the manager —
+            // the same condition that gates the approval confirmation. Reject
+            // gets an inline notice rather than its own gate, since typing a
+            // reason is already a deliberate act.
+            onBehalfOfManager={
+              selectedRequest && isOnBehalfApproval(selectedRequest)
+                ? selectedRequest.manager ?? ""
+                : undefined
+            }
+          />
+
+          <ConfirmOnBehalfApprovalDialog
+            open={onBehalfOpen}
+            onOpenChange={(next) => {
+              setOnBehalfOpen(next);
+              if (!next) {
+                setOnBehalfError(null);
+                setSelectedRequest(null);
+              }
+            }}
+            userName={selectedRequest?.userName ?? ""}
+            categoryName={selectedRequest?.categoryName ?? ""}
+            managerName={selectedRequest?.manager ?? null}
+            pending={onBehalfPending}
+            error={onBehalfError}
+            onConfirm={handleConfirmOnBehalfApprove}
           />
 
           <CreateModelDialog

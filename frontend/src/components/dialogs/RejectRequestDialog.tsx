@@ -11,12 +11,24 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (reason: string) => void;
+  /**
+   * Set when an ADMIN is rejecting a request the manager hasn't answered yet —
+   * the name of that manager, or "" when the row carries none. Undefined for
+   * every other rejection (a manager rejecting their own, or an admin rejecting
+   * at the IT stage), which renders no notice.
+   *
+   * Deliberately an informational indicator rather than an extra confirmation
+   * step: rejection is already gated by having to type a reason, and a second
+   * gate would just get clicked through.
+   */
+  onBehalfOfManager?: string;
 };
 
 export default function RejectionReasonDialog({
   open,
   onOpenChange,
   onConfirm,
+  onBehalfOfManager,
 }: Props) {
   const [reason, setReason] = useState("");
 
@@ -66,6 +78,19 @@ export default function RejectionReasonDialog({
           }}
           className="p-8 space-y-6"
         >
+          {/* On-behalf notice. Same dashed indicator as the home page, so it
+              reads as information rather than as an error the admin caused. */}
+          {onBehalfOfManager !== undefined && (
+            <span className="inline-flex items-start gap-1.5 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-1 text-status-pending text-[12px] font-semibold">
+              <span className="material-symbols-outlined !text-[14px] shrink-0">
+                info
+              </span>
+              {onBehalfOfManager.trim()
+                ? `${onBehalfOfManager.trim()} hasn't responded yet — you're rejecting this on their behalf.`
+                : "The manager hasn't responded yet — you're rejecting this on their behalf."}
+            </span>
+          )}
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-modal-text-secondary mb-2 ml-1">
               Reason

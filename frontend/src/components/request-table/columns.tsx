@@ -80,6 +80,34 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     return <div className="flex justify-center gap-2">{children}</div>;
   }
 
+  /**
+   * A stage badge stacked above its action buttons.
+   *
+   * Used only for the two consecutive approval stages an ADMIN can act on:
+   * awaiting-manager and awaiting-IT-sign-off. Both offer Approve/Reject, so
+   * without the badge the row renders identically before and after an admin
+   * approves on a manager's behalf — the click looked dead even though the
+   * transition had happened. The other admin stages (create model, select
+   * accessory, ...) stay buttons-only: their labels already differ, so a badge
+   * would be noise.
+   */
+  function StagedActionRow({
+    status,
+    tip,
+    children,
+  }: {
+    status: StatusBadgeStatus;
+    tip?: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <BadgeWithTooltip status={status} tip={tip} />
+        <ActionRow>{children}</ActionRow>
+      </div>
+    );
+  }
+
   function ActionButton({
     icon,
     label,
@@ -344,17 +372,44 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   // ADMIN VIEW (non-completed states)
   // ──────────────────────────────────────────────────
   if (role === "ADMIN") {
-    if (isPending || isApprovedAwaitingAdmin || isStandardAwaitingIT) {
+    // Stage 1 — the manager hasn't acted. An admin approving here is standing
+    // in for them, which is a different act from the IT sign-off below, so it
+    // gets its own badge and its own button label. Approving is routed through
+    // a confirmation dialog by the page; rejecting is already gated by the
+    // reason dialog, which carries the on-behalf notice instead.
+    if (isPending) {
       return (
-        <ActionRow>
-          <ActionButton icon="check_circle" label="Approve" color="text-status-success" hoverBg="hover:bg-status-success/10"
-            border="border-status-success/40"
-            title={isStandardAwaitingIT ? "Approve and assign an asset" : "Approve this request"}
+        <StagedActionRow
+          status="PENDING"
+          tip={`Waiting for manager approval${
+            request.manager ? ` from ${request.manager}` : ""
+          } — you can approve on their behalf`}
+        >
+          <ActionButton icon="supervisor_account" label="Approve for manager" color="text-status-success"
+            hoverBg="hover:bg-status-success/10" border="border-status-success/40"
+            title="Record the manager's approval on their behalf"
             onClick={() => meta.onApprove(request)} />
           <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
             border="border-status-error/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
-        </ActionRow>
+        </StagedActionRow>
+      );
+    }
+
+    // Stage 2 — the manager has approved (or an admin already did so on their
+    // behalf) and this is the admin's own IT sign-off. Same two affordances,
+    // but the badge and the label now say which stage the request is at.
+    if (isApprovedAwaitingAdmin || isStandardAwaitingIT) {
+      return (
+        <StagedActionRow status="AWAITING_IT">
+          <ActionButton icon="shield_person" label="IT sign-off" color="text-status-success"
+            hoverBg="hover:bg-status-success/10" border="border-status-success/40"
+            title="Approve and assign an asset"
+            onClick={() => meta.onApprove(request)} />
+          <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
+            border="border-status-error/40" title="Reject this request"
+            onClick={() => meta.onReject(request)} />
+        </StagedActionRow>
       );
     }
     if (isAssetAwaitingModel) {
