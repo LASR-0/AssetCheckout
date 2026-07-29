@@ -300,7 +300,7 @@ function QuickStart() {
           <p className="py-6 text-sm text-info-light">
             Couldn't load the asset catalogue right now — you can still{" "}
             <Link
-              to="/checkout"
+              to="/assets"
               className="font-semibold underline hover:text-on-background transition-colors"
             >
               start a request from the form
@@ -316,7 +316,7 @@ function QuickStart() {
               // against its own fetched list before preselecting.
               <Link
                 key={cat.id}
-                to={`/checkout?categoryId=${cat.id}`}
+                to={`/assets?categoryId=${cat.id}`}
                 className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
                 <span className="material-symbols-outlined !text-[28px]">
@@ -457,7 +457,7 @@ function QuickLinks() {
       icon: "list",
       title: "Request Assets",
       desc: "Request an Asset here.",
-      to: "/checkout",
+      to: "/assets",
     },
     {
       icon: "settings",
