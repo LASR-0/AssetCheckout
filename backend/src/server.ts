@@ -5,6 +5,7 @@ import routes from "./routes/index.js";
 import { prisma } from "./db/prisma.js";
 import { ensureDefaults } from "./services/settings.js";
 import { startJobs } from './jobs/index.js';
+import { assertAppLinksConfig } from './jobs/handlers/appLinks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,11 @@ async function configureDatabase(): Promise<void> {
 }
 
 async function start() {
+  // Before anything else: refuse to boot if notification links can't be
+  // built. Cheap, synchronous, and catches a missing APP_BASE_URL here
+  // instead of in a recipient's inbox.
+  assertAppLinksConfig();
+
   await configureDatabase();
   await ensureDefaults();
   console.log("Settings defaults ensured");
