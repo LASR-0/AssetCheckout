@@ -20,9 +20,15 @@ export default function Footer() {
         <nav className="ml-auto flex gap-5 font-semibold">
           <Link
             className="hover:text-on-background transition-colors"
-            to="/request"
+            to="/assets"
           >
-            Checkouts
+            Request assets
+          </Link>
+          <Link
+            className="hover:text-on-background transition-colors"
+            to="/accessories"
+          >
+            Request accessories
           </Link>
           <Link
             className="hover:text-on-background transition-colors"
