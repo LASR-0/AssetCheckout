@@ -32,8 +32,13 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
 
   const [openRequest, setOpenRequest] = useState(false);
   const [openPage, setOpenPage] = useState(false);
+  // IN_PROGRESS is a synthetic option: it spans PENDING + APPROVED, which the
+  // backend's single-status filter can't express, so the page resolves it
+  // client-side. It exists so the home page's "In progress" tile has a
+  // destination that shows exactly what it counted.
   const statusOptions = [
     { label: "All", value: "ALL", icon: "list" },
+    { label: "In progress", value: "IN_PROGRESS", icon: "pending" },
     { label: "Pending", value: "PENDING", icon: "schedule" },
     { label: "Approved", value: "APPROVED", icon: "check_circle" },
     { label: "Completed", value: "COMPLETED", icon: "task_alt" },
@@ -118,7 +123,12 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                             <span className="material-symbols-outlined !text-info-light mr-2 !text-sm">
                                 filter_list
                             </span>
-                            {status === "ALL" ? "Filter" : status}
+                            {/* Show the option's label, not the raw value —
+                                IN_PROGRESS would otherwise read as a constant. */}
+                            {status === "ALL"
+                              ? "Filter"
+                              : statusOptions.find((s) => s.value === status)
+                                  ?.label ?? status}
                           </button>
                         </PopoverTrigger>
                       </TooltipTrigger>

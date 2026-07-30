@@ -194,7 +194,22 @@ function HomeHead({
         className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0"
         aria-label="Your request summary"
       >
-        <Stat num={inProgress} label="In progress" loading={loading} pending={inProgress > 0} />
+        {/* Links to the requests table pre-filtered to the same rows this
+            number counts: IN_PROGRESS (PENDING + APPROVED) scoped to this
+            person. Only linked when there's actually something to show. */}
+        <Stat
+          num={inProgress}
+          label="In progress"
+          loading={loading}
+          pending={inProgress > 0}
+          to={
+            inProgress > 0
+              ? `/requests?status=IN_PROGRESS${
+                  name ? `&q=${encodeURIComponent(name)}` : ""
+                }`
+              : undefined
+          }
+        />
         <Stat num={completed} label="Completed" loading={loading} complete={completed > 0} />
         <Stat
           num={rejected}
@@ -214,6 +229,7 @@ function Stat({
   attention = false,
   complete = false,
   pending = false,
+  to,
 }: {
   num: number;
   label: string;
@@ -221,17 +237,72 @@ function Stat({
   attention?: boolean;
   complete?: boolean;
   pending?: boolean;
+  /** When set, the tile becomes a link to this route. */
+  to?: string;
+}) {
+  const className = `${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px]
+        ${attention ? "!border-status-error/50" : ""}
+        ${complete ? "!border-status-success/50" : ""}
+        ${pending ? "!border-status-model/50" : ""}`;
+
+  // Linked tiles get the same hover lift as the request tiles below, so the
+  // affordance reads the same way across the page. Only rendered as a link
+  // when there's somewhere to go — a tile showing 0 leads to an empty table,
+  // which is worse than not being clickable.
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={`${className} hover:border-purple-500 hover:-translate-y-px transition-all`}
+      >
+        <StatBody
+          num={num}
+          label={label}
+          loading={loading}
+          attention={attention}
+          complete={complete}
+          pending={pending}
+        />
+      </Link>
+    );
+  }
+
+  return (
+    <div className={className}>
+      <StatBody
+        num={num}
+        label={label}
+        loading={loading}
+        attention={attention}
+        complete={complete}
+        pending={pending}
+      />
+    </div>
+  );
+}
+
+/** The number + label, shared by the linked and plain variants of Stat so the
+ *  two can never drift apart visually. */
+function StatBody({
+  num,
+  label,
+  loading,
+  attention,
+  complete,
+  pending,
+}: {
+  num: number;
+  label: string;
+  loading: boolean;
+  attention: boolean;
+  complete: boolean;
+  pending: boolean;
 }) {
   return (
-    <div
-      className={`${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px] 
-        ${attention ? "!border-status-error/50" : ""} 
-        ${complete ? "!border-status-success/50" : ""} 
-        ${pending ? "!border-status-model/50" : ""}`}
-    >
+    <>
       <span
-        className={`font-headline font-extrabold text-2xl 
-          ${attention ? "text-status-error" : "" } 
+        className={`font-headline font-extrabold text-2xl
+          ${attention ? "text-status-error" : "" }
           ${complete ? "text-status-success" : ""}
           ${pending ? "text-status-model" : ""}
           `}
@@ -241,7 +312,7 @@ function Stat({
       <span className="text-xs text-info-light text-center whitespace-nowrap">
         {label}
       </span>
-    </div>
+    </>
   );
 }
 

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import RequestsToolbar from "@/components/request-table/RequestsToolbar";
 import RequestsPagination from "@/components/request-table/RequestPagination";
 import RequestsTable from "@/components/request-table/RequestsTable";
@@ -18,10 +19,41 @@ import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalR
 import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
 import ConfirmOnBehalfApprovalDialog from "@/components/dialogs/ConfirmOnBehalfApprovalDialog";
 
+/**
+ * Filter values the status dropdown can hold. IN_PROGRESS is synthetic — it
+ * means PENDING + APPROVED, which the backend's single-status query param
+ * can't express, so it is resolved client-side (see serverStatus /
+ * visibleRequests below). Anything not in this list is ignored when it
+ * arrives via the URL, so a stale or hand-edited link falls back to ALL
+ * rather than filtering to nothing.
+ */
+const SELECTABLE_STATUSES = [
+  "ALL",
+  "IN_PROGRESS",
+  "PENDING",
+  "APPROVED",
+  "COMPLETED",
+  "REJECTED",
+];
+
+/** The two statuses the home page's "In progress" tile counts. */
+const IN_PROGRESS_STATUSES = ["PENDING", "APPROVED"];
+
 export default function RequestTablePage() {
   const [requests, setRequests] = useState<Request[]>([]);
-  const [status, setStatus] = useState("ALL");
-  const [search, setSearch] = useState("");
+
+  // Seeded from the URL so widgets elsewhere can deep-link into a view:
+  // ?status=IN_PROGRESS&q=<name> is what the home page's "In progress" tile
+  // links to. Lazy initialisers, so this happens once on mount and never
+  // fights the user's own filter changes afterwards.
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState(() => {
+    const requested = searchParams.get("status");
+    return requested && SELECTABLE_STATUSES.includes(requested)
+      ? requested
+      : "ALL";
+  });
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
@@ -100,15 +132,34 @@ export default function RequestTablePage() {
 
   async function loadRequests() {
     try {
-      const data = await getRequests({
-        status: status === "ALL" ? undefined : status,
-      });
+      // IN_PROGRESS spans two statuses, so it can't go to the server — fetch
+      // unfiltered and narrow client-side. Safe because this endpoint is not
+      // paginated (findMany with no take), so we already hold every row the
+      // actor can see and the table paginates locally.
+      const serverStatus =
+        status === "ALL" || status === "IN_PROGRESS" ? undefined : status;
+
+      const data = await getRequests({ status: serverStatus });
 
       setRequests(data.requests);
     } catch (err) {
       console.error("Failed to load requests", err);
     }
   }
+
+  /**
+   * Rows handed to the table. Only IN_PROGRESS narrows here — every other
+   * value was already applied by the server, so this is a pass-through and
+   * doesn't double-filter. Narrowing before the table means TanStack's
+   * pagination and the filtered-count readout both reflect it for free.
+   */
+  const visibleRequests = useMemo(
+    () =>
+      status === "IN_PROGRESS"
+        ? requests.filter((r) => IN_PROGRESS_STATUSES.includes(r.status))
+        : requests,
+    [requests, status]
+  );
 
   // -----------------------------
   // ACTIONS
@@ -333,7 +384,7 @@ export default function RequestTablePage() {
 
           {/* TABLE */}
           <RequestsTable
-            requests={requests}
+            requests={visibleRequests}
             role={role}
             currentUserName={currentUserName}
             onApprove={handleApprove}
