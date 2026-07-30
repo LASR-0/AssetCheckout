@@ -497,7 +497,10 @@ function TileBody({
     <>
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
         <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
-        <span className={nameClass}>{name}</span>
+        {/* mb-[5px] on the name rather than a larger parent gap, so the extra
+            breathing room lands below the category text only and not also
+            between the icon and the name. */}
+        <span className={`${nameClass} mb-[5px]`}>{name}</span>
       </div>
 
       <div className="flex w-full items-center gap-2">
