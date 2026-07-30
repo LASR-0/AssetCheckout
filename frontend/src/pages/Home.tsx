@@ -150,6 +150,30 @@ function formattedDate(): string {
   return `${weekday}, ${day} ${month}`;
 }
 
+/**
+ * Destination for a status-snapshot tile: the requests table filtered to the
+ * same status the tile counted, with the person's name seeded into the search
+ * so they land on their own rows rather than the whole org.
+ *
+ * Returns undefined for an empty count, which leaves the tile unlinked.
+ *
+ * IN_PROGRESS is resolved client-side by the table (it means PENDING +
+ * APPROVED, which the backend's single-status param can't express); the rest
+ * are real statuses and filter server-side. Note the name is seeded into the
+ * free-text filter, which matches any field — so it also catches rows where
+ * this person is the MANAGER rather than the requester, and the table can show
+ * more rows than the tile counted.
+ */
+function requestsLink(
+  status: "IN_PROGRESS" | "COMPLETED" | "REJECTED",
+  count: number,
+  name: string | null
+): string | undefined {
+  if (count <= 0) return undefined;
+  const scope = name ? `&q=${encodeURIComponent(name)}` : "";
+  return `/requests?status=${status}${scope}`;
+}
+
 function HomeHead({
   requests,
   loading,
@@ -194,28 +218,30 @@ function HomeHead({
         className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0"
         aria-label="Your request summary"
       >
-        {/* Links to the requests table pre-filtered to the same rows this
-            number counts: IN_PROGRESS (PENDING + APPROVED) scoped to this
-            person. Only linked when there's actually something to show. */}
+        {/* Each tile links to the requests table pre-filtered to the rows it
+            counted: its status, scoped to this person by name. Only linked
+            when the count is above zero — a zero leading to an empty table is
+            worse than not being clickable. */}
         <Stat
           num={inProgress}
           label="In progress"
           loading={loading}
           pending={inProgress > 0}
-          to={
-            inProgress > 0
-              ? `/requests?status=IN_PROGRESS${
-                  name ? `&q=${encodeURIComponent(name)}` : ""
-                }`
-              : undefined
-          }
+          to={requestsLink("IN_PROGRESS", inProgress, name)}
         />
-        <Stat num={completed} label="Completed" loading={loading} complete={completed > 0} />
+        <Stat
+          num={completed}
+          label="Completed"
+          loading={loading}
+          complete={completed > 0}
+          to={requestsLink("COMPLETED", completed, name)}
+        />
         <Stat
           num={rejected}
           label="Rejected"
           loading={loading}
           attention={rejected > 0}
+          to={requestsLink("REJECTED", rejected, name)}
         />
       </div>
     </section>

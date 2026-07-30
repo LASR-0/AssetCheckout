@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
@@ -80,34 +81,6 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     return <div className="flex justify-center gap-2">{children}</div>;
   }
 
-  /**
-   * A stage badge stacked above its action buttons.
-   *
-   * Used only for the two consecutive approval stages an ADMIN can act on:
-   * awaiting-manager and awaiting-IT-sign-off. Both offer Approve/Reject, so
-   * without the badge the row renders identically before and after an admin
-   * approves on a manager's behalf — the click looked dead even though the
-   * transition had happened. The other admin stages (create model, select
-   * accessory, ...) stay buttons-only: their labels already differ, so a badge
-   * would be noise.
-   */
-  function StagedActionRow({
-    status,
-    tip,
-    children,
-  }: {
-    status: StatusBadgeStatus;
-    tip?: string;
-    children: React.ReactNode;
-  }) {
-    return (
-      <div className="flex flex-col items-center gap-2">
-        <BadgeWithTooltip status={status} tip={tip} />
-        <ActionRow>{children}</ActionRow>
-      </div>
-    );
-  }
-
   function ActionButton({
     icon,
     label,
@@ -125,17 +98,50 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     border: string;
     onClick: () => void;
   }) {
+    // Swap the icon for a spinner briefly on click, so EVERY row action
+    // acknowledges the press. The mutations themselves are fast and the table
+    // refetches afterwards, so this is a fixed-duration acknowledgement rather
+    // than a real progress indicator — the click, not the request, is what it
+    // reports. It matters most on an admin's back-to-back approvals, where the
+    // row can otherwise look untouched between the two stages.
+    const [clicked, setClicked] = useState(false);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // The row usually re-renders (or unmounts) when the refetch lands, so the
+    // timeout has to be cancelled rather than left to fire into nothing.
+    useEffect(
+      () => () => {
+        if (timer.current) clearTimeout(timer.current);
+      },
+      []
+    );
+
+    function handleClick() {
+      if (timer.current) clearTimeout(timer.current);
+      setClicked(true);
+      timer.current = setTimeout(() => setClicked(false), 300);
+      onClick();
+    }
+
     return (
       <TooltipProvider delayDuration={400}>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={onClick}
+              onClick={handleClick}
               className={`group/icon ${color} ${hoverBg} ${border} border-2 rounded-lg shadow-sm px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center hover:shadow-md justify-center whitespace-nowrap text-xs font-semibold`}
             >
-              <span className="material-symbols-outlined !text-[16px] hover:cursor-pointer icon-fill-hover transition-all">
-                {icon}
-              </span>
+              {clicked ? (
+                // Sized to match the 16px icon so the button doesn't reflow.
+                <span
+                  className="h-[16px] w-[16px] shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <span className="material-symbols-outlined !text-[16px] hover:cursor-pointer icon-fill-hover transition-all">
+                  {icon}
+                </span>
+              )}
               {label}
             </button>
           </TooltipTrigger>
@@ -373,26 +379,31 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   // ──────────────────────────────────────────────────
   if (role === "ADMIN") {
     // Stage 1 — the manager hasn't acted. An admin approving here is standing
-    // in for them, which is a different act from the IT sign-off below, so it
-    // gets its own badge and its own button label. Approving is routed through
-    // a confirmation dialog by the page; rejecting is already gated by the
-    // reason dialog, which carries the on-behalf notice instead.
+    // in for them, which is a different act from the IT sign-off below, so the
+    // two stages carry different icons and labels: supervisor_account/"Approve"
+    // here, shield_person/"IT sign-off" there. That is what makes the row
+    // visibly change when an approval advances it from one to the other.
+    //
+    // No status badge alongside either one: a row shows a badge only when the
+    // viewer's role leaves them nothing to do with it. Both of these are
+    // actionable, so they render actions only.
+    //
+    // Approving is routed through a confirmation dialog by the page; rejecting
+    // is already gated by the reason dialog, which carries the on-behalf
+    // notice instead.
     if (isPending) {
       return (
-        <StagedActionRow
-          status="PENDING"
-          tip={`Waiting for manager approval${
-            request.manager ? ` from ${request.manager}` : ""
-          } — you can approve on their behalf`}
-        >
-          <ActionButton icon="supervisor_account" label="Approve for manager" color="text-status-success"
+        <ActionRow>
+          <ActionButton icon="supervisor_account" label="Approve" color="text-status-success"
             hoverBg="hover:bg-status-success/10" border="border-status-success/40"
-            title="Record the manager's approval on their behalf"
+            title={`Record the manager's approval on their behalf${
+              request.manager ? ` (${request.manager} hasn't responded yet)` : ""
+            }`}
             onClick={() => meta.onApprove(request)} />
           <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
             border="border-status-error/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
-        </StagedActionRow>
+        </ActionRow>
       );
     }
 
@@ -401,7 +412,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     // but the badge and the label now say which stage the request is at.
     if (isApprovedAwaitingAdmin || isStandardAwaitingIT) {
       return (
-        <StagedActionRow status="AWAITING_IT">
+        <ActionRow>
           <ActionButton icon="shield_person" label="IT sign-off" color="text-status-success"
             hoverBg="hover:bg-status-success/10" border="border-status-success/40"
             title="Approve and assign an asset"
@@ -409,7 +420,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
             border="border-status-error/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
-        </StagedActionRow>
+        </ActionRow>
       );
     }
     if (isAssetAwaitingModel) {
