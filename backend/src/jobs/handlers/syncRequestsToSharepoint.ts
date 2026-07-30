@@ -63,8 +63,20 @@ export async function syncRequestsToSharepointHandler(
 
   // Unsynced backlog. No `include` → just the Request table's own columns,
   // which is exactly the ledger payload we want (no related modelRequest etc).
+  //
+  // ASSET only. This is the ORDERING ledger: it exists to drive purchasing of
+  // devices, so accessory requests were never meant to reach it, and neither
+  // are record corrections. The filter was believed to be here already but
+  // wasn't — the where-clause was `{ syncedToSharepointAt: null }` alone, so
+  // every kind qualified. Nothing has leaked in practice only because
+  // sharepoint_sync_enabled defaults to false.
+  //
+  // Filtering positively on ASSET rather than excluding known kinds, so a kind
+  // added later has to be opted IN to the ledger rather than silently
+  // inheriting it. Legacy rows predate requestKind and carry its ASSET
+  // default, so they are unaffected.
   const pending = await prisma.request.findMany({
-    where: { syncedToSharepointAt: null },
+    where: { syncedToSharepointAt: null, requestKind: "ASSET" },
     orderBy: { id: "asc" },
   });
 
