@@ -52,6 +52,21 @@ export default function SettingsPage() {
             requesters pick from in each. "Something else" is always offered
             automatically and locks a request to non-standard.
           </p>
+          {/* Half of the cross-layer story. Repeated in scoped form under
+              Accessory Availability by Asset rather than hoisted into one
+              page-level panel, so each section explains itself where the
+              admin is working. */}
+          <p className="text-sm text-info-light mb-4">
+            This controls what <em>exists</em>, not who can see it. A category
+            set up perfectly here is still invisible to everyone until it's
+            mapped to at least one asset category under{" "}
+            <span className="font-semibold text-on-surface-variant">
+              Accessory Availability by Asset
+            </span>{" "}
+            below — requesters only ever see the two combined. Leaving the
+            requestable list empty applies no restriction rather than blocking
+            everything.
+          </p>
           <AccessoryConfigurationSettings />
         </SettingsSection>
       )}
@@ -64,6 +79,20 @@ export default function SettingsPage() {
             categories they hold in Snipe-IT. Only requestable accessory
             categories can be mapped here, and requesters only see accessories
             tied to assets they actually have.
+          </p>
+          {/* The other half. This is the layer that gates: an unmapped
+              accessory category is invisible no matter how it's configured
+              above, which is the most common "I set it up and nobody can
+              request it" cause. */}
+          <p className="text-sm text-info-light mb-4">
+            This is what decides what a given person sees. An accessory
+            category mapped to nothing here can't be requested by anyone, even
+            when it's requestable and has options configured under{" "}
+            <span className="font-semibold text-on-surface-variant">
+              Accessory Configuration
+            </span>{" "}
+            above. If an admin reports configuring an accessory that nobody can
+            request, check this mapping first.
           </p>
           <AccessoryAssetMap refreshKey={assetConfigRefreshKey}/>
         </SettingsSection>

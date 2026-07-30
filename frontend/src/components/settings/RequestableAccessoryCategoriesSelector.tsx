@@ -46,6 +46,8 @@ export default function RequestableAccessoryCategoriesSelector({
             <span>
               {loading
                 ? "Loading..."
+                : allowed.size === 0
+                ? `All ${categories.length} allowed (no restriction)`
                 : `${allowed.size} of ${categories.length} allowed`}
             </span>
             <span className="material-symbols-outlined !text-base">tune</span>
@@ -68,6 +70,17 @@ export default function RequestableAccessoryCategoriesSelector({
           {!loading && categories.length === 0 && (
             <div className="text-sm text-info-light italic py-3 text-center">
               No accessory categories found
+            </div>
+          )}
+
+          {/* The empty case is a genuine surprise: no ticks means "don't
+              restrict", not "block everything". Stated here rather than only
+              in the section copy because this popover is where an admin is
+              actually about to untick the last box. */}
+          {!loading && categories.length > 0 && allowed.size === 0 && (
+            <div className="mb-2 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-1.5 text-[11px] font-semibold text-status-pending leading-relaxed">
+              Nothing selected means no site-wide restriction — every accessory
+              category is allowed. Tick categories to narrow it down.
             </div>
           )}
 

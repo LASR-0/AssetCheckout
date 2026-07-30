@@ -8,6 +8,7 @@ import {
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import ComboboxField from "@/components/ui/comboboxfield";
+import InfoHint from "@/components/ui/infohint";
 import {
   getAccessoriesByCategory,
   setStandardAccessoriesForCategory,
@@ -519,8 +520,30 @@ export default function StandardAccessoriesSelector({
                 {rail}
                 <div className="flex min-h-0 flex-col">
                   {pane ?? (
-                    <div className="flex-1 grid place-items-center px-6 text-center text-sm text-info-light italic">
-                      Select a category to configure its options.
+                    // Not just "pick something" — this is the first place an
+                    // admin lands, so it's where the editor explains what it
+                    // is for before they have chosen anything.
+                    <div className="flex-1 grid place-items-center px-6 py-8">
+                      <div className="max-w-sm space-y-3 text-center">
+                        <span className="material-symbols-outlined !text-[28px] text-info-light">
+                          tune
+                        </span>
+                        <p className="text-sm text-on-surface-variant">
+                          Pick a category on the left to set up its options.
+                        </p>
+                        <p className="text-xs text-info-light leading-relaxed">
+                          Options are the named choices a requester picks from
+                          when they ask for this kind of accessory — for
+                          example "iPad A16 - Case". Each one points at a
+                          specific accessory in Snipe-IT, so you control
+                          exactly what gets handed out.
+                        </p>
+                        <p className="text-xs text-info-light leading-relaxed">
+                          Only categories you've made requestable appear here.
+                          Nothing is saved until you press{" "}
+                          <span className="font-semibold">Save changes</span>.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -538,12 +561,25 @@ export default function StandardAccessoriesSelector({
                   : "px-4 pb-4 pt-2 gap-2"
               }
             >
+              {/* When there ARE staged changes, say that they haven't been
+                  written yet. A removed option disappears from the list
+                  immediately, which otherwise looks like the delete has
+                  already gone through. */}
               <span className="flex-1 text-xs mx-5 text-info-light">
-                {dirtyCount === 0
-                  ? "No unsaved changes"
-                  : `${dirtyCount} ${
+                {dirtyCount === 0 ? (
+                  "No unsaved changes"
+                ) : (
+                  <>
+                    {`${dirtyCount} ${
                       dirtyCount === 1 ? "category" : "categories"
                     } with unsaved changes`}
+                    <span className="hidden sm:inline">
+                      {" "}
+                      — nothing is written to Snipe-IT, including removals,
+                      until you save.
+                    </span>
+                  </>
+                )}
               </span>
               <button
                 onClick={saveAll}
@@ -734,9 +770,34 @@ function CategoryPane({
         ) : (
           <>
             {options.length === 0 && (
-              <div className="text-xs text-info-light italic">
-                No options yet. Add one above — requesters pick from these;
-                "Something else" is always offered automatically.
+              // An empty list is NOT broken — it means the zero-config
+              // fallback applies. Say so, because a blank editor otherwise
+              // reads as "nothing configured, nothing works", and then
+              // recommend the convention that avoids relying on it.
+              <div className="space-y-2 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-[12px] font-semibold text-status-pending">
+                  <span className="material-symbols-outlined !text-[14px]">
+                    info
+                  </span>
+                  No options set — this category still works
+                </p>
+                <p className="text-xs text-info-light leading-relaxed">
+                  With no options configured, a standard request here is
+                  fulfilled automatically: the first accessory in this category
+                  that has stock is picked for the requester, in name order.
+                  Nobody chooses — they just get whatever comes up first.
+                </p>
+                <p className="text-xs text-info-light leading-relaxed">
+                  Adding options takes that decision back. Even where there's
+                  really only one sensible item, a single option named{" "}
+                  <span className="font-semibold text-on-surface-variant">
+                    Standard
+                  </span>{" "}
+                  is worth setting: you decide which accessory it resolves to,
+                  and a requester who needs something different still has
+                  "Something else", which flags the request as non-standard for
+                  you to review.
+                </p>
               </div>
             )}
 
@@ -857,40 +918,81 @@ function OptionRow({
       {expanded && (
         <div className="px-3 pb-3 pt-1 space-y-3 border-t border-outline">
           <label className="block">
-            <span className="block text-xs font-medium text-info-light mb-1">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-info-light mb-1">
               Option label
+              <InfoHint side="right">
+                Also what gets stored on the request, so changing it later
+                won't retitle requests that were already submitted.
+              </InfoHint>
             </span>
             <input
               value={option.label}
               disabled={disabled}
-              placeholder="What the requester sees"
+              placeholder="e.g. iPad A16 - Case"
               onChange={(e) => onEdit({ label: e.target.value })}
               className="w-full bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
             />
+            {/* The single most important line in this dialog: it's the only
+                field the requester ever sees, and they see it with no other
+                context. */}
+            <span className="mt-1 block text-[11px] text-info-light leading-relaxed">
+              This is the choice requesters see in the accessory request form.
+              Name it by model and type — "iPad A16 - Screen Protector" — since
+              a bare "Screen Protector" is ambiguous as soon as two device
+              generations are in play.
+            </span>
           </label>
 
           {/* Optional request-table labels. Blank falls back (display → option
               label; accessory → the primary's Snipe name). Requesters never see
-              these — they only shape how the row reads in the request log. */}
-          <div className="space-y-1.5">
+              these — they only shape how the row reads in the request log.
+              Each gets its own label and hint: three fields on this row are
+              called some variant of "label", and one shared blurb left admins
+              guessing which was which. */}
+          <div className="space-y-2">
             <span className="block text-[11px] font-medium text-info-light/70">
-              Request-table labels (optional)
+              Request-table labels (optional) — admin view only, never shown to
+              requesters
             </span>
             <div className="grid grid-cols-2 gap-2">
-              <input
-                value={option.displayLabel ?? ""}
-                disabled={disabled}
-                placeholder="Type"
-                onChange={(e) => onEdit({ displayLabel: e.target.value })}
-                className="bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
-              />
-              <input
-                value={option.accessoryLabel ?? ""}
-                disabled={disabled}
-                placeholder="Name"
-                onChange={(e) => onEdit({ accessoryLabel: e.target.value })}
-                className="bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
-              />
+              <label className="block">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-info-light mb-1">
+                  Type
+                  <InfoHint side="top">
+                    Shown in the Request Type column of the requests table in
+                    place of the option label. Use it to shorten a long option
+                    name down to what you need when scanning the table. Leave
+                    blank to show the option label itself.
+                  </InfoHint>
+                </span>
+                <input
+                  value={option.displayLabel ?? ""}
+                  disabled={disabled}
+                  placeholder="e.g. Case"
+                  onChange={(e) => onEdit({ displayLabel: e.target.value })}
+                  className="w-full bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+                />
+              </label>
+
+              <label className="block">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-info-light mb-1">
+                  Accessory name
+                  <InfoHint side="top">
+                    The correlating accessory, shown to admins on the request
+                    row so you can tell what to actually prepare. Use a clean
+                    product name — "iPad A16" — rather than the full Snipe-IT
+                    record title. Leave blank to show the primary accessory's
+                    Snipe-IT name.
+                  </InfoHint>
+                </span>
+                <input
+                  value={option.accessoryLabel ?? ""}
+                  disabled={disabled}
+                  placeholder="e.g. iPad A16"
+                  onChange={(e) => onEdit({ accessoryLabel: e.target.value })}
+                  className="w-full bg-surface-container-low/30 border border-outline rounded-md px-2 py-1.5 text-sm text-on-surface-variant transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+                />
+              </label>
             </div>
           </div>
 
@@ -914,6 +1016,16 @@ function OptionRow({
               onChange={(v) => onEdit({ backup: v })}
             />
           </div>
+
+          {/* The resolution chain is worth stating because its last step is
+              counter-intuitive: it fails rather than substituting. */}
+          <p className="text-[11px] text-info-light leading-relaxed">
+            Requests for this option take the primary accessory, preferring a
+            record at the requester's own site. If none is in stock anywhere it
+            falls back to the backup. If both are out of stock the request
+            can't be fulfilled — it won't substitute a different accessory from
+            the category.
+          </p>
         </div>
       )}
     </div>
@@ -989,8 +1101,17 @@ function ProductSlot({
 
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-info-light mb-1">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-info-light mb-1">
         {label}
+        {/* The stock number in this picker is the one figure an admin is most
+            likely to misread — Snipe stores accessories per location, so the
+            same product appears once per site and the picker sums them. */}
+        <InfoHint side="top">
+          Stock shown next to each accessory is the total across every
+          Snipe-IT location, not one site's. The same product is stored once
+          per location and listed here as a single entry with the counts added
+          together.
+        </InfoHint>
       </span>
       <ComboboxField
         size="compact"

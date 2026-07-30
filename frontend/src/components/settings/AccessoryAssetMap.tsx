@@ -5,6 +5,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { getAllAssetCategories } from "@/api/categories";
+import InfoHint from "@/components/ui/infohint";
 import {
   getRequestableCategoryIds,
   getAccessoryAssetMap,
@@ -162,6 +163,18 @@ export default function AccessoryAssetMap({ refreshKey = 0 }: Props) {
     (c) => (map[String(c.id)]?.length ?? 0) > 0
   ).length;
 
+  // Any visible row mapped to an accessory category that's no longer
+  // requestable. Drives the explanation of the flagged chips, so it only
+  // appears when there's actually one on screen to explain. Same test MapRow
+  // uses per chip.
+  const hasStaleMapping = useMemo(
+    () =>
+      assetRows.some((row) =>
+        (map[String(row.id)] ?? []).some((accId) => !poolIds.has(accId))
+      ),
+    [assetRows, map, poolIds]
+  );
+
   return (
     <div className="space-y-3">
       {error && (
@@ -179,9 +192,32 @@ export default function AccessoryAssetMap({ refreshKey = 0 }: Props) {
         </div>
       ) : (
         <>
-          <div className="text-xs text-info-light px-1">
+          <div className="flex items-center gap-1.5 text-xs text-info-light px-1">
             {configuredCount} of {assetRows.length} asset categories mapped
+            {/* Two behaviours admins can't infer: an unmapped row blocks the
+                accessory entirely, and un-requestabling doesn't destroy the
+                mapping. Both cause "where did my configuration go?". */}
+            <InfoHint side="right">
+              A row with nothing mapped means holders of that asset category
+              can request no accessories at all — this is what a user is
+              allowed, so leaving it empty blocks rather than permits.
+              Un-requestabling an asset category hides its row but keeps the
+              mapping; making it requestable again brings the row back
+              unchanged.
+            </InfoHint>
           </div>
+
+          {/* Explains the flagged chips before an admin meets one, since a
+              greyed chip that only offers "remove" reads like an error. */}
+          {hasStaleMapping && (
+            <div className="rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-1.5 text-[11px] font-semibold text-status-pending leading-relaxed">
+              Chips marked with a warning point at accessory categories that
+              are no longer requestable, so they currently have no effect. They
+              stay visible rather than vanishing silently — click one to remove
+              it, or make the category requestable again under Accessory
+              Configuration.
+            </div>
+          )}
           <div className="rounded-lg  divide-y divide-outline/15 overflow-hidden">
           <div className="space-y-2">
             {assetRows.map((row) => (
