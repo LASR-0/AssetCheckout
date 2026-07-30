@@ -581,8 +581,10 @@ function QuickStart({
                   to={`/assets?categoryId=${cat.id}`}
                   // `relative` anchors the count badge. Height stays
                   // content-driven — the tile keeps its original rectangular
-                  // proportions.
-                  className={`${RAISED} group relative flex flex-col gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                  // proportions. pb-2 rather than py-5 so the bottom row sits
+                  // the same 8px off the edge as the count badge does at
+                  // top-2/right-2.
+                  className={`${RAISED} group relative flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
                 >
                   {/* How many of this category the user already holds. Assets
                       are one row per physical item, so the count is a real
@@ -845,7 +847,7 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
                 {/* No count badge here — the accessory endpoint gives no
                     per-user quantity. See HoldingsCount. */}
