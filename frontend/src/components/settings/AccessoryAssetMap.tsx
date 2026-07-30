@@ -7,6 +7,10 @@ import {
 import { getAllAssetCategories } from "@/api/categories";
 import InfoHint from "@/components/ui/infohint";
 import {
+  getUnreachableHoldings,
+  type UnreachableHolding,
+} from "@/api/holdings";
+import {
   getRequestableCategoryIds,
   getAccessoryAssetMap,
   setAccessoryCategoriesForAssetCategory,
@@ -46,6 +50,10 @@ export default function AccessoryAssetMap({ refreshKey = 0 }: Props) {
   const [accPool, setAccPool] = useState<AccessoryCategory[]>([]);
   const [allAccById, setAllAccById] = useState<Map<number, string>>(new Map());
   const [map, setMap] = useState<AssetAccessoryCategoryMap>({});
+  // Categories people are holding that nobody can request. Read-only signal,
+  // fetched alongside the map; a failure leaves it empty so the editor still
+  // works rather than the whole section erroring on a diagnostic.
+  const [unreachable, setUnreachable] = useState<UnreachableHolding[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingRows, setSavingRows] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -57,15 +65,25 @@ export default function AccessoryAssetMap({ refreshKey = 0 }: Props) {
       try {
         setLoading(true);
         setError(null);
-        const [allAssetCatsRes, reqAssetIdsRes, allAccCats, accSettings, initialMap] =
-          await Promise.all([
+        const [
+          allAssetCatsRes,
+          reqAssetIdsRes,
+          allAccCats,
+          accSettings,
+          initialMap,
+          unreachableRes,
+        ] = await Promise.all([
             getAllAssetCategories(),
             getRequestableCategoryIds(),
             getAllAccessoryCategories(),
             getAccessorySettings(),
             getAccessoryAssetMap(),
+            // Diagnostic only — never let it fail the editor.
+            getUnreachableHoldings().catch(() => null),
           ]);
         if (cancelled) return;
+
+        setUnreachable(unreachableRes?.unreachable ?? []);
 
         setAllAssetCats(allAssetCatsRes);
         setReqAssetIds(reqAssetIdsRes);
@@ -206,6 +224,56 @@ export default function AccessoryAssetMap({ refreshKey = 0 }: Props) {
               unchanged.
             </InfoHint>
           </div>
+
+          {/* People are holding these, but nobody can request them, so the
+              holdings show on nobody's home page. Computed rather than
+              described: the state is knowable, so name the categories instead
+              of explaining the failure mode. Only rendered when there is a
+              real gap, so a correctly-mapped instance sees nothing. */}
+          {unreachable.length > 0 && (
+            <div className="rounded-lg border border-dashed border-status-pending bg-status-pending/10 p-3 space-y-1.5">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-status-pending">
+                <span className="material-symbols-outlined !text-[16px]">
+                  visibility_off
+                </span>
+                {unreachable.length === 1
+                  ? "1 category is held but can't be requested"
+                  : `${unreachable.length} categories are held but can't be requested`}
+              </p>
+              <p className="text-xs text-info-light leading-relaxed">
+                People already have accessories in{" "}
+                {unreachable.length === 1 ? "this category" : "these categories"}
+                , but nobody can request{" "}
+                {unreachable.length === 1 ? "it" : "them"} — so those holdings
+                appear on nobody's home page. Map{" "}
+                {unreachable.length === 1 ? "it" : "them"} to an asset category
+                below to make {unreachable.length === 1 ? "it" : "them"}{" "}
+                visible.
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {unreachable.map((u) => (
+                  <span
+                    key={u.categoryId}
+                    className="inline-flex items-center gap-1 rounded-full border border-status-pending/40 bg-surface px-2 py-0.5 text-[11px] font-semibold text-on-surface-variant"
+                    // Says which layer is missing, since the fix differs:
+                    // un-requestable is fixed above, unmapped is fixed here.
+                    title={
+                      !u.requestable && !u.mapped
+                        ? "Not requestable, and not mapped to any asset category"
+                        : !u.requestable
+                        ? "Not in the requestable list — fix under Accessory Configuration"
+                        : "Not mapped to any asset category — fix below"
+                    }
+                  >
+                    {u.categoryName}
+                    <span className="text-info-light">
+                      · {u.heldCount} held
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Explains the flagged chips before an admin meets one, since a
               greyed chip that only offers "remove" reads like an error. */}
