@@ -430,18 +430,29 @@ function StatBody({
 //  Two small pieces shared by the asset and accessory tiles so the treatment
 //  can't drift between them.
 //
-//  Only the ASSET tiles get the count badge. The accessory endpoint exposes no
-//  per-user quantity — its qty/remaining are stock at a location — so a number
-//  there would be a claim the data doesn't support. Accessory tiles get the
-//  name line only.
+//  BOTH tile kinds show the count badge, for consistency — a number on one and
+//  not the other read as odd. What the number MEANS differs, though, so the
+//  hover text is supplied per kind rather than baked in:
+//
+//    Assets      — one row per physical asset, so the count is a true count of
+//                  items held.
+//    Accessories — the number of records Snipe returns for this user in this
+//                  category. It is NOT a quantity: the endpoint exposes no
+//                  per-user quantity (its qty/remaining are stock at a
+//                  location, and checkouts_count comes back null), so the copy
+//                  avoids claiming "you hold N of these".
+//
+//  The name line keeps the same distinction: assets can say "x2" for a
+//  repeated model, accessories never do.
 
-function HoldingsCount({ count }: { count: number }) {
+function HoldingsCount({ count, title }: { count: number; title: string }) {
   return (
     <span
       // Absolute so it never affects the tile's flex flow, and the tile keeps
-      // its existing height whether or not anything is held.
+      // its existing height whether or not anything is held. Requires
+      // `relative` on the tile.
       className="absolute top-2 right-2 inline-flex min-w-5 items-center justify-center rounded-full bg-status-model/15 px-1.5 py-0.5 text-[11px] font-bold text-status-model"
-      title={`You already hold ${count} of these`}
+      title={title}
     >
       {count}
     </span>
@@ -495,12 +506,12 @@ function TileBody({
 }) {
   return (
     <>
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+      <div className="flex flex-1 flex-col items-center my-8 justify-center gap-2 text-center">
         <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
         {/* On the name rather than a larger parent gap, so the extra breathing
             room lands below the category text only and not also between the
             icon and the name. */}
-        <span className={`${nameClass} mb-[10px]`}>{name}</span>
+        <span className={`${nameClass} `}>{name}</span>
       </div>
 
       <div className="flex w-full items-center gap-2">
@@ -589,11 +600,13 @@ function QuickStart({
                   // top-2/right-2.
                   className={`${RAISED} group relative flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
                 >
-                  {/* How many of this category the user already holds. Assets
-                      are one row per physical item, so the count is a real
-                      count. */}
+                  {/* Assets are one row per physical item, so this is a true
+                      count of what the user holds. */}
                   {held.length > 0 && (
-                    <HoldingsCount count={held.length} />
+                    <HoldingsCount
+                      count={held.length}
+                      title={`You already hold ${held.length} of these`}
+                    />
                   )}
                   <TileBody
                     icon={iconForCategory(cat.name)}
@@ -850,10 +863,22 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                // `relative` anchors the count badge.
+                className={`${RAISED} group relative flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
-                {/* No count badge here — the accessory endpoint gives no
-                    per-user quantity. See HoldingsCount. */}
+                {/* Same badge as the asset tiles, for consistency. The number
+                    is how many accessory records Snipe returns for this user
+                    here — not a quantity, hence the wording. */}
+                {held.length > 0 && (
+                  <HoldingsCount
+                    count={held.length}
+                    title={
+                      held.length === 1
+                        ? "1 accessory assigned to you in this category"
+                        : `${held.length} accessories assigned to you in this category`
+                    }
+                  />
+                )}
                 <TileBody
                   icon={iconForCategory(cat.name)}
                   name={cat.name}
