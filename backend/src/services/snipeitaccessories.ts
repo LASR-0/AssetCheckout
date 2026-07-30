@@ -11,6 +11,7 @@ import type {
   AccessorySummary,
   AccessoryResolution,
   AccessorySearchResult,
+  AccessoryHolding,
 } from "../types/snipeTypes.js";
 
 ///  +-----------------------------------------------------------------+
@@ -671,4 +672,67 @@ export async function deleteAccessory(accessoryId: number): Promise<boolean> {
   }
 
   return true;
+}
+///  +-----------------------------------------------------------------+
+///  |                   USER ACCESSORY HOLDINGS                       |
+///  +-----------------------------------------------------------------+
+
+/**
+ * The accessories a user currently holds.
+ *
+ * A new Snipe read — nothing previously needed this. The device-derivation
+ * work only ever asked for a user's ASSET categories, so there was no
+ * accessory equivalent to reuse.
+ *
+ * VERIFIED against the live instance before building (a previous accessory
+ * POST on this project returned a 302 and silently dropped its body, so the
+ * shape is not assumed):
+ *   GET /api/v1/users/{id}/accessories -> 200 application/json
+ *   { total, rows, current_page, per_page, total_pages, prev/next_page_url }
+ *   Each row is the ACCESSORY record, carrying id, name, manufacturer,
+ *   category { id, name }, location, model_number.
+ *
+ * IMPORTANT: the row's `qty`, `remaining` and `remaining_qty` are that
+ * accessory's STOCK AT ITS LOCATION — not how many this user holds — and
+ * `checkouts_count` came back null. So this deliberately returns no
+ * per-holding quantity: none is available here. The number of rows is the
+ * number of distinct accessories held, which is all the caller should infer.
+ *
+ * Bubbles nothing on failure beyond a thrown AppError; the home page's
+ * holdings display is expected to stay quiet, so the ROUTE swallows errors
+ * rather than this function pretending success.
+ */
+export async function getUserAccessoryHoldings(
+  userId: number
+): Promise<AccessoryHolding[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users/${userId}/accessories?limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (res.status === 404) {
+    throw new AppError(`Snipe user ${userId} not found`, 404);
+  }
+  if (!res.ok) {
+    throw new AppError(
+      `Failed to fetch accessory holdings for user ${userId}: status ${res.status}`,
+      500
+    );
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  return rows.map((acc) => {
+    const categoryId = Number(acc.category?.id);
+    return {
+      id: Number(acc.id),
+      name: acc.name ?? "",
+      manufacturer: acc.manufacturer?.name ?? null,
+      categoryId: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null,
+      categoryName: acc.category?.name ?? null,
+    };
+  });
 }

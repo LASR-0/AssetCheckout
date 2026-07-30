@@ -119,6 +119,55 @@ export type SnipeUserAsset = {
   category: string | null;
 };
 
+///  +-----------------------------------------------------------------+
+///  |                       USER HOLDINGS                             |
+///  +-----------------------------------------------------------------+
+//
+//  What a user currently has checked out, shaped for display rather than for
+//  fulfilment. Deliberately separate from SnipeUserAsset / AccessorySummary:
+//  those exist for the checkout and offboarding flows, and this needs the
+//  category ID (to line a holding up with a Quick Start tile, which is keyed
+//  by ID) alongside the model name (the only thing that lets a user recognise
+//  their own device).
+//
+//  No serial. Confirmed design constraint: most users never interact with
+//  serials, so on the home page they'd be noise. Serial capture belongs to the
+//  unlogged-item correction flow only.
+///  +-----------------------------------------------------------------+
+
+export type AssetHolding = {
+  /** Snipe asset id — the stable identifier for corrections later. */
+  id: number;
+  assetTag: string;
+  /** Model name. The display field: Snipe's asset `name` is often empty. */
+  model: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  /**
+   * ISO-ish datetime the asset was last checked out, or null. Used only to put
+   * the most recent holding first when a category holds several, so the name
+   * shown alongside "+N" is the one the user most likely thinks of as theirs.
+   * The accessory endpoint exposes no per-checkout date, so accessories keep
+   * Snipe's own row order instead.
+   */
+  lastCheckout: string | null;
+};
+
+export type AccessoryHolding = {
+  /** Snipe accessory id (a product-at-location record). */
+  id: number;
+  /** The accessory's own name, which is the model-equivalent here. */
+  name: string;
+  manufacturer: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+};
+
+export type UserHoldings = {
+  assets: AssetHolding[];
+  accessories: AccessoryHolding[];
+};
+
 export type CheckinFailure = { assetId: number; assetTag: string; error: string };
 
 export type OffboardResult = {

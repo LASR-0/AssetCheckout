@@ -23,6 +23,7 @@ import type {
   ModelSearchResult,
   CreateSnipeUserInput,
   SnipeUserAsset,
+  AssetHolding,
   CheckinFailure,
   OffboardResult
 } from '../types/snipeTypes.js';
@@ -1474,6 +1475,68 @@ export async function getUserAssetCategoryIds(userId: number): Promise<number[]>
     if (Number.isFinite(id) && id > 0) ids.add(id);
   }
   return Array.from(ids);
+}
+
+/**
+ * The assets a user currently holds, shaped for display.
+ *
+ * A third function over the same Snipe endpoint as getUserAssets and
+ * getUserAssetCategoryIds, deliberately: getUserAssets carries the model name
+ * but drops the category ID, and getUserAssetCategoryIds carries the ID but
+ * drops everything else. Lining a holding up with a Quick Start tile needs
+ * both — the tiles are keyed by category ID, and the model name is the only
+ * thing a user recognises their own device by. Rather than widen either
+ * existing shape (both feed the checkout and offboarding flows), this maps
+ * what the holdings display needs and leaves those two untouched.
+ *
+ * Verified against the live instance: rows carry category.id, category.name
+ * and model.name; asset `name` is frequently an empty string, so `model` is
+ * the field to render. No serial is returned here on purpose.
+ */
+export async function getUserAssetHoldings(
+  userId: number
+): Promise<AssetHolding[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/users/${userId}/assets?limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (res.status === 404) {
+    throw new AppError(`Snipe user ${userId} not found`, 404);
+  }
+  if (!res.ok) {
+    throw new AppError(
+      `Failed to fetch asset holdings for user ${userId}: status ${res.status}`,
+      500
+    );
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  const holdings: AssetHolding[] = rows.map((asset) => {
+    const categoryId = Number(asset.category?.id);
+    return {
+      id: Number(asset.id),
+      assetTag: asset.asset_tag ?? "",
+      model: asset.model?.name ?? null,
+      categoryId: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null,
+      categoryName: asset.category?.name ?? null,
+      lastCheckout: asset.last_checkout?.datetime ?? null,
+    };
+  });
+
+  // Most recently checked out first, so where a category holds several the name
+  // shown is the newest rather than whatever order Snipe happened to return.
+  // Nulls sort last.
+  return holdings.sort((a, b) => {
+    if (a.lastCheckout === b.lastCheckout) return 0;
+    if (a.lastCheckout === null) return 1;
+    if (b.lastCheckout === null) return -1;
+    return b.lastCheckout.localeCompare(a.lastCheckout);
+  });
 }
 
 ///  +-----------------------------------------------------------------+

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getRequests } from "@/api/requests";
 import { getAssetCategories } from "@/api/categories";
 import { iconForCategory } from "@/lib/categoryIcon";
@@ -9,6 +9,17 @@ import type { AssetCategory } from "@/types/categoriesType";
 import { getAccessoryCategoriesForMe } from "@/api/accessories";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 import type { Request } from "@/types/requestType"
+import { getMyHoldings } from "@/api/holdings";
+import type {
+  UserHoldings,
+  AssetHolding,
+  AccessoryHolding,
+} from "@/types/holdingsType";
+import {
+  groupByCategoryId,
+  summariseAssetHoldings,
+  summariseAccessoryHoldings,
+} from "@/lib/holdings";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     HOME PAGE (internal tool)                   |
@@ -115,15 +126,73 @@ function useMyRequests() {
   return { requests, loading };
 }
 
+///  +-----------------------------------------------------------------+
+///  |                  DATA: WHAT THE USER HOLDS                      |
+///  +-----------------------------------------------------------------+
+//
+//  Fetched once here and passed to both tile sections, since one endpoint
+//  returns both halves and rendering them twice would double the round trips.
+//
+//  DELIBERATELY QUIET. A failure logs and leaves the maps empty, so the tiles
+//  render exactly as they did before this feature existed. No error state on
+//  the home page — matching AccessoryQuickStart, which already renders nothing
+//  when it can't resolve anything.
+//
+//  Accessory results WILL be sparse in practice: Snipe's accessory data is
+//  incomplete because accessories get handed out and never logged. That is the
+//  problem this phase addresses, not a fault here.
+
+function useMyHoldings() {
+  const { name, isLoading: authLoading } = useAuth();
+  const [holdings, setHoldings] = useState<UserHoldings>({
+    assets: [],
+    accessories: [],
+  });
+
+  useEffect(() => {
+    if (authLoading || !name) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getMyHoldings();
+        if (cancelled) return;
+        setHoldings({
+          assets: data.assets ?? [],
+          accessories: data.accessories ?? [],
+        });
+      } catch (err) {
+        console.error("Failed to load holdings for home page", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [name, authLoading]);
+
+  const assetsByCategory = useMemo(
+    () => groupByCategoryId(holdings.assets),
+    [holdings.assets]
+  );
+  const accessoriesByCategory = useMemo(
+    () => groupByCategoryId(holdings.accessories),
+    [holdings.accessories]
+  );
+
+  return { assetsByCategory, accessoriesByCategory };
+}
+
 export default function LandingPage() {
   const { requests, loading } = useMyRequests();
+  const { assetsByCategory, accessoriesByCategory } = useMyHoldings();
 
   return (
     <div className="bg-landing-bg text-on-background flex-grow">
       <main className="w-full max-w-[1160px] mx-auto px-6 md:px-8 pb-16">
         <HomeHead requests={requests} loading={loading} />
-        <QuickStart />
-        <AccessoryQuickStart />
+        <QuickStart holdingsByCategory={assetsByCategory} />
+        <AccessoryQuickStart holdingsByCategory={accessoriesByCategory} />
         <RecentRequests requests={requests} loading={loading} />
         <QuickLinks />
       </main>
@@ -354,7 +423,51 @@ function StatBody({
 //  Chrome: tinted SectionHeader + padded body. The tiles themselves are
 //  untouched.
 
-function QuickStart() {
+///  +-----------------------------------------------------------------+
+///  |                  HOLDINGS ON A QUICK START TILE                 |
+///  +-----------------------------------------------------------------+
+//
+//  Two small pieces shared by the asset and accessory tiles so the treatment
+//  can't drift between them.
+//
+//  Only the ASSET tiles get the count badge. The accessory endpoint exposes no
+//  per-user quantity — its qty/remaining are stock at a location — so a number
+//  there would be a claim the data doesn't support. Accessory tiles get the
+//  name line only.
+
+function HoldingsCount({ count }: { count: number }) {
+  return (
+    <span
+      // Absolute so it never affects the tile's flex flow, and the tile keeps
+      // its existing height whether or not anything is held.
+      className="absolute top-2 right-2 inline-flex min-w-5 items-center justify-center rounded-full bg-status-model/15 px-1.5 py-0.5 text-[11px] font-bold text-status-model"
+      title={`You already hold ${count} of these`}
+    >
+      {count}
+    </span>
+  );
+}
+
+function HoldingsLine({ summary }: { summary: string | null }) {
+  if (!summary) return null;
+  return (
+    <span
+      className="max-w-full truncate text-[11px] text-info-light/80"
+      title={`You already hold: ${summary}`}
+    >
+      {summary}
+    </span>
+  );
+}
+
+function QuickStart({
+  holdingsByCategory,
+}: {
+  /** What the user already holds, keyed by Snipe asset category id. Empty
+   *  when holdings couldn't be resolved — the tiles then look as they always
+   *  did. */
+  holdingsByCategory: Map<number, AssetHolding[]>;
+}) {
   const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -408,23 +521,35 @@ function QuickStart() {
 
         {!loading && !error && categories.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {categories.map((cat) => (
-              // FIXED: deep-link with the category id — the form validates it
-              // against its own fetched list before preselecting.
-              <Link
-                key={cat.id}
-                to={`/assets?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
-              >
-                <span className="material-symbols-outlined !text-[26px]">
-                  {iconForCategory(cat.name)}
-                </span>
-                <span className="font-bold text-[13px]">{cat.name}</span>
-                <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-                  Request →
-                </span>
-              </Link>
-            ))}
+            {categories.map((cat) => {
+              const held = holdingsByCategory.get(cat.id) ?? [];
+              return (
+                // FIXED: deep-link with the category id — the form validates it
+                // against its own fetched list before preselecting.
+                <Link
+                  key={cat.id}
+                  to={`/assets?categoryId=${cat.id}`}
+                  // `relative` anchors the count badge; gap-3 -> gap-2 so the
+                  // extra holdings line doesn't stretch the tile.
+                  className={`${RAISED} group relative flex flex-col items-start gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                >
+                  {/* How many of this category the user already holds. Assets
+                      are one row per physical item, so the count is a real
+                      count. */}
+                  {held.length > 0 && (
+                    <HoldingsCount count={held.length} />
+                  )}
+                  <span className="material-symbols-outlined !text-[26px]">
+                    {iconForCategory(cat.name)}
+                  </span>
+                  <span className="font-bold text-[13px]">{cat.name}</span>
+                  <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+                    Request →
+                  </span>
+                  <HoldingsLine summary={summariseAssetHoldings(held)} />
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
@@ -622,7 +747,12 @@ function QuickLinks() {
 // Must stay in step with the route registered in App.tsx.
 const ACCESSORY_FORM_ROUTE = "/accessories";
 
-function AccessoryQuickStart() {
+function AccessoryQuickStart({
+  holdingsByCategory,
+}: {
+  /** Accessory holdings keyed by Snipe accessory category id. */
+  holdingsByCategory: Map<number, AccessoryHolding[]>;
+}) {
   const [categories, setCategories] = useState<AccessoryCategory[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -659,21 +789,26 @@ function AccessoryQuickStart() {
 
       <div className="p-5 md:p-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {categories.map((cat) => (
-            <Link
-              key={cat.id}
-              to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-              className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
-            >
-              <span className="material-symbols-outlined !text-[28px]">
-                {iconForCategory(cat.name)}
-              </span>
-              <span className="font-bold text-[15px]">{cat.name}</span>
-              <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-                Request →
-              </span>
-            </Link>
-          ))}
+          {categories.map((cat) => {
+            const held = holdingsByCategory.get(cat.id) ?? [];
+            return (
+              <Link
+                key={cat.id}
+                to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
+                className={`${RAISED} group flex flex-col items-start gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+              >
+                <span className="material-symbols-outlined !text-[28px]">
+                  {iconForCategory(cat.name)}
+                </span>
+                <span className="font-bold text-[15px]">{cat.name}</span>
+                <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+                  Request →
+                </span>
+                {/* Name only, no count badge — see HoldingsCount. */}
+                <HoldingsLine summary={summariseAccessoryHoldings(held)} />
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>

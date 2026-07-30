@@ -12,6 +12,7 @@ import jobRoutes from "./jobRoutes.js";
 import integrationsRoutes from "./integrationRoutes.js";
 import feedbackRoutes from "./feedbackRoutes.js"
 import sharepointRoutes from "./sharepointRoutes.js";
+import holdingsRoutes from "./holdingsRoutes.js";
 
 
 
@@ -30,5 +31,6 @@ router.use("/job", jobRoutes);
 router.use("/integrations", integrationsRoutes);
 router.use("/feedback", feedbackRoutes);
 router.use("/sharepoint", sharepointRoutes);
+router.use("/holdings", holdingsRoutes);
 
 export default router;
