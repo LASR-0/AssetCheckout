@@ -231,7 +231,7 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     normalize: normalizeCategoryIdsEnv,
     defaultValue: "",
     description:
-      "JSON array of Snipe-IT accessory category IDs that are allowed for new accessory requests. Empty string means all accessory categories allowed.",
+      "JSON array of Snipe-IT accessory category IDs that are allowed for new accessory requests. Empty (either an empty string or an empty array) means no site-wide restriction — every accessory category is allowed. Note this only filters; which categories a given user actually sees is driven by the asset-to-accessory map (ACCESSORY_ASSET_CATEGORY_MAP_JSON).",
   },
   {
     key: STANDARD_ACCESSORIES_KEY,
@@ -596,6 +596,18 @@ export async function getAllConfiguredStandardModelIds(): Promise<Set<number>> {
 /**
  * Returns the list of allowed accessory category IDs, or null if unset
  * (null means "all accessory categories allowed" — the default).
+ *
+ * An EMPTY list resolves to null as well, i.e. no restriction. Previously it
+ * didn't: clearing every checkbox stored "[]", which is truthy, so the
+ * whitelist became an empty allow-set and
+ * getRequestableAccessoryCategoryIdsForAssetCategories filtered the entire L3
+ * union away — no user could request any accessory. That state was
+ * indistinguishable in the UI from never having configured the setting, which
+ * allows everything, so the same empty screen meant two opposite things.
+ *
+ * NOTE: the asset-category equivalent (getRequestableCategoryIds) still has
+ * this behaviour. Deliberately left alone — it gates the main asset request
+ * path, so changing it is a separate, more consequential decision.
  */
 export async function getRequestableAccessoryCategoryIds(): Promise<number[] | null> {
   const raw = await getSetting(REQUESTABLE_ACCESSORY_CATEGORIES_KEY);
@@ -604,7 +616,8 @@ export async function getRequestableAccessoryCategoryIds(): Promise<number[] | n
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    return parsed.filter((id): id is number => typeof id === "number");
+    const ids = parsed.filter((id): id is number => typeof id === "number");
+    return ids.length > 0 ? ids : null;
   } catch {
     return null;
   }
@@ -616,9 +629,13 @@ export async function setRequestableAccessoryCategoryIds(
 ): Promise<void> {
   // Validate input: all numbers, deduplicated
   const cleaned = Array.from(new Set(ids.filter((id) => typeof id === "number")));
+  // Persist "" rather than "[]" for an empty selection so the stored value
+  // matches SETTING_DEFAULTS and reads unambiguously as "no restriction". The
+  // getter already treats the two identically; this keeps the row honest for
+  // anyone reading the DB or seeding from .env.
   await setSetting(
     REQUESTABLE_ACCESSORY_CATEGORIES_KEY,
-    JSON.stringify(cleaned),
+    cleaned.length > 0 ? JSON.stringify(cleaned) : "",
     actorEmail
   );
 }
