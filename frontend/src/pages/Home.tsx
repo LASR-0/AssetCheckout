@@ -448,15 +448,60 @@ function HoldingsCount({ count }: { count: number }) {
   );
 }
 
-function HoldingsLine({ summary }: { summary: string | null }) {
+/**
+ * The held model name(s) as a badge. No icon — the tile's own icon already
+ * says what kind of thing this is, and a second glyph here competes with it.
+ *
+ * min-w-0 + truncate because it shares its row with "Request →" and model
+ * names run long ("ThinkPad T16 Gen 1"); the full text stays on hover.
+ */
+function HoldingsBadge({ summary }: { summary: string | null }) {
   if (!summary) return null;
   return (
     <span
-      className="max-w-full truncate text-[11px] text-info-light/80"
+      className="min-w-0 truncate rounded-full border border-outline bg-surface-container-low/40 px-2 py-0.5 text-[10px] font-semibold text-info-light"
       title={`You already hold: ${summary}`}
     >
       {summary}
     </span>
+  );
+}
+
+/**
+ * The shared tile body: icon and category name centred in the available
+ * space, with the holdings badge and the "Request →" affordance on a bottom
+ * row. Used by both tile sets so the two can't drift.
+ *
+ * Request → is pushed right with ml-auto rather than justify-between, so it
+ * still sits bottom-right when there's no holdings badge beside it.
+ */
+function TileBody({
+  icon,
+  name,
+  nameClass,
+  iconClass,
+  summary,
+}: {
+  icon: string;
+  name: string;
+  nameClass: string;
+  iconClass: string;
+  summary: string | null;
+}) {
+  return (
+    <>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+        <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
+        <span className={nameClass}>{name}</span>
+      </div>
+
+      <div className="flex w-full items-center gap-2">
+        <HoldingsBadge summary={summary} />
+        <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+          Request →
+        </span>
+      </div>
+    </>
   );
 }
 
@@ -529,9 +574,11 @@ function QuickStart({
                 <Link
                   key={cat.id}
                   to={`/assets?categoryId=${cat.id}`}
-                  // `relative` anchors the count badge; gap-3 -> gap-2 so the
-                  // extra holdings line doesn't stretch the tile.
-                  className={`${RAISED} group relative flex flex-col items-start gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                  // `relative` anchors the count badge. aspect-square makes the
+                  // tile square rather than a short wide rectangle; the body
+                  // then distributes into it, identity centred and the bottom
+                  // row pinned low.
+                  className={`${RAISED} group relative flex aspect-square flex-col px-4 py-4 hover:border-purple-500 hover:-translate-y-px transition-all`}
                 >
                   {/* How many of this category the user already holds. Assets
                       are one row per physical item, so the count is a real
@@ -539,14 +586,13 @@ function QuickStart({
                   {held.length > 0 && (
                     <HoldingsCount count={held.length} />
                   )}
-                  <span className="material-symbols-outlined !text-[26px]">
-                    {iconForCategory(cat.name)}
-                  </span>
-                  <span className="font-bold text-[13px]">{cat.name}</span>
-                  <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-                    Request →
-                  </span>
-                  <HoldingsLine summary={summariseAssetHoldings(held)} />
+                  <TileBody
+                    icon={iconForCategory(cat.name)}
+                    name={cat.name}
+                    iconClass="!text-[26px]"
+                    nameClass="font-bold text-[13px]"
+                    summary={summariseAssetHoldings(held)}
+                  />
                 </Link>
               );
             })}
@@ -795,17 +841,17 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col items-start gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                className={`${RAISED} group flex aspect-square flex-col px-4 py-4 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
-                <span className="material-symbols-outlined !text-[28px]">
-                  {iconForCategory(cat.name)}
-                </span>
-                <span className="font-bold text-[15px]">{cat.name}</span>
-                <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-                  Request →
-                </span>
-                {/* Name only, no count badge — see HoldingsCount. */}
-                <HoldingsLine summary={summariseAccessoryHoldings(held)} />
+                {/* No count badge here — the accessory endpoint gives no
+                    per-user quantity. See HoldingsCount. */}
+                <TileBody
+                  icon={iconForCategory(cat.name)}
+                  name={cat.name}
+                  iconClass="!text-[28px]"
+                  nameClass="font-bold text-[15px]"
+                  summary={summariseAccessoryHoldings(held)}
+                />
               </Link>
             );
           })}
