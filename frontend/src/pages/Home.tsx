@@ -468,12 +468,17 @@ function HoldingsBadge({ summary }: { summary: string | null }) {
 }
 
 /**
- * The shared tile body: icon and category name centred in the available
- * space, with the holdings badge and the "Request →" affordance on a bottom
- * row. Used by both tile sets so the two can't drift.
+ * The shared tile body: icon and category name centred, with the holdings
+ * badge and the "Request →" affordance on a row beneath. Used by both tile
+ * sets so the two can't drift.
+ *
+ * Tile height is content-driven, so flex-1/justify-center on the identity
+ * block are inert today — they're kept so the layout still distributes
+ * correctly if the tile is ever given a fixed height. The visible effect is
+ * the horizontal centring from items-center/text-center.
  *
  * Request → is pushed right with ml-auto rather than justify-between, so it
- * still sits bottom-right when there's no holdings badge beside it.
+ * still sits at the right when there's no holdings badge beside it.
  */
 function TileBody({
   icon,
@@ -574,11 +579,10 @@ function QuickStart({
                 <Link
                   key={cat.id}
                   to={`/assets?categoryId=${cat.id}`}
-                  // `relative` anchors the count badge. aspect-square makes the
-                  // tile square rather than a short wide rectangle; the body
-                  // then distributes into it, identity centred and the bottom
-                  // row pinned low.
-                  className={`${RAISED} group relative flex aspect-square flex-col px-4 py-4 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                  // `relative` anchors the count badge. Height stays
+                  // content-driven — the tile keeps its original rectangular
+                  // proportions.
+                  className={`${RAISED} group relative flex flex-col gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
                 >
                   {/* How many of this category the user already holds. Assets
                       are one row per physical item, so the count is a real
@@ -841,7 +845,7 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex aspect-square flex-col px-4 py-4 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                className={`${RAISED} group flex flex-col gap-2 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
                 {/* No count badge here — the accessory endpoint gives no
                     per-user quantity. See HoldingsCount. */}
