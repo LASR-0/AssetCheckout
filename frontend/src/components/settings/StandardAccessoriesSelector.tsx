@@ -68,6 +68,9 @@ import type {
 
 const NONE_LABEL = "(none)";
 
+/** Stable empty set so an omitted `unmappedIds` doesn't remount the rail. */
+const EMPTY_ID_SET: Set<number> = new Set();
+
 /**
  * Compare two option lists for equality.
  *
@@ -129,6 +132,12 @@ type Props = {
   config: StandardAccessoriesConfig;
   /** Parent setter so optimistic updates stay in one source of truth. */
   onConfigChange: (next: StandardAccessoriesConfig) => void;
+  /**
+   * Requestable categories that no asset category maps to (L3), so no user can
+   * request them yet. Flagged in the rail. Owned by the parent, which is the
+   * only place that holds both the requestable set and the asset map.
+   */
+  unmappedIds?: Set<number>;
 };
 
 export default function StandardAccessoriesSelector({
@@ -136,6 +145,7 @@ export default function StandardAccessoriesSelector({
   categoriesLoading,
   config,
   onConfigChange,
+  unmappedIds,
 }: Props) {
   const isDesktop = useIsDesktop();
 
@@ -415,6 +425,7 @@ export default function StandardAccessoriesSelector({
       isDesktop={isDesktop}
       countFor={(id) => optionsFor(id).length}
       dirtyFor={isDirty}
+      unmappedIds={unmappedIds ?? EMPTY_ID_SET}
       onSelect={setSelectedCategoryId}
     />
   );
@@ -612,6 +623,7 @@ function CategoryRail({
   isDesktop,
   countFor,
   dirtyFor,
+  unmappedIds,
   onSelect,
 }: {
   categories: AccessoryCategory[];
@@ -619,6 +631,8 @@ function CategoryRail({
   isDesktop: boolean;
   countFor: (categoryId: number) => number;
   dirtyFor: (categoryId: number) => boolean;
+  /** Requestable but mapped to no asset category — invisible to every user. */
+  unmappedIds: Set<number>;
   onSelect: (categoryId: number) => void;
 }) {
   return (
@@ -648,6 +662,17 @@ function CategoryRail({
               {iconForCategory(cat.name)}
             </span>
             <span className="flex-1 truncate">{cat.name}</span>
+            {/* Flags the category right where an admin is configuring its
+                options — the options are wasted effort until it's mapped. */}
+            {unmappedIds.has(cat.id) && (
+              <span
+                title="Requestable, but no asset category maps to it — no user can request this yet"
+                aria-label="Not requestable by any user yet"
+                className="material-symbols-outlined !text-[15px] shrink-0 text-status-pending"
+              >
+                report
+              </span>
+            )}
             {dirty ? (
               <span
                 aria-label="Unsaved changes"
