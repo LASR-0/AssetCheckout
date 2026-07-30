@@ -96,6 +96,17 @@ function notify(requestId: number, kind: NotificationKind): void {
  * for NON_STANDARD the ModelRequest is created later, at manager approval
  * time, by handleNonStandardApproval.
  */
+/**
+ * Normalise the optional "what model do you have in mind?" free text.
+ * Blank or whitespace-only becomes null so the column holds either real text
+ * or nothing — no empty strings to special-case at the display end.
+ */
+function normalisePreferredModel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export async function createRequest(input: CreateRequestInput): Promise<CreateResponse> {
 
   if (typeof input.categoryId !== "number" || input.categoryId === 0) {
@@ -140,6 +151,7 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
       // asset payload carrying one is ignored rather than persisted.
       accessoryOption: null,
       reason: input.reason,
+      preferredModel: normalisePreferredModel(input.preferredModel),
       manager: input.manager,
       managerId: input.managerId,
       callText: input.callText ?? false,
@@ -231,6 +243,7 @@ async function createAccessoryRequest(
       requestType: input.requestType,
       accessoryOption,
       reason: input.reason,
+      preferredModel: normalisePreferredModel(input.preferredModel),
       manager: input.manager,
       managerId: input.managerId,
       callText: false,

@@ -21,6 +21,12 @@ export type CreateRequestInput = {
    */
   accessoryOption?: string | null;
   reason?: string;
+  /**
+   * Free text: "what model do you have in mind?". Shared by both request
+   * kinds, captured beside the reason on a non-standard request. Standard
+   * requests never offer the field, so it stays null there.
+   */
+  preferredModel?: string | null;
   manager?: string;
   managerId?: number;
   callText?: boolean;

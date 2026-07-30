@@ -303,6 +303,14 @@ export default function CreateModelDialog({
             {headerConfig.subtitle}
           </p>
         )}
+        {request?.preferredModel && (
+          <span className="mt-3 inline-flex items-start gap-1.5 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-1 mx-auto text-status-pending text-[12px] font-semibold">
+            <span className="material-symbols-outlined !text-[14px] shrink-0">
+              lightbulb
+            </span>
+            Requester has this in mind: {request.preferredModel}
+          </span>
+        )}
       </ResponsiveDialogHeader>
     );
   }

@@ -1,8 +1,12 @@
 type Props = {
   value: "STANDARD" | "NON_STANDARD";
   reason: string;
+  /** Optional "what model do you have in mind?" free text. Shared by the
+   *  asset and accessory forms; only offered on non-standard requests. */
+  preferredModel: string;
   onChange: (val: "STANDARD" | "NON_STANDARD") => void;
   onReasonChange: (val: string) => void;
+  onPreferredModelChange: (val: string) => void;
   /**
    * One-way lock to NON_STANDARD while true (accessory "Something else").
    * The parent derives the effective value; this component just disables
@@ -17,8 +21,10 @@ type Props = {
 export default function SpecLevelToggle({
   value,
   reason,
+  preferredModel,
   onChange,
   onReasonChange,
+  onPreferredModelChange,
   locked = false,
   lockedHint,
 }: Props) {
@@ -78,6 +84,22 @@ export default function SpecLevelToggle({
             onChange={(e) => onReasonChange(e.target.value)}
             rows={4}
             placeholder="Explain why this asset is required... (e.g., 'I need a bigger screen', 'I want an Android specifically')"
+            className="w-full p-4 border border-outline rounded-xl bg-surface-container/40 text-on-surface-variant focus:outline-0 transition-all"
+          />
+
+          {/* Optional, and deliberately inside the non-standard block so the
+              standard path — which has been stable in production — gains no
+              field and no validation. Blank is normalised to null server-side. */}
+          <label className="block text-sm ml-2 font-medium text-on-surface-variant pt-2">
+            What model do you have in mind?{" "}
+            <span className="font-normal text-info-light">(optional)</span>
+          </label>
+
+          <input
+            type="text"
+            value={preferredModel}
+            onChange={(e) => onPreferredModelChange(e.target.value)}
+            placeholder="e.g. ThinkPad T16 Gen 1 — leave blank if you don't mind"
             className="w-full p-4 border border-outline rounded-xl bg-surface-container/40 text-on-surface-variant focus:outline-0 transition-all"
           />
         </div>

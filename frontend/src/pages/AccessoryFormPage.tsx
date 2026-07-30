@@ -41,6 +41,7 @@ type FormState = {
   categoryName: string;
   requestType: "STANDARD" | "NON_STANDARD"; // user's own choice
   reason: string;
+  preferredModel: string;
   accessoryOption: string | null; // chosen named option label
   somethingElse: boolean;         // escape hatch → locks NON_STANDARD
   manager: string;
@@ -54,6 +55,7 @@ const INITIAL_STATE: FormState = {
   categoryName: "",
   requestType: "STANDARD",
   reason: "",
+  preferredModel: "",
   accessoryOption: null,
   somethingElse: false,
   manager: "",
@@ -137,6 +139,7 @@ export default function AccessoryRequestFormPage() {
       requestType: effectiveRequestType,
       accessoryOption: formState.somethingElse ? null : formState.accessoryOption,
       reason: formState.reason,
+      preferredModel: formState.preferredModel,
       manager: formState.manager,
       managerId: formState.managerId,
     };
@@ -307,6 +310,7 @@ export default function AccessoryRequestFormPage() {
               <SpecLevelToggle
                 value={effectiveRequestType}
                 reason={formState.reason}
+                preferredModel={formState.preferredModel}
                 locked={formState.somethingElse}
                 lockedHint={'"Something else" is always a non-standard request.'}
                 onChange={(val) =>
@@ -314,6 +318,9 @@ export default function AccessoryRequestFormPage() {
                 }
                 onReasonChange={(val) =>
                   setFormState((prev) => ({ ...prev, reason: val }))
+                }
+                onPreferredModelChange={(val) =>
+                  setFormState((prev) => ({ ...prev, preferredModel: val }))
                 }
               />
 

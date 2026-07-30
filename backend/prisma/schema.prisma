@@ -23,6 +23,10 @@ model Request {
   status         RequestStatus @default(PENDING)
 
   reason         String?
+  // Free text: "what model do you have in mind?". Shared by asset and
+  // accessory requests, captured alongside the reason on a non-standard
+  // request. Null on standard requests, which never offer the field.
+  preferredModel String?
   manager        String?
   managerId      Int
 

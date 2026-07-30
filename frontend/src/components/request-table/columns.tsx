@@ -580,6 +580,20 @@ export const columns: ColumnDef<Request>[] = [
           </span>
         )}
         <ReasonCell text={row.original.reason} />
+        {/* What the requester said they had in mind. Sits under the reason
+            because it's the same free-text answer split in two, and an admin
+            reads both together when deciding what to issue. */}
+        {row.original.preferredModel && (
+          <span
+            className="inline-flex max-w-full items-center gap-1 text-xs text-info-light"
+            title={`Requester has this model in mind: ${row.original.preferredModel}`}
+          >
+            <span className="material-symbols-outlined !text-[14px] shrink-0 text-info-light">
+              lightbulb
+            </span>
+            <span className="truncate">{row.original.preferredModel}</span>
+          </span>
+        )}
       </div>
     ),
     meta: { tdClass: "max-w-[220px]" },

@@ -19,6 +19,7 @@ type FormState = {
   categoryName: string;
   requestType: "STANDARD" | "NON_STANDARD";
   reason: string;
+  preferredModel: string;
   callText: boolean;
   newNumber: boolean;
   needsData: boolean;
@@ -35,6 +36,7 @@ const INITIAL_STATE: FormState = {
   categoryName: "",
   requestType: "STANDARD",
   reason: "",
+  preferredModel: "",
   callText: false,
   newNumber: false,
   needsData: false,
@@ -232,11 +234,15 @@ export default function RequestFormPage() {
               <SpecLevelToggle
                 value={formState.requestType}
                 reason={formState.reason}
+                preferredModel={formState.preferredModel}
                 onChange={(val) =>
                   setFormState((prev) => ({ ...prev, requestType: val }))
                 }
                 onReasonChange={(val) =>
                   setFormState((prev) => ({ ...prev, reason: val }))
+                }
+                onPreferredModelChange={(val) =>
+                  setFormState((prev) => ({ ...prev, preferredModel: val }))
                 }
               />
 

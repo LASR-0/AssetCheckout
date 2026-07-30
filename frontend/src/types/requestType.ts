@@ -34,6 +34,9 @@ export interface Request {
   accessoryLinkedLabel?: string | null;
 
   reason?: string;
+  /** Optional "what model do you have in mind?" free text, captured beside
+   *  the reason on a non-standard request. Null on standard requests. */
+  preferredModel?: string | null;
   manager?: string;
   managerId: number;
 
