@@ -344,6 +344,215 @@ underlying assets must satisfy the same conditions the checkout flow enforces:
 
 ![Configuring standard devices](Photos/Configure_Standard_Devices.png)
 
+### Accessories: the three layers
+
+Accessory availability is the product of **three** settings layers, spread over
+two settings sections. Configuring one correctly is not enough — a requester
+only ever sees the result of all three combined, and getting any of them wrong
+produces the same symptom: you save successfully and nobody can request the
+thing.
+
+```
+  L3  Accessory Availability by Asset
+      "Holders of this ASSET category may request these ACCESSORY categories"
+      accessory_asset_category_map
+                    |
+                    |  the devices this user actually holds in Snipe-IT
+                    |  decide which of these rows apply to them
+                    v
+              [ candidate accessory categories ]
+                    |
+                    |  INTERSECT
+                    v
+  L1  Requestable accessory categories        ...............  filters
+      "These accessory categories exist for requesting, site-wide"
+      requestable_accessory_categories
+                    |
+                    v
+        what the requester sees in the form
+                    |
+                    |  and underneath each one:
+                    v
+  L2  Standard accessories (options)
+      "Within this accessory category, offer these named choices"
+      standard_accessories
+```
+
+**L3 is the gate; L1 only filters.** The candidate set is built from L3 — the
+accessory categories mapped to the asset categories this person holds — and L1
+then removes anything not requestable site-wide. So:
+
+- An accessory category mapped to **no** asset category in L3 is invisible to
+  everyone, however well L1 and L2 are configured.
+- An accessory category that **is** mapped in L3 but isn't requestable in L1 is
+  also invisible.
+- L1 being empty does **not** mean "nobody sees anything" — it means "no
+  site-wide restriction", so the L3 result passes through untouched.
+
+L2 never affects *visibility*. It only decides what choices appear underneath a
+category the requester can already see.
+
+**Configure in the order L1 → L2 → L3**, because each step narrows what the
+next one can offer you:
+
+1. **L1 first** — the options editor only lists categories you've made
+   requestable, so nothing else can be set up until this is done.
+2. **L2 second** — decide what each requestable category actually offers while
+   you still have the category list in front of you.
+3. **L3 last** — the mapping picker only offers requestable accessory
+   categories, so doing it last means everything you want to map already
+   exists. This is also the step that makes anything visible, so leaving it
+   until the end means you're never looking at a half-configured category that
+   users can already request.
+
+### Requestable accessory categories (L1)
+
+The site-wide whitelist of accessory categories that can be requested at all.
+
+**An empty selection means no restriction — every accessory category is
+allowed.** This reads as the opposite of what it does, so the control says so:
+with nothing ticked it displays "All N allowed (no restriction)". Tick
+categories only when you want to *narrow* the set.
+
+Remember this layer only filters. Making a category requestable here does not
+make it requestable by anyone — that needs an L3 mapping.
+
+> **Note.** The asset-category equivalent (`requestable_categories`, under Asset
+> Configuration) has a subtly different behaviour: clearing every box there
+> stores an empty list that blocks all categories, rather than resolving to "no
+> restriction". Only the accessory whitelist treats empty as unrestricted.
+
+### Standard accessories: options (L2)
+
+Within each requestable accessory category, an **option** is a named choice the
+requester picks from. Each option resolves to a **primary** Snipe-IT accessory
+and an optional **backup**.
+
+**A category with no options still works.** It falls back to scanning the
+category and issuing the first product that has stock, in name order — the
+requester chooses nothing and gets whatever comes up first. That's a working
+configuration, not a broken one, but it takes the decision out of your hands.
+
+**Recommended: give every category at least one option**, even where there's
+only one sensible item. Name that single option `Standard`. You then control
+exactly which accessory it resolves to, and a requester who needs something
+different still has **Something else**, which is always offered automatically
+and flags the request as non-standard for you to review.
+
+**Resolution order** for a standard request against a configured option:
+
+1. The option's **primary**, preferring a record at the requester's own site.
+2. Any other site's record of that primary (which makes it a shipping request).
+3. The option's **backup**, the same way.
+4. Otherwise the request **fails** — it will not substitute a different
+   accessory from the category. The zero-config scan above applies only when a
+   category has *no* options at all.
+
+#### The label convention
+
+Requesters pick from option labels with **no other context** — no model name,
+no category heading, nothing but the label itself. So label every option by
+**model and type**:
+
+```
+iPad A16 - Screen Protector
+iPad A16 - Case
+iPad 9 Gen 2 - Case
+```
+
+A bare `Screen Protector` is unambiguous only until a second device generation
+exists, at which point nobody — requester or admin — can tell which one a
+submitted request meant. The label is also stored on the request, so renaming it
+later won't retitle requests already submitted.
+
+**Worked example — a multi-option category.** `Cables` genuinely offers a
+choice, so each type is its own option:
+
+| Option label | Primary accessory | Backup |
+|---|---|---|
+| `iPad A16 - USB-C to Lightning` | USB-C to Lightning 1m | USB-C to Lightning 2m |
+| `iPad A16 - USB-C to USB-C` | USB-C to USB-C 1m | *(none)* |
+
+The requester sees two clearly distinguishable choices and picks the one that
+matches their situation.
+
+**Worked example — a single-option category.** `Screen Protectors` has one
+sensible item per device, so it gets one option rather than none:
+
+| Option label | Primary accessory | Backup |
+|---|---|---|
+| `Standard` | iPad A16 Screen Protector | *(none)* |
+
+The requester effectively confirms rather than chooses, but you still control
+which accessory is issued — and "Something else" remains available for the
+exceptions.
+
+#### The three label fields
+
+Every option has three fields whose names are all variants of "label". They have
+different audiences:
+
+| Field | Who sees it | What it does |
+|---|---|---|
+| **Option label** | Requesters | The choice shown in the accessory request form, and the value stored on the request. The one that matters most. |
+| **Type** (`displayLabel`) | Admins only | Replaces the option label in the requests table's Request Type column — use it to shorten a long label for scanning. Blank shows the option label. |
+| **Accessory name** (`accessoryLabel`) | Admins only | The correlating accessory shown on the request row so you know what to prepare. Use a clean product name, not the full Snipe-IT record title. Blank shows the primary's Snipe-IT name. |
+
+Only the first is ever visible to a requester.
+
+#### Stock counts are totals, not per-site
+
+Snipe-IT stores accessories as one record **per location**, so the same product
+appears several times. The options picker dedupes on product identity and
+**sums the stock across every location**, showing one entry per product. A
+count of `12` may be four at one site and eight at another — it is not one
+site's availability.
+
+Fulfilment still respects location: the requester's own site is preferred, and a
+record from another site becomes a shipping request.
+
+#### Nothing is saved until you press Save changes
+
+The options editor stages every change locally, **including removals**. A
+deleted option disappears from the list immediately but is still in Snipe-IT
+until you save, and the footer says how many categories have unsaved changes.
+Closing the dialog with Escape or an outside click keeps your staged changes;
+only **Discard changes** throws them away.
+
+### Accessory availability by asset (L3)
+
+One row per requestable **asset** category, each mapping to zero or more
+requestable **accessory** categories. It answers: "if someone holds this kind of
+device, what accessories may they ask for?"
+
+- **A row with nothing mapped blocks rather than permits.** Holders of that
+  asset category can request no accessories at all. This is the most common
+  cause of "I configured it and nobody can request it".
+- **Only requestable accessory categories can be mapped**, so complete L1
+  first.
+- **Chips flagged with a warning** point at accessory categories that are no
+  longer requestable in L1. They have no effect, and they stay visible rather
+  than disappearing quietly so a stale mapping is something you can see and
+  deal with. Click one to remove it, or make the category requestable again.
+- **Un-requestabling an asset category hides its row but keeps the mapping.**
+  Making the asset category requestable again brings the row back with its
+  accessory mapping intact — you have not lost the configuration.
+
+### Accessory settings: UI control → key → env var
+
+Every accessory setting is seedable from `.env` on a fresh install using the key
+below. See [Setting key catalogue](#application-settings) for the full list.
+
+| UI control | Setting key | Env override |
+|---|---|---|
+| Accessory Configuration → Requestable categories | `requestable_accessory_categories` | `REQUESTABLE_ACCESSORY_CATEGORY_IDS` |
+| Accessory Configuration → Standard accessories | `standard_accessories` | `STANDARD_ACCESSORIES_JSON` |
+| Accessory Availability by Asset | `accessory_asset_category_map` | `ACCESSORY_ASSET_CATEGORY_MAP_JSON` |
+
+Seeding only applies when no row exists yet; once a setting has been written
+through the UI, env-var changes are ignored. Seed the structured values as JSON
+so that "what's in `.env`" matches "what's in the database".
+
 ### Skeleton asset status
 
 When the app creates a skeleton asset for a non-standard request (either under
@@ -427,6 +636,42 @@ create at least one model in that category manually in Snipe-IT first.
 **Model creation fails with no skeleton status.** If no skeleton status is
 configured and Snipe-IT has no status named "Pending" to fall back to, creating
 a skeleton asset fails. Fix: set a skeleton status in the settings page.
+
+**I configured an accessory and nobody can request it.** Almost always the
+three-layer intersection — see [Accessories: the three
+layers](#accessories-the-three-layers). Work through it in this order:
+
+1. **Is it mapped in L3?** Under *Accessory Availability by Asset*, at least one
+   asset category that people actually hold must map to this accessory category.
+   An accessory category mapped to nothing is invisible to everyone no matter
+   how it's configured elsewhere. This is the usual culprit.
+2. **Is it requestable in L1?** Under *Accessory Configuration*, either the
+   category is ticked, or nothing is ticked at all (which means no restriction).
+   If some categories are ticked and this one isn't, it's filtered out.
+3. **Does the user hold a matching device?** Availability is derived from the
+   assets checked out to them in Snipe-IT. Someone holding no devices in any
+   mapped asset category sees nothing, which is working as designed.
+4. **Is the mapping stale?** A chip flagged with a warning in L3 points at a
+   category that's no longer requestable in L1, so it has no effect.
+
+**An accessory category shows no options and I expected it to be broken.** It
+isn't. A category with no configured options falls back to issuing the first
+in-stock product in that category, in name order. See [Standard accessories:
+options](#standard-accessories-options-l2) — configuring a single option named
+`Standard` is recommended so the choice is yours rather than incidental.
+
+**An accessory request fails with no stock even though stock exists.** If the
+category has configured options, resolution tries only that option's primary and
+backup. When both are out of stock the request fails rather than substituting
+another accessory from the category — that substitution only happens for
+categories with no options at all. Check the specific accessories the option
+points at, not the category total. Remember the stock figure in the options
+picker is summed across all Snipe-IT locations.
+
+**I unticked every accessory category and now everything is requestable.** That
+is intended: an empty accessory whitelist means "no site-wide restriction". To
+restrict, tick the categories you want to allow. (Note the asset-category
+whitelist behaves differently — clearing it there blocks everything.)
 
 **Emails aren't being sent.** Notification jobs show as Failed in the
 Background Jobs history when SMTP is unconfigured or the relay is unreachable.
@@ -983,6 +1228,15 @@ Asset configuration:
 | `skeleton_status_id` | `SKELETON_STATUS_ID` | `""` | Status ID for newly-created skeleton assets. Empty falls back to a status named "Pending". |
 | `mobile_country_code` | `MOBILE_COUNTRY_CODE` | `61` | Country calling code (digits only) used to recognise mobile numbers. |
 | `mobile_leading_digit` | `MOBILE_LEADING_DIGIT` | `4` | First digit after the prefix that marks a number as a mobile. Single digit. |
+
+Accessory configuration (see [Accessories: the three
+layers](#accessories-the-three-layers) for how these interact):
+
+| Key | Env override | Default | Meaning |
+|---|---|---|---|
+| `requestable_accessory_categories` | `REQUESTABLE_ACCESSORY_CATEGORY_IDS` | `""` (no restriction) | **L1.** JSON array of accessory category IDs allowed site-wide. Empty — empty string *or* empty array — means no restriction, unlike the asset equivalent. Filters only; visibility comes from L3. Env accepts JSON or comma-separated. |
+| `standard_accessories` | `STANDARD_ACCESSORIES_JSON` | `""` | **L2.** JSON object mapping `accessoryCategoryId → { options: [{ label, displayLabel, accessoryLabel, primary, backup }] }`. A category absent here falls back to issuing the first in-stock product in it. |
+| `accessory_asset_category_map` | `ACCESSORY_ASSET_CATEGORY_MAP_JSON` | `""` | **L3.** JSON object mapping `assetCategoryId → [accessoryCategoryId, ...]` — what holders of that asset category may request. This is the layer that grants visibility; an unmapped accessory category is requestable by nobody. |
 
 Shipping, reminders, and features:
 
