@@ -416,10 +416,10 @@ function QuickStart() {
                 to={`/assets?categoryId=${cat.id}`}
                 className={`${RAISED} group flex flex-col items-start gap-3 px-5 py-5 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
-                <span className="material-symbols-outlined !text-[28px]">
+                <span className="material-symbols-outlined !text-[26px]">
                   {iconForCategory(cat.name)}
                 </span>
-                <span className="font-bold text-[15px]">{cat.name}</span>
+                <span className="font-bold text-[13px]">{cat.name}</span>
                 <span className="text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
                   Request →
                 </span>

@@ -119,7 +119,7 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     function handleClick() {
       if (timer.current) clearTimeout(timer.current);
       setClicked(true);
-      timer.current = setTimeout(() => setClicked(false), 300);
+      timer.current = setTimeout(() => setClicked(false), 100);
       onClick();
     }
 
