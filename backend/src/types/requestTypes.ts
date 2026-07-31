@@ -31,6 +31,8 @@ export type CreateCorrectionInput = {
   serial?: string | null;
   /** WRONG_MODEL only: what the model actually is. */
   correctedModel?: string | null;
+  /** WRONG_MODEL only: which detail is wrong. */
+  wrongField?: "SERIAL" | "MODEL" | "OTHER" | null;
   /** NO_LONGER_HELD only: why it's gone. */
   noLongerHeldReason?:
     | "RETURNED"

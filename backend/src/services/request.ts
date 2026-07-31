@@ -173,6 +173,14 @@ export async function createCorrectionRequest(
   const correctedModel =
     input.correctionKind === "WRONG_MODEL" ? trimmed(input.correctedModel) : null;
 
+  const VALID_WRONG_FIELDS = ["SERIAL", "MODEL", "OTHER"];
+  const wrongField =
+    input.correctionKind === "WRONG_MODEL" &&
+    typeof input.wrongField === "string" &&
+    VALID_WRONG_FIELDS.includes(input.wrongField)
+      ? input.wrongField
+      : null;
+
   const VALID_REASONS = ["RETURNED", "LOST", "SWAPPED", "GAVE_AWAY", "OTHER"];
   const noLongerHeldReason =
     input.correctionKind === "NO_LONGER_HELD" &&
@@ -245,6 +253,7 @@ export async function createCorrectionRequest(
           description,
           serial,
           correctedModel,
+          wrongField,
           noLongerHeldReason,
         },
       },

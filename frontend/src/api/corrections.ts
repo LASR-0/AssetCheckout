@@ -27,6 +27,8 @@ export type SubmitCorrectionInput = {
   description: string;
   serial?: string | null;
   correctedModel?: string | null;
+  /** Which recorded detail is wrong — only meaningful on WRONG_MODEL. */
+  wrongField?: "SERIAL" | "MODEL" | "OTHER" | null;
   noLongerHeldReason?: NoLongerHeldReason | null;
 };
 

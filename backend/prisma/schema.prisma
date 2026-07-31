@@ -162,6 +162,10 @@ model CorrectionDetail {
   /// WRONG_MODEL only: what the model actually is, in the user's words.
   correctedModel String?
 
+  /// WRONG_MODEL only: which detail is wrong — serial, model, or something
+  /// the user describes instead.
+  wrongField     WrongField?
+
   /// NO_LONGER_HELD only: why it's gone.
   noLongerHeldReason NoLongerHeldReason?
 
@@ -246,6 +250,15 @@ enum CorrectionSubject {
 /// Why the user no longer has something recorded against them. Optional, but
 /// it's the difference between an admin knowing what to do with the record and
 /// having to chase the requester.
+/// Which recorded detail the user says is wrong. WRONG_MODEL is the kind;
+/// this says which field within it, so a serial-only correction doesn't have
+/// to pretend the model is wrong.
+enum WrongField {
+  SERIAL
+  MODEL
+  OTHER
+}
+
 enum NoLongerHeldReason {
   RETURNED
   LOST

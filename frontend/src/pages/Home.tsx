@@ -576,7 +576,7 @@ function QuickStart({
       <MyHoldingsDialog
         open={holdingsOpen}
         onOpenChange={setHoldingsOpen}
-        focus="ASSET"
+        subject="ASSET"
       />
 
       <div className="p-5 md:p-6">
@@ -885,7 +885,7 @@ function AccessoryQuickStart({
       <MyHoldingsDialog
         open={holdingsOpen}
         onOpenChange={setHoldingsOpen}
-        focus="ACCESSORY"
+        subject="ACCESSORY"
       />
 
       <div className="p-5 md:p-6">
