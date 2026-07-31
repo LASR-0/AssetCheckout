@@ -473,7 +473,11 @@ function HoldingsBadge({ summary }: { summary: string | null }) {
   if (!summary) return null;
   return (
     <span
-      className="min-w-0 truncate rounded-full border border-outline bg-surface-container-low/40 px-2 py-0.5 text-[10px] font-semibold text-info-light"
+      // max-w-full is what makes truncate actually work. min-w-0 alone only
+      // helps when a flex row squeezes the badge; stacked on mobile the badge
+      // is shrink-to-fit, so without a cap it grew past the tile instead of
+      // ellipsing.
+      className="max-w-full min-w-0 truncate rounded-full border border-outline bg-surface-container-low/40 px-2 py-0.5 text-[10px] font-semibold text-info-light"
       title={`You already hold: ${summary}`}
     >
       {summary}
@@ -518,11 +522,14 @@ function TileBody({
       </div>
 
       {/* Stacked on mobile — the badge on its own line with "Request →" beneath
-          it, right-aligned — because side by side there isn't room for a model
-          name and the affordance on one narrow line. Side by side from sm up.
-          ml-auto pushes right in both directions: in a column the cross axis is
-          horizontal, so it still right-aligns rather than needing self-end. */}
-      <div className="flex w-full flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+          it — because side by side there isn't room for a model name and the
+          affordance on one narrow line. Side by side from sm up.
+          items-center centres the badge under the icon and category name above
+          it, so a short name doesn't sit off to one side. It also serves as the
+          row's vertical centring from sm up, so no separate sm: variant.
+          "Request →" keeps ml-auto and stays right in both directions: in a
+          column the cross axis is horizontal, so it right-aligns there too. */}
+      <div className="flex w-full flex-col items-center gap-1 sm:flex-row sm:gap-2">
         <HoldingsBadge summary={summary} />
         <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
           Request →
