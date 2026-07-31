@@ -62,6 +62,11 @@
     --status-shipped:     #38bdf8; /* sky-400    — shipped */
     --status-assigned:    #818cf8; /* indigo-400 — assigned */
     --status-model:       #e2a302; /* amber-400  — create model */
+    /* Record corrections. Its own token rather than a reused one: every other
+       orangey-yellow above is bound to a lifecycle stage, and a correction is
+       a KIND of row, not a stage within one — the same reasoning that put the
+       non-standard indicator on the unbound brand colour. */
+    --status-correction:  #d97706; /* amber-600  — record correction */
 
     /* modals */
     --modal-text-primary: 52 50 52;
@@ -145,6 +150,7 @@
     --status-shipped:     #22d3ee; /* cyan-400 */
     --status-assigned:    #a5b4fc; /* indigo-300 */
     --status-model:       #fcd34d; /* amber-300 */
+    --status-correction:  #fbbf24; /* amber-400 */
 
     --modal-text-primary: 255 228 189;
     --modal-text-secondary: 255 241 219;
@@ -255,6 +261,7 @@
   --color-status-shipped:     var(--status-shipped);
   --color-status-assigned:    var(--status-assigned);
   --color-status-model:       var(--status-model);
+  --color-status-correction:  var(--status-correction);
 
    --color-tooltip-bg: rgb(var(--tooltip-bg));
    --color-tooltip-text: rgb(var(--tooltip-text));

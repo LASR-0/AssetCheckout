@@ -28,6 +28,7 @@ export type RequestsTableMeta = {
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   onMarkReadyForCollection: (request: Request) => void;
+  onManageCorrection: (request: Request) => void;
 };
 
 // --- Sort indicator ---
@@ -280,15 +281,39 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     ? "Fulfilled — waiting for IT to prepare it for collection"
     : undefined;
 
-  // CORRECTIONS never offer a provisioning action. Without this a resolved
-  // correction (status COMPLETED, nothing shipped or collected) satisfies
-  // deriveFulfilment's collect-awaiting-prep case, so an admin would be shown
-  // "Mark ready" — which stamps collectionReadyAt and emails the requester
-  // that a device is ready to collect. Placed above every other branch.
-  //
-  // Interim: the row indicator and the Manage dialog land in increment 5. For
-  // now the row states where the correction is and offers nothing.
+  // CORRECTIONS never offer a provisioning action. Without this branch a
+  // resolved correction (status COMPLETED, nothing shipped or collected)
+  // satisfies deriveFulfilment's collect-awaiting-prep case, so an admin would
+  // be shown "Mark ready" — which stamps collectionReadyAt and emails the
+  // requester that a device is ready to collect. Placed above every other
+  // branch, and it must STAY above them: the single action offered here is
+  // "Manage", which opens the correction's own dialog and nothing else.
   if (request.requestKind === "CORRECTION") {
+    // Blocked: approved, but the write to Snipe couldn't happen, so the row
+    // deliberately sits at APPROVED rather than claiming to be done. Named on
+    // the row so it's visible without opening anything.
+    const blocked = !!request.correctionDetail?.applyError;
+
+    if (role === "ADMIN" && requestStatus !== "COMPLETED" && requestStatus !== "REJECTED") {
+      return (
+        <ActionRow>
+          <ActionButton
+            icon={blocked ? "pending_actions" : "fact_check"}
+            label={blocked ? "Blocked" : "Manage"}
+            color="text-status-correction"
+            hoverBg="hover:bg-status-correction/10"
+            border="border-status-correction/40"
+            title={
+              blocked
+                ? "This correction couldn't be applied to Snipe — review and retry"
+                : "Review this correction and approve or reject it"
+            }
+            onClick={() => meta.onManageCorrection(request)}
+          />
+        </ActionRow>
+      );
+    }
+
     return (
       <BadgeWithTooltip
         status={requestStatus}
@@ -297,6 +322,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             ? "Record correction — applied"
             : requestStatus === "REJECTED"
             ? "Record correction — rejected"
+            : blocked
+            ? "Record correction — approved, but not yet applied in Snipe"
             : "Record correction — waiting for IT to review"
         }
       />
@@ -602,7 +629,30 @@ export const columns: ColumnDef<Request>[] = [
             Non-standard
           </span>
         )}
-        <ReasonCell text={row.original.reason} />
+        {/* Same treatment for corrections, in their own token — names what the
+            orangey-yellow row accent means so the accent doesn't have to be
+            learned. Mutually exclusive with the badge above: requestType is
+            CORRECTION, never NON_STANDARD. */}
+        {row.original.requestKind === "CORRECTION" && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-correction/10 text-status-correction border border-status-correction/30">
+            <span className="material-symbols-outlined !text-[11px]">
+              fact_check
+            </span>
+            Correction
+          </span>
+        )}
+        {/* Corrections hard-null `reason` at creation and only gain one when
+            rejected (the "REJECTED: … REQUEST: …" format ReasonCell parses).
+            So an open correction shows what the requester actually reported,
+            and a rejected one shows the admin's reason — which is how the
+            rejection reason reaches the requester. */}
+        <ReasonCell
+          text={
+            row.original.requestKind === "CORRECTION" && !row.original.reason
+              ? row.original.correctionDetail?.description
+              : row.original.reason
+          }
+        />
         {/* What the requester said they had in mind. Sits under the reason
             because it's the same free-text answer split in two, and an admin
             reads both together when deciding what to issue. */}

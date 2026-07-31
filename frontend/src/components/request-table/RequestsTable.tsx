@@ -31,6 +31,7 @@ type Props = {
   onFilteredCountChange?: (count: number) => void;
   columnVisibility: Record<string, boolean>;
   onMarkReadyForCollection: (request: Request) => void;
+  onManageCorrection: (request: Request) => void;
 };
 
 /**
@@ -120,6 +121,7 @@ export default function RequestsTable({
   onFilteredCountChange,
   columnVisibility,
   onMarkReadyForCollection,
+  onManageCorrection,
 }: Props) {
   // Default sort: newest first
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -150,7 +152,8 @@ export default function RequestsTable({
       onAddAccessoryStock,
       onMarkShipped,
       onMarkReceived,
-      onMarkReadyForCollection
+      onMarkReadyForCollection,
+      onManageCorrection
     } as RequestsTableMeta,
   });
 
@@ -211,10 +214,18 @@ export default function RequestsTable({
                   // amber or green accent would read as "pending"/"completed".
                   // Non-standard is an attribute of the request, not a stage.
                   //
+                  // Corrections carry the same accent in status-correction —
+                  // its own token for the same reason `primary` was chosen
+                  // here: a correction is a kind of row, not a stage within
+                  // one. The two are mutually exclusive by construction
+                  // (requestType is CORRECTION, never NON_STANDARD).
+                  //
                   // Standard rows get the same 4px border in transparent so
                   // the first column stays aligned across the table.
                   className={`hover:bg-surface-container-low/20 transition-colors border-b border-outline group border-l-4 ${
-                    row.original.requestType === "NON_STANDARD"
+                    row.original.requestKind === "CORRECTION"
+                      ? "border-l-status-correction"
+                      : row.original.requestType === "NON_STANDARD"
                       ? "border-l-primary"
                       : "border-l-transparent"
                   }`}

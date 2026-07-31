@@ -42,3 +42,48 @@ export async function submitCorrection(input: SubmitCorrectionInput) {
     { method: "POST", body: input }
   );
 }
+
+///  +-----------------------------------------------------------------+
+///  |                     ADMIN RESOLUTION                            |
+///  +-----------------------------------------------------------------+
+
+/** Targets the admin supplies when the correction's free text can't name a
+ *  Snipe record on its own. */
+export type CorrectionResolution = {
+  /** WRONG_MODEL + MODEL: the Snipe model to retarget the asset to. */
+  modelId?: number | null;
+  /** UNLOGGED: the accessory or asset the report was matched to. */
+  snipeRecordId?: number | null;
+  /** The admin already fixed Snipe by hand — skip the write, complete the row. */
+  resolvedManually?: boolean;
+};
+
+export type ApplyCorrectionResult = {
+  success: true;
+  type: "CORRECTION";
+  /**
+   * READ THIS. False means the correction is blocked: nothing was written to
+   * Snipe, the request is still APPROVED, and `message` says why. A 200 alone
+   * is NOT proof the record was fixed.
+   */
+  applied: boolean;
+  message: string;
+};
+
+/**
+ * Approve a correction and apply it to Snipe.
+ *
+ * Goes through the shared approve endpoint rather than a correction-specific
+ * one: that endpoint already routes CORRECTION rows to their own handler
+ * before any provisioning branch is considered, so reusing it keeps the single
+ * guarded entry point instead of opening a second door into approval.
+ */
+export async function approveCorrection(
+  requestId: number,
+  resolution: CorrectionResolution = {}
+): Promise<ApplyCorrectionResult> {
+  return apiFetch<ApplyCorrectionResult>(`/api/approval/${requestId}/approve`, {
+    method: "POST",
+    body: resolution,
+  });
+}

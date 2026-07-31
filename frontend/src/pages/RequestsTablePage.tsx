@@ -18,6 +18,7 @@ import AccessoryStockDialog from "@/components/dialogs/AccessoryStockDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
 import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
 import ConfirmOnBehalfApprovalDialog from "@/components/dialogs/ConfirmOnBehalfApprovalDialog";
+import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 
 /**
  * Filter values the status dropdown can hold. IN_PROGRESS is synthetic — it
@@ -74,6 +75,7 @@ export default function RequestTablePage() {
   const [accessoryStockDialogOpen, setAccessoryStockDialogOpen] = useState(false);
   const [standardResultOpen, setStandardResultOpen] = useState(false);
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
+  const [manageCorrectionOpen, setManageCorrectionOpen] = useState(false);
 
   // Admin-approving-for-a-manager confirmation. Separate from the misnamed
   // `approveDialogOpen` above, which drives CreateModelDialog.
@@ -234,16 +236,29 @@ export default function RequestTablePage() {
   }
 
   async function handleReject(request: Request, reason: string) {
+    // Corrections hard-null `reason` at creation, so the original text has to
+    // come from the correction detail — otherwise the stored value reads
+    // "REQUEST: undefined" and the requester is shown that instead of what
+    // they reported. Everything else keeps its own reason.
+    const original =
+      request.requestKind === "CORRECTION"
+        ? request.correctionDetail?.description ?? ""
+        : request.reason ?? "";
+
     try {
       await apiFetch(`/api/approval/${request.id}/reject`, {
         method: "POST",
         body: {
-          reason: "REJECTED: " + reason + "\n REQUEST: " + request.reason,
+          reason: "REJECTED: " + reason + "\n REQUEST: " + original,
         },
       });
       await loadRequests();
     } catch (err) {
       console.error("Reject failed", err);
+      // Rethrown so a caller that shows the failure where the admin is
+      // looking (the Manage dialog) can do so, instead of the rejection
+      // silently appearing to have worked.
+      throw err;
     }
   }
 
@@ -323,7 +338,15 @@ export default function RequestTablePage() {
 
   const handleConfirmReject = async (reason: string) => {
     if (!selectedRequest) return;
-    await handleReject(selectedRequest, reason);
+    try {
+      await handleReject(selectedRequest, reason);
+    } catch (err) {
+      // handleReject rethrows now, so this has to be caught here or it
+      // surfaces as an unhandled rejection. Keeping the dialog open is
+      // deliberate: closing it on a failed reject would look like it worked.
+      alert(err instanceof Error && err.message ? err.message : "Failed to reject this request.");
+      return;
+    }
     setRejectDialogOpen(false);
     setSelectedRequest(null);
   };
@@ -348,6 +371,13 @@ export default function RequestTablePage() {
   function handleAddAccessoryStock(request: Request) {
     setSelectedRequest(request);
     setAccessoryStockDialogOpen(true);
+  }
+
+  // Corrections get one row action — Manage — and both verbs live inside the
+  // dialog. They never reach handleApprove's provisioning paths.
+  function handleManageCorrection(request: Request) {
+    setSelectedRequest(request);
+    setManageCorrectionOpen(true);
   }
 
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
@@ -401,6 +431,7 @@ export default function RequestTablePage() {
             onFilteredCountChange={setFilteredCount}
             columnVisibility={columnVisibility}
             onMarkReadyForCollection={handleMarkReadyForCollection}
+            onManageCorrection={handleManageCorrection}
           />
           {/* DIALOGS */}
           <RejectionReasonDialog
@@ -486,6 +517,17 @@ export default function RequestTablePage() {
           <FeedbackNudgeDialog
             open={feedbackNudgeOpen}
             onOpenChange={setFeedbackNudgeOpen}
+          />
+
+          <ManageCorrectionDialog
+            request={selectedRequest}
+            open={manageCorrectionOpen}
+            onOpenChange={(next) => {
+              setManageCorrectionOpen(next);
+              if (!next) setSelectedRequest(null);
+            }}
+            onSuccess={loadRequests}
+            onReject={handleReject}
           />
 
           {/* PAGINATION */}
