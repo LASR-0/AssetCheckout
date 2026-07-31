@@ -12,6 +12,16 @@ import { getFeedbackEnabled } from "@/api/feedback";
 
 const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
 
+/**
+ * Footer link. The basis pins exactly two links per row on mobile —
+ * 50% minus half the 1.5rem column gap — so they form a tidy 2x2 block
+ * beside the company name instead of wrapping raggedly wherever they
+ * happen to run out of room. From sm up the basis is dropped and they sit
+ * on one natural-width row as before.
+ */
+const FOOTER_LINK =
+  "basis-[calc(50%-0.75rem)] sm:basis-auto hover:text-on-background transition-colors";
+
 export default function Footer() {
   return (
     <footer className="border-t border-outline shadow-md bg-footer-bg">
@@ -22,23 +32,14 @@ export default function Footer() {
           down and wraps instead. Desktop is unchanged from sm up. */}
       <div className="max-w-[1160px] mx-auto px-5 sm:px-8 py-5 sm:py-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-info-light">
         <span className="shrink-0">{COMPANY}</span>
-        <nav className="ml-auto flex flex-wrap justify-end gap-x-4 gap-y-1.5 sm:gap-5 font-semibold">
-          <Link
-            className="hover:text-on-background transition-colors"
-            to="/assets"
-          >
+        <nav className="ml-auto flex flex-wrap gap-x-6 gap-y-1.5 sm:gap-5 font-semibold">
+          <Link className={FOOTER_LINK} to="/assets">
             Request assets
           </Link>
-          <Link
-            className="hover:text-on-background transition-colors"
-            to="/accessories"
-          >
+          <Link className={FOOTER_LINK} to="/accessories">
             Request accessories
           </Link>
-          <Link
-            className="hover:text-on-background transition-colors"
-            to="/requests"
-          >
+          <Link className={FOOTER_LINK} to="/requests">
             Requests
           </Link>
           <FeedbackNavLink />
@@ -69,7 +70,7 @@ function FeedbackNavLink() {
   if (!enabled) return null;
 
   return (
-    <Link className="hover:text-on-background transition-colors" to="/feedback">
+    <Link className={FOOTER_LINK} to="/feedback">
       Feedback
     </Link>
   );
