@@ -158,6 +158,13 @@ export type CorrectionApproveResponse = {
   success: true;
   type: "CORRECTION";
   request: Request;
+  /**
+   * Whether Snipe was actually written. False means the correction is BLOCKED:
+   * the request stays at APPROVED, `message` carries the reason, and the row
+   * remains in the admin queue. A successful call is therefore not on its own
+   * proof that the record was fixed — callers must read this.
+   */
+  applied: boolean;
   message: string;
 };
 

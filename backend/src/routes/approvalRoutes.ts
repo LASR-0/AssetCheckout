@@ -42,7 +42,20 @@ router.post("/:requestId/approve", async (req, res, next) => {
     const actorEmail = getActorEmail(req);
     const isAdmin = isAdminEmail(actorEmail);
 
-    const result = await approveRequest(requestId, { name: actorName, isAdmin });
+    // Corrections only. The Manage dialog supplies the Snipe record the admin
+    // matched a free-text report to, or states they fixed Snipe by hand.
+    // Ignored by every provisioning path — those derive their own targets.
+    const { modelId, snipeRecordId, resolvedManually } = req.body ?? {};
+
+    const result = await approveRequest(
+      requestId,
+      { name: actorName, isAdmin },
+      {
+        modelId: typeof modelId === "number" ? modelId : null,
+        snipeRecordId: typeof snipeRecordId === "number" ? snipeRecordId : null,
+        resolvedManually: resolvedManually === true,
+      }
+    );
     res.json(result);
   } catch (err) {
     next(err);

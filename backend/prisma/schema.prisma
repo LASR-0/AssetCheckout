@@ -169,6 +169,13 @@ model CorrectionDetail {
   /// NO_LONGER_HELD only: why it's gone.
   noLongerHeldReason NoLongerHeldReason?
 
+  /// Why an approved correction could not be written to Snipe. Set when the
+  /// admin approved but the write failed or could not be attempted; the
+  /// Request deliberately STAYS at APPROVED so the correction remains in the
+  /// admin queue and can be retried, rather than being marked COMPLETED with
+  /// Snipe untouched. Cleared on a successful apply.
+  applyError     String?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

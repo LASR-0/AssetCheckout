@@ -1,5 +1,13 @@
 import { prisma } from "../db/prisma.js";
-import type { Request, ModelRequest } from "../../generated/prisma_client/client.js";
+import type {
+  Request,
+  ModelRequest,
+  CorrectionDetail,
+} from "../../generated/prisma_client/client.js";
+import {
+  applyCorrectionToSnipe,
+  type CorrectionResolution,
+} from "./correction.js";
 import {
   getModelsByCategory,
   getAvailableAssetFromModel,
@@ -451,12 +459,13 @@ async function createAccessoryRequest(
  */
 export async function approveRequest(
   requestId: number,
-  actor: Actor
+  actor: Actor,
+  resolution: CorrectionResolution = {}
 ): Promise<ApproveResponse> {
 
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    include: { modelRequest: true },
+    include: { modelRequest: true, correctionDetail: true },
   });
 
   if (!request) {
@@ -471,7 +480,12 @@ export async function approveRequest(
     if (!actor.isAdmin) {
       throw new AppError("IT admin sign-off required for corrections", 403);
     }
-    return handleCorrectionApproval(request, actor.name);
+    return handleCorrectionApproval(
+      request,
+      request.correctionDetail,
+      actor.name,
+      resolution
+    );
   }
 
   if (request.status === "PENDING") {
@@ -513,22 +527,58 @@ export async function approveRequest(
 }
 
 /**
- * Admin resolution of a correction. Terminal: the correction is either applied
- * or rejected, and there is no collection, shipping or receipt stage after it.
+ * Admin resolution of a correction: the decision, then the write to Snipe.
  *
- * Writes NOTHING to Snipe. Applying the correction to Snipe is increment 5;
- * until then approving records the decision only, which is exactly the
- * behaviour this increment has to guarantee — no checkout, no stock movement,
- * no shipping stamp.
+ * COMPLETED MEANS SNIPE AGREES. The request is only marked COMPLETED when the
+ * write actually landed (or the admin stated they made it by hand). If the
+ * correction can't be applied — no stock, no target selected, nothing to patch
+ * — the status deliberately STAYS at APPROVED with the reason recorded on
+ * applyError, so the row stays in the admin queue and can be retried. The
+ * alternative, completing it anyway, would leave an unapplied correction
+ * indistinguishable from an applied one: the exact class of wrong record this
+ * feature exists to fix.
  *
- * Emits no notification: every existing kind is provisioning copy.
+ * Still no provisioning: no ModelRequest, no shipping stamp, no collection
+ * stamp, no job queued. The only Snipe writes are the ones that make the
+ * record match reality — a checkin, a checkout, or a single-field patch.
+ *
+ * Emits no notification: every existing template is provisioning copy.
  */
 async function handleCorrectionApproval(
   request: Request,
-  actorName: string
+  detail: CorrectionDetail | null,
+  actorName: string,
+  resolution: CorrectionResolution
 ): Promise<CorrectionApproveResponse> {
   if (request.status === "REJECTED" || request.status === "COMPLETED") {
     throw new AppError("Correction is already in a terminal state", 400);
+  }
+
+  if (!detail) {
+    throw new AppError(
+      "Correction has no detail record — cannot be applied",
+      500
+    );
+  }
+
+  const outcome = await applyCorrectionToSnipe(request, detail, resolution);
+
+  if (outcome.status === "blocked") {
+    // Record WHY on the detail row and leave the request where it is. Nothing
+    // about the request changes: no adminApprovedAt, because approving is
+    // exactly what hasn't been able to take effect.
+    await prisma.correctionDetail.update({
+      where: { requestId: request.id },
+      data: { applyError: outcome.blockedReason },
+    });
+
+    return {
+      success: true,
+      type: "CORRECTION",
+      request,
+      applied: false,
+      message: outcome.blockedReason,
+    };
   }
 
   const updated = await prisma.request.update({
@@ -537,6 +587,9 @@ async function handleCorrectionApproval(
       status: "COMPLETED",
       adminApprovedBy: actorName,
       adminApprovedAt: new Date(),
+      // Cleared on success so a row that was blocked and then applied doesn't
+      // keep showing the stale reason it was once stuck on.
+      correctionDetail: { update: { applyError: null } },
     },
   });
 
@@ -544,7 +597,8 @@ async function handleCorrectionApproval(
     success: true,
     type: "CORRECTION",
     request: updated,
-    message: "Correction approved",
+    applied: true,
+    message: outcome.summary,
   };
 }
 
