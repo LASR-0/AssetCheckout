@@ -15,9 +15,14 @@ const COMPANY = import.meta.env.VITE_COMPANY_NAME || "Checkout Central";
 export default function Footer() {
   return (
     <footer className="border-t border-outline shadow-md bg-footer-bg">
-      <div className="max-w-[1160px] mx-auto px-8 py-8 flex items-center gap-6 text-sm text-info-light">
-        <span>{COMPANY}</span>
-        <nav className="ml-auto flex gap-5 font-semibold">
+      {/* Mobile: the company name and the links share one row, the links
+          wrapping and right-aligned, at a smaller size and tighter padding.
+          Four links no longer fit a phone width at text-sm, and stacking them
+          vertically would have grown the footer's height — so the type scales
+          down and wraps instead. Desktop is unchanged from sm up. */}
+      <div className="max-w-[1160px] mx-auto px-5 sm:px-8 py-5 sm:py-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-info-light">
+        <span className="shrink-0">{COMPANY}</span>
+        <nav className="ml-auto flex flex-wrap justify-end gap-x-4 gap-y-1.5 sm:gap-5 font-semibold">
           <Link
             className="hover:text-on-background transition-colors"
             to="/assets"

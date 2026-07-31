@@ -4,7 +4,7 @@ import { getRequests } from "@/api/requests";
 import { getAssetCategories } from "@/api/categories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { useAuth } from "@/hooks/useAuth";
-import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
+import { StatusBadge, Badge, deriveFulfilment } from "@/components/ui/statusbadge";
 import type { AssetCategory } from "@/types/categoriesType";
 import { getAccessoryCategoriesForMe } from "@/api/accessories";
 import type { AccessoryCategory } from "@/types/accessoriesType";
@@ -67,8 +67,10 @@ function SectionHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-5 py-3 bg-surface-container-low/30 border-b border-outline/50">
-      <div className="flex flex-col min-w-0">
+    // Stacks on mobile so the title gets the full width instead of competing
+    // with the actions link for a narrow row; side by side from sm up.
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-5 py-3 bg-surface-container-low/30 border-b border-outline/50">
+      <div className="flex flex-col min-w-0 w-full sm:w-auto">
         <h2 className="font-headline font-bold text-base text-on-background">
           {title}
         </h2>
@@ -76,7 +78,7 @@ function SectionHeader({
           <p className="text-info-light text-[13px] leading-snug">{subtitle}</p>
         )}
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      {actions && <div className="shrink-0 sm:ml-auto">{actions}</div>}
     </div>
   );
 }
@@ -507,7 +509,7 @@ function TileBody({
 }) {
   return (
     <>
-      <div className="flex flex-1 flex-col items-center my-8 justify-center gap-2 text-center">
+      <div className="flex flex-1 flex-col items-center my-6 justify-center gap-2 text-center">
         <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
         {/* On the name rather than a larger parent gap, so the extra breathing
             room lands below the category text only and not also between the
@@ -566,7 +568,7 @@ function QuickStart({
           <button
             type="button"
             onClick={() => setHoldingsOpen(true)}
-            className="text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer"
+            className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
           >
             See all my devices →
           </button>
@@ -662,7 +664,12 @@ function shortDate(iso: string): string {
   return `${d.getDate()} ${d.toLocaleDateString("en-AU", { month: "short" })}`;
 }
 
-const RECENT_GRID = "grid grid-cols-[1.6fr_0.8fr_0.8fr_1fr] gap-2";
+// The "For" column is dropped below sm — on a phone it's the least useful of
+// the four (this list is already the signed-in user's own requests, so it
+// reads "Yourself" nearly every time) and its absence buys real width for the
+// asset name. The cell itself is hidden to match, so the columns stay aligned.
+const RECENT_GRID =
+  "grid grid-cols-[1.6fr_0.8fr_1fr] sm:grid-cols-[1.6fr_0.8fr_0.8fr_1fr] gap-2";
 
 function RecentRequests({
   requests,
@@ -701,7 +708,7 @@ function RecentRequests({
           >
             <span>Asset</span>
             <span>Requested</span>
-            <span>For</span>
+            <span className="hidden sm:block">For</span>
             <span>Status</span>
           </div>
 
@@ -733,7 +740,7 @@ function RecentRequests({
                 <span className="text-on-surface-variant">
                   {shortDate(r.createdAt)}
                 </span>
-                <span className="text-on-surface-variant">
+                <span className="hidden sm:block text-on-surface-variant">
                   {r.userName === name ? "Yourself" : r.userName}
                 </span>
                 <span>
@@ -866,16 +873,24 @@ function AccessoryQuickStart({
       <SectionHeader
         title="Accessories for your devices"
         subtitle={
-          <span className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-0.5 text-status-pending text-[12px] font-semibold">
-            <span className="material-symbols-outlined !text-[14px]">info</span>
-            Based on the equipment assigned to you.
+          // The shared Badge rather than a hand-rolled span: it already does
+          // max-w-full + min-w-0 + truncate with the full text on hover, which
+          // is exactly what this needed on a narrow screen.
+          <span className="mt-1 flex min-w-0">
+            <Badge
+              icon="info"
+              label="Based on the equipment assigned to you."
+              bg="bg-status-pending/10"
+              text="text-status-pending"
+              size="compact"
+            />
           </span>
         }
         actions={
           <button
             type="button"
             onClick={() => setHoldingsOpen(true)}
-            className="text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer"
+            className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
           >
             See all my accessories →
           </button>
