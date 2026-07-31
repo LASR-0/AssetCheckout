@@ -509,7 +509,7 @@ function TileBody({
 }) {
   return (
     <>
-      <div className="flex flex-1 flex-col items-center my-6 justify-center gap-2 text-center">
+      <div className="flex flex-1 flex-col items-center my-8 justify-center gap-2 text-center">
         <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
         {/* On the name rather than a larger parent gap, so the extra breathing
             room lands below the category text only and not also between the
@@ -517,7 +517,12 @@ function TileBody({
         <span className={`${nameClass} `}>{name}</span>
       </div>
 
-      <div className="flex w-full items-center gap-2">
+      {/* Stacked on mobile — the badge on its own line with "Request →" beneath
+          it, right-aligned — because side by side there isn't room for a model
+          name and the affordance on one narrow line. Side by side from sm up.
+          ml-auto pushes right in both directions: in a column the cross axis is
+          horizontal, so it still right-aligns rather than needing self-end. */}
+      <div className="flex w-full flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <HoldingsBadge summary={summary} />
         <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
           Request →
