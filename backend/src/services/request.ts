@@ -160,14 +160,54 @@ export async function createCorrectionRequest(
     );
   }
 
-  // Serial is captured for unlogged items only. Ignored elsewhere rather than
-  // rejected, so a stray field can't fail an otherwise valid submission.
+  const trimmed = (v: unknown) =>
+    typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+
+  // Serial is meaningful for an unlogged item (read off the device) and for a
+  // wrong-model correction (the recorded one is wrong). Ignored on
+  // no-longer-held rather than rejected, so a stray field can't fail an
+  // otherwise valid submission.
   const serial =
-    input.correctionKind === "UNLOGGED" &&
-    typeof input.serial === "string" &&
-    input.serial.trim().length > 0
-      ? input.serial.trim()
+    input.correctionKind === "NO_LONGER_HELD" ? null : trimmed(input.serial);
+
+  const correctedModel =
+    input.correctionKind === "WRONG_MODEL" ? trimmed(input.correctedModel) : null;
+
+  const VALID_REASONS = ["RETURNED", "LOST", "SWAPPED", "GAVE_AWAY", "OTHER"];
+  const noLongerHeldReason =
+    input.correctionKind === "NO_LONGER_HELD" &&
+    typeof input.noLongerHeldReason === "string" &&
+    VALID_REASONS.includes(input.noLongerHeldReason)
+      ? input.noLongerHeldReason
       : null;
+
+  // DUPLICATE PREVENTION. Same user, same Snipe record, same kind, still open
+  // (a correction sits at APPROVED until an admin resolves it). Blocked at
+  // submission rather than merged at review, so the user finds out
+  // immediately instead of an admin discovering two of the same later.
+  //
+  // Only possible where there IS a record to key on. An UNLOGGED report has
+  // no snipeRecordId by definition and nothing else identifies it reliably,
+  // so those are not deduplicated — noted rather than faked.
+  if (snipeRecordId !== null) {
+    const existing = await prisma.request.findFirst({
+      where: {
+        userId: input.userId,
+        requestKind: "CORRECTION",
+        status: { notIn: ["COMPLETED", "REJECTED"] },
+        correctionDetail: {
+          snipeRecordId,
+          correctionKind: input.correctionKind,
+        },
+      },
+    });
+    if (existing) {
+      throw new AppError(
+        "You've already reported this — it's waiting for IT to review.",
+        409
+      );
+    }
+  }
 
   const request = await prisma.request.create({
     data: {
@@ -204,6 +244,8 @@ export async function createCorrectionRequest(
           snipeRecordId,
           description,
           serial,
+          correctedModel,
+          noLongerHeldReason,
         },
       },
     },

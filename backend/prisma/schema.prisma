@@ -154,9 +154,16 @@ model CorrectionDetail {
   /// Free text from the requester. Resolved manually by an admin; volume is
   /// low and bursty, so there is no need to pre-structure it.
   description    String
-  /// Captured for unlogged items only, and optional even then: unlogged
-  /// accessories frequently have no serial at all.
+  /// The serial as the user reports it — either read off an unlogged item, or
+  /// a correction to what's recorded. Always optional: accessories frequently
+  /// have no serial at all, and users often can't find one.
   serial         String?
+
+  /// WRONG_MODEL only: what the model actually is, in the user's words.
+  correctedModel String?
+
+  /// NO_LONGER_HELD only: why it's gone.
+  noLongerHeldReason NoLongerHeldReason?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -234,4 +241,15 @@ enum CorrectionKind {
 enum CorrectionSubject {
   ASSET
   ACCESSORY
+}
+
+/// Why the user no longer has something recorded against them. Optional, but
+/// it's the difference between an admin knowing what to do with the record and
+/// having to chase the requester.
+enum NoLongerHeldReason {
+  RETURNED
+  LOST
+  SWAPPED
+  GAVE_AWAY
+  OTHER
 }

@@ -26,8 +26,19 @@ export type CreateCorrectionInput = {
   /** The Snipe record being corrected. Null for an unlogged item. */
   snipeRecordId?: number | null;
   description: string;
-  /** Unlogged items only, and optional even then — accessories often have none. */
+  /** Serial as the user reports it — read off an unlogged item, or a
+   *  correction to what's recorded. Always optional. */
   serial?: string | null;
+  /** WRONG_MODEL only: what the model actually is. */
+  correctedModel?: string | null;
+  /** NO_LONGER_HELD only: why it's gone. */
+  noLongerHeldReason?:
+    | "RETURNED"
+    | "LOST"
+    | "SWAPPED"
+    | "GAVE_AWAY"
+    | "OTHER"
+    | null;
 };
 
 export type CreateRequestInput = {

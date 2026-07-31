@@ -10,6 +10,7 @@ import { getAccessoryCategoriesForMe } from "@/api/accessories";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 import type { Request } from "@/types/requestType"
 import { getMyHoldings } from "@/api/holdings";
+import MyHoldingsDialog from "@/components/dialogs/MyHoldingsDialog";
 import type {
   UserHoldings,
   AssetHolding,
@@ -535,6 +536,7 @@ function QuickStart({
   const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [holdingsOpen, setHoldingsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -560,6 +562,21 @@ function QuickStart({
       <SectionHeader
         title="Start a request"
         subtitle="Pick what you need to get going."
+        actions={
+          <button
+            type="button"
+            onClick={() => setHoldingsOpen(true)}
+            className="text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer"
+          >
+            See all my devices →
+          </button>
+        }
+      />
+
+      <MyHoldingsDialog
+        open={holdingsOpen}
+        onOpenChange={setHoldingsOpen}
+        focus="ASSET"
       />
 
       <div className="p-5 md:p-6">
@@ -823,6 +840,7 @@ function AccessoryQuickStart({
 }) {
   const [categories, setCategories] = useState<AccessoryCategory[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [holdingsOpen, setHoldingsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -853,6 +871,21 @@ function AccessoryQuickStart({
             Based on the equipment assigned to you.
           </span>
         }
+        actions={
+          <button
+            type="button"
+            onClick={() => setHoldingsOpen(true)}
+            className="text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer"
+          >
+            See all my accessories →
+          </button>
+        }
+      />
+
+      <MyHoldingsDialog
+        open={holdingsOpen}
+        onOpenChange={setHoldingsOpen}
+        focus="ACCESSORY"
       />
 
       <div className="p-5 md:p-6">
