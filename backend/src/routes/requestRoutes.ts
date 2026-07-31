@@ -176,6 +176,11 @@ router.get("/", async (req, res, next) => {
       },
       include: {
         modelRequest: true,
+        // Null for every kind except CORRECTION. The row indicator and the
+        // Manage dialog both read it, and the visibility filter below already
+        // restricts corrections to their requester (manager is set to the
+        // requester's own name) plus admins, so this exposes nothing new.
+        correctionDetail: true,
       },
     });
 

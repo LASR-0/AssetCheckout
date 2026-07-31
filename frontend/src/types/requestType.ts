@@ -14,6 +14,18 @@ export type CorrectionKind = "UNLOGGED" | "NO_LONGER_HELD" | "WRONG_MODEL";
 /** Whether the corrected thing is an asset or an accessory. */
 export type CorrectionSubject = "ASSET" | "ACCESSORY";
 
+/** Which recorded detail the user says is wrong. WRONG_MODEL is the kind; this
+ *  says which field within it, so a serial-only correction doesn't have to
+ *  pretend the model is wrong. */
+export type WrongField = "SERIAL" | "MODEL" | "OTHER";
+/** Why the user no longer holds the record. */
+export type NoLongerHeldReason =
+  | "RETURNED"
+  | "LOST"
+  | "SWAPPED"
+  | "GAVE_AWAY"
+  | "OTHER";
+
 export type CorrectionDetail = {
   correctionKind: CorrectionKind;
   subjectKind: CorrectionSubject;
@@ -21,6 +33,19 @@ export type CorrectionDetail = {
   snipeRecordId: number | null;
   description: string;
   serial: string | null;
+  /** WRONG_MODEL only: what the model actually is, in the user's words. */
+  correctedModel?: string | null;
+  /** WRONG_MODEL only: which detail is wrong. */
+  wrongField?: WrongField | null;
+  /** NO_LONGER_HELD only. */
+  noLongerHeldReason?: NoLongerHeldReason | null;
+  /**
+   * Why an approved correction could not be written to Snipe. Set means the
+   * correction is BLOCKED: it was approved, the write didn't happen, and the
+   * row deliberately stays at APPROVED in the admin queue so it can be
+   * retried. Null once it applies.
+   */
+  applyError?: string | null;
 };
 
 export interface Request {
