@@ -6,10 +6,11 @@ import {
   getTierValues,
 } from "../services/snipeitassets.js";
 import { getAllAccessories } from "../services/snipeitaccessories.js";
+import { findSnipeUserByEmail } from "../services/snipeitassets.js";
 import { getStandardAccessories } from "../services/settings.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
-import { createRequest } from "../services/request.js";
+import { createRequest, createCorrectionRequest } from "../services/request.js";
 import { getActorName, getActorEmail, isAdminEmail, normalizeName } from "../config/auth.js";
 
 const router = express.Router();
@@ -21,6 +22,50 @@ const router = express.Router();
 router.post("/", async (req, res, next) => {
   try {
     const result = await createRequest(req.body);
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                    POST CORRECTION                              |
+///  +-----------------------------------------------------------------+
+//
+//  Its own endpoint rather than a branch of POST / — createRequest's input
+//  shape is a provisioning order, and routing corrections through it would put
+//  a correction one mis-set field away from becoming one.
+//
+//  SELF-ONLY. The requester is always the signed-in actor, never taken from
+//  the body: admins can already fix records directly and don't need this
+//  pipeline, so there is no on-behalf-of dimension to get wrong.
+
+router.post("/corrections", async (req, res, next) => {
+  try {
+    const actorEmail = getActorEmail(req);
+    const actorName = getActorName(req);
+    if (!actorEmail || !actorName) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Missing actor identity" });
+    }
+
+    const user = await findSnipeUserByEmail(actorEmail);
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "No Snipe-IT user matches the signed-in account",
+      });
+    }
+
+    const result = await createCorrectionRequest({
+      ...req.body,
+      // Identity is server-derived, so a crafted body can't file a correction
+      // against somebody else.
+      userId: user.id,
+      userName: actorName,
+    });
 
     res.json(result);
   } catch (err) {

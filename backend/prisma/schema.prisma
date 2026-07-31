@@ -58,6 +58,7 @@ model Request {
   rejectedAt        DateTime?
 
   modelRequest   ModelRequest?
+  correctionDetail CorrectionDetail?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -128,10 +129,50 @@ model Feedback {
   createdAt          DateTime @default(now())
 }
 
+/* ===================== CORRECTIONS ===================== */
+// Correction-specific data, hung off Request 1:1 exactly as ModelRequest is,
+// rather than adding half a dozen more nullable columns to Request that would
+// be null for the overwhelming majority of rows.
+//
+// A correction never provisions anything: it enters the workflow already at
+// APPROVED (there is no manager stage), and an admin either applies it to
+// Snipe or rejects it.
+model CorrectionDetail {
+  id             Int      @id @default(autoincrement())
+
+  requestId      Int      @unique
+  request        Request  @relation(fields: [requestId], references: [id])
+
+  correctionKind CorrectionKind
+  /// Whether the thing being corrected is an asset or an accessory. Separate
+  /// from Request.requestKind, which is CORRECTION for every row here.
+  subjectKind    CorrectionSubject
+
+  /// The Snipe record the correction is about, where one exists — null for an
+  /// unlogged item, which by definition has no record yet.
+  snipeRecordId  Int?
+  /// Free text from the requester. Resolved manually by an admin; volume is
+  /// low and bursty, so there is no need to pre-structure it.
+  description    String
+  /// Captured for unlogged items only, and optional even then: unlogged
+  /// accessories frequently have no serial at all.
+  serial         String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 /* ===================== ENUMS ===================== */
 enum RequestType {
   STANDARD
   NON_STANDARD
+  // Corrections are not a spec level, but requestType is non-nullable and
+  // every provisioning branch tests it for STANDARD or NON_STANDARD. Giving
+  // corrections their own value means those branches exclude them by
+  // construction rather than by remembering a guard — including the admin
+  // fulfilment branch in approveRequest, which would otherwise check hardware
+  // out of Snipe, and the non-standard row treatment in the requests table.
+  CORRECTION
 }
 
 enum RequestStatus {
@@ -173,6 +214,24 @@ enum JobStatus {
 }
 
 enum RequestKind {
+  ASSET
+  ACCESSORY
+  // A request to correct the Snipe record rather than to provision anything.
+  // What the correction is ABOUT (an asset or an accessory) lives on
+  // CorrectionDetail.subjectKind, not here.
+  CORRECTION
+}
+
+enum CorrectionKind {
+  /// The user has something that isn't recorded against them.
+  UNLOGGED
+  /// Something is recorded against them that they no longer have.
+  NO_LONGER_HELD
+  /// The record exists but names the wrong model.
+  WRONG_MODEL
+}
+
+enum CorrectionSubject {
   ASSET
   ACCESSORY
 }

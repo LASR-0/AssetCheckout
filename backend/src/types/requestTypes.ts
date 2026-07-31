@@ -1,6 +1,34 @@
-import type { Request, ModelRequest } from "../../generated/prisma_client/client.js";
+import type { Request, ModelRequest, RequestType } from "../../generated/prisma_client/client.js";
 
 export type Actor = { name: string; isAdmin: boolean };
+
+/**
+ * A request to correct the Snipe record rather than to provision anything.
+ *
+ * Separate from CreateRequestInput on purpose: almost none of that shape
+ * applies here (no spec level, no approver, no phone/number fields), and
+ * sharing it would invite a provisioning field being set by accident.
+ */
+export type CreateCorrectionInput = {
+  userId: number;
+  userName: string;
+  /**
+   * The category of the thing being corrected — Request.categoryId /
+   * categoryName are non-nullable, and the subject's own category is the
+   * meaningful value. The caller supplies it; for a no-longer-held or
+   * wrong-model correction it comes from the holding the user picked.
+   */
+  categoryId: number;
+  categoryName: string;
+  correctionKind: "UNLOGGED" | "NO_LONGER_HELD" | "WRONG_MODEL";
+  /** Whether the subject is an asset or an accessory. */
+  subjectKind: "ASSET" | "ACCESSORY";
+  /** The Snipe record being corrected. Null for an unlogged item. */
+  snipeRecordId?: number | null;
+  description: string;
+  /** Unlogged items only, and optional even then — accessories often have none. */
+  serial?: string | null;
+};
 
 export type CreateRequestInput = {
   userId: number;
@@ -39,7 +67,10 @@ export type CreateRequestInput = {
 
 export type CreateResponse = {
   success: true;
-  type: "STANDARD" | "NON_STANDARD";
+  // Echoes the row's requestType. Widened to the full enum because the column
+  // now includes CORRECTION; createRequest itself still cannot produce one,
+  // since CreateRequestInput.requestType stays narrowed to the two spec levels.
+  type: RequestType;
   request: Request;
   message: string;
 };
@@ -105,11 +136,27 @@ export type NonStandardApproveResponse = {
   message: string;
 };
 
-export type ApproveResponse = StandardApproveResponse | NonStandardApproveResponse;
+/**
+ * Admin resolution of a correction. Its own variant rather than reusing a
+ * provisioning response, because there is no asset, model or accessory to
+ * report — approving a correction only records the decision.
+ */
+export type CorrectionApproveResponse = {
+  success: true;
+  type: "CORRECTION";
+  request: Request;
+  message: string;
+};
+
+export type ApproveResponse =
+  | StandardApproveResponse
+  | NonStandardApproveResponse
+  | CorrectionApproveResponse;
 
 export type RejectResponse = {
   success: true;
-  type: "STANDARD" | "NON_STANDARD";
+  // Corrections CAN be rejected, so this echoes the full enum.
+  type: RequestType;
   request: Request;
   message: string;
 };

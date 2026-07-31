@@ -1,11 +1,27 @@
-export type RequestType = "STANDARD" | "NON_STANDARD";
+// CORRECTION is not a spec level. It exists so every provisioning branch that
+// tests for STANDARD or NON_STANDARD excludes corrections by construction.
+export type RequestType = "STANDARD" | "NON_STANDARD" | "CORRECTION";
 export type RequestStatus = "PENDING" | "COMPLETED" | "REJECTED" | "APPROVED";
 // FIXED: number decision enum, matching the Prisma NumberOption enum
 export type NumberOption = "NEW" | "REUSE" | "NONE";
 // Accessories chapter: matches the Prisma RequestKind enum. Optional on
 // the interface — records created before the accessories expansion won't
 // carry it, and absent means ASSET.
-export type RequestKind = "ASSET" | "ACCESSORY";
+export type RequestKind = "ASSET" | "ACCESSORY" | "CORRECTION";
+
+/** What a correction is asking IT to fix. */
+export type CorrectionKind = "UNLOGGED" | "NO_LONGER_HELD" | "WRONG_MODEL";
+/** Whether the corrected thing is an asset or an accessory. */
+export type CorrectionSubject = "ASSET" | "ACCESSORY";
+
+export type CorrectionDetail = {
+  correctionKind: CorrectionKind;
+  subjectKind: CorrectionSubject;
+  /** The Snipe record being corrected; null for an unlogged item. */
+  snipeRecordId: number | null;
+  description: string;
+  serial: string | null;
+};
 
 export interface Request {
   id: number;
@@ -37,6 +53,9 @@ export interface Request {
   /** Optional "what model do you have in mind?" free text, captured beside
    *  the reason on a non-standard request. Null on standard requests. */
   preferredModel?: string | null;
+
+  /** Present only on CORRECTION rows. */
+  correctionDetail?: CorrectionDetail | null;
   manager?: string;
   managerId: number;
 

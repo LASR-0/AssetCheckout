@@ -280,6 +280,29 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     ? "Fulfilled — waiting for IT to prepare it for collection"
     : undefined;
 
+  // CORRECTIONS never offer a provisioning action. Without this a resolved
+  // correction (status COMPLETED, nothing shipped or collected) satisfies
+  // deriveFulfilment's collect-awaiting-prep case, so an admin would be shown
+  // "Mark ready" — which stamps collectionReadyAt and emails the requester
+  // that a device is ready to collect. Placed above every other branch.
+  //
+  // Interim: the row indicator and the Manage dialog land in increment 5. For
+  // now the row states where the correction is and offers nothing.
+  if (request.requestKind === "CORRECTION") {
+    return (
+      <BadgeWithTooltip
+        status={requestStatus}
+        tip={
+          requestStatus === "COMPLETED"
+            ? "Record correction — applied"
+            : requestStatus === "REJECTED"
+            ? "Record correction — rejected"
+            : "Record correction — waiting for IT to review"
+        }
+      />
+    );
+  }
+
   if (requestStatus === "REJECTED") {
     return <BadgeWithTooltip status={requestStatus} />;
   }

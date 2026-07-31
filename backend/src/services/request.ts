@@ -37,6 +37,8 @@ import { AppError } from "../utils/errors.js";
 import type {
   CreateNewModelInput,
   CreateRequestInput,
+  CreateCorrectionInput,
+  CorrectionApproveResponse,
   CreateResponse,
   ModelCreationResponse,
   ApproveResponse,
@@ -96,6 +98,121 @@ function notify(requestId: number, kind: NotificationKind): void {
  * for NON_STANDARD the ModelRequest is created later, at manager approval
  * time, by handleNonStandardApproval.
  */
+///  +-----------------------------------------------------------------+
+///  |                    CORRECTION REQUESTS                          |
+///  +-----------------------------------------------------------------+
+//
+//  A correction asks IT to fix the Snipe record. It provisions nothing, so it
+//  deliberately does NOT go through createRequest: that function's two paths
+//  both assume an order is being placed.
+//
+//  It enters the workflow already at APPROVED. There is no manager stage, and
+//  APPROVED is exactly how the existing machine spells "waiting on IT" — the
+//  same state a manager-approved request sits in before sign-off. So no new
+//  status was needed.
+//
+//  requestType is CORRECTION rather than STANDARD or NON_STANDARD. That is the
+//  load-bearing safety decision: every provisioning branch tests requestType
+//  for one of those two, so they all exclude corrections by construction
+//  instead of relying on a guard being remembered. In particular
+//  approveRequest's admin-fulfilment branch, which checks real hardware out of
+//  Snipe, tests `requestType === "STANDARD"` and therefore cannot fire here
+//  even if its explicit correction guard were removed.
+//
+//  Emits NO notification. There is no manager to tell, and the requester
+//  hearing about it is deferred — the existing kinds are all provisioning
+//  copy.
+///  +-----------------------------------------------------------------+
+
+export async function createCorrectionRequest(
+  input: CreateCorrectionInput
+): Promise<{ success: true; request: Request }> {
+  if (typeof input.userId !== "number" || input.userId <= 0) {
+    throw new AppError("userId is required", 400);
+  }
+  if (typeof input.categoryId !== "number" || input.categoryId <= 0) {
+    throw new AppError("categoryId is required", 400);
+  }
+
+  const VALID_KINDS = ["UNLOGGED", "NO_LONGER_HELD", "WRONG_MODEL"] as const;
+  if (!VALID_KINDS.includes(input.correctionKind)) {
+    throw new AppError("Invalid correctionKind", 400);
+  }
+  if (input.subjectKind !== "ASSET" && input.subjectKind !== "ACCESSORY") {
+    throw new AppError("Invalid subjectKind", 400);
+  }
+
+  const description = (input.description ?? "").trim();
+  if (!description) {
+    throw new AppError("A description is required", 400);
+  }
+
+  // Only an unlogged item legitimately has no Snipe record; the other two
+  // kinds are raised against something the user picked from their holdings.
+  const snipeRecordId =
+    typeof input.snipeRecordId === "number" && input.snipeRecordId > 0
+      ? input.snipeRecordId
+      : null;
+  if (input.correctionKind !== "UNLOGGED" && snipeRecordId === null) {
+    throw new AppError(
+      "snipeRecordId is required for this correction kind",
+      400
+    );
+  }
+
+  // Serial is captured for unlogged items only. Ignored elsewhere rather than
+  // rejected, so a stray field can't fail an otherwise valid submission.
+  const serial =
+    input.correctionKind === "UNLOGGED" &&
+    typeof input.serial === "string" &&
+    input.serial.trim().length > 0
+      ? input.serial.trim()
+      : null;
+
+  const request = await prisma.request.create({
+    data: {
+      userId: input.userId,
+      userName: input.userName,
+      categoryId: input.categoryId,
+      categoryName: input.categoryName,
+      requestKind: "CORRECTION",
+      requestType: "CORRECTION",
+      // Enters at the IT stage. No manager approved this, so approvedBy /
+      // approvedAt stay null rather than claiming someone did.
+      status: "APPROVED",
+      // managerId is non-nullable and a correction has no approver. Point it
+      // at the requester: self-referential and truthful, rather than a
+      // sentinel that every manager lookup would have to special-case.
+      managerId: input.userId,
+      manager: input.userName,
+      // Everything below is provisioning-only and hard-nulled, mirroring how
+      // the accessory path nulls the asset-only fields.
+      reason: null,
+      preferredModel: null,
+      accessoryOption: null,
+      callText: false,
+      newNumber: false,
+      needsData: false,
+      numberOption: null,
+      reuseNumberFromEmail: null,
+      reuseNumberPhone: null,
+      needsShipping: false,
+      correctionDetail: {
+        create: {
+          correctionKind: input.correctionKind,
+          subjectKind: input.subjectKind,
+          snipeRecordId,
+          description,
+          serial,
+        },
+      },
+    },
+  });
+
+  // Deliberately no notify(): see the header above.
+  return { success: true, request };
+}
+
 /**
  * Normalise the optional "what model do you have in mind?" free text.
  * Blank or whitespace-only becomes null so the column holds either real text
@@ -295,6 +412,17 @@ export async function approveRequest(
     throw new AppError("Request not found", 404);
   }
 
+  // CORRECTIONS FIRST, before any provisioning branch is even considered.
+  // Belt and braces: requestType is CORRECTION, so the STANDARD/NON_STANDARD
+  // branches below cannot match anyway — but this is the one place a missed
+  // guard would check real hardware out of Snipe, so it is explicit.
+  if (request.requestKind === "CORRECTION") {
+    if (!actor.isAdmin) {
+      throw new AppError("IT admin sign-off required for corrections", 403);
+    }
+    return handleCorrectionApproval(request, actor.name);
+  }
+
   if (request.status === "PENDING") {
     if (request.requestType === "STANDARD") {
       return handleStandardApproval(request, actor.name);
@@ -331,6 +459,42 @@ export async function approveRequest(
   }
 
   throw new AppError("Request is not in a state that can be approved", 400);
+}
+
+/**
+ * Admin resolution of a correction. Terminal: the correction is either applied
+ * or rejected, and there is no collection, shipping or receipt stage after it.
+ *
+ * Writes NOTHING to Snipe. Applying the correction to Snipe is increment 5;
+ * until then approving records the decision only, which is exactly the
+ * behaviour this increment has to guarantee — no checkout, no stock movement,
+ * no shipping stamp.
+ *
+ * Emits no notification: every existing kind is provisioning copy.
+ */
+async function handleCorrectionApproval(
+  request: Request,
+  actorName: string
+): Promise<CorrectionApproveResponse> {
+  if (request.status === "REJECTED" || request.status === "COMPLETED") {
+    throw new AppError("Correction is already in a terminal state", 400);
+  }
+
+  const updated = await prisma.request.update({
+    where: { id: request.id },
+    data: {
+      status: "COMPLETED",
+      adminApprovedBy: actorName,
+      adminApprovedAt: new Date(),
+    },
+  });
+
+  return {
+    success: true,
+    type: "CORRECTION",
+    request: updated,
+    message: "Correction approved",
+  };
 }
 
 /**
@@ -1463,7 +1627,13 @@ export async function rejectRequest(
   // Notify the requester their request was declined (reason read from the
   // request row by the handler). Automated rejections (stale cleanup, orphan
   // cleanup) also flow through here, so the requester is told either way.
-  notify(updated.id, "REQUEST_REJECTED");
+  //
+  // Corrections are excluded: every notification kind is provisioning copy
+  // ("Your {category} request was declined"), which would read wrongly for a
+  // record correction. Telling the requester is deferred rather than dropped.
+  if (updated.requestKind !== "CORRECTION") {
+    notify(updated.id, "REQUEST_REJECTED");
+  }
 
   return {
     success: true,
@@ -1503,6 +1673,13 @@ export async function findStaleRequests(
     where: {
       status: { in: ["PENDING", "APPROVED"] },
       updatedAt: { lt: cutoff },
+      // Corrections are excluded. They sit at APPROVED waiting on an admin, so
+      // they would otherwise qualify — but a correction is a REPORT that the
+      // Snipe record is wrong. Auto-rejecting it discards the report without
+      // fixing the data, and since corrections emit no notifications the
+      // requester would never learn it had been dropped. They persist until an
+      // admin resolves them.
+      requestKind: { not: "CORRECTION" },
     },
     include: { modelRequest: true },
   });
