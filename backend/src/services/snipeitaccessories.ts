@@ -674,6 +674,104 @@ export async function deleteAccessory(accessoryId: number): Promise<boolean> {
   return true;
 }
 ///  +-----------------------------------------------------------------+
+///  |                     ACCESSORY CHECKIN                           |
+///  +-----------------------------------------------------------------+
+//
+//  The counterpart to checkoutAccessory, needed by NO_LONGER_HELD record
+//  corrections ("Snipe says I have this; I don't").
+//
+//  THE ID TRAP. Checkin is NOT keyed by accessory id or by user id — it takes
+//  the accessories_users PIVOT row id, i.e. the id of one specific assignment.
+//  Verified read-only against the live instance: accessory 18 checked out to
+//  user 256 returns a row with id 38, so the checkin path is
+//  /accessories/38/checkin. That path is one digit away from meaning
+//  "accessory 38", which is a different record entirely — hence the two-step
+//  lookup below rather than any arithmetic on the ids the caller already has.
+///  +-----------------------------------------------------------------+
+
+/** One row of /accessories/{id}/checkedout — an assignment, not an accessory. */
+export type AccessoryAssignment = {
+  /** The accessories_users pivot id. This is what checkin is keyed by. */
+  assignmentId: number;
+  userId: number;
+  userName: string | null;
+};
+
+/**
+ * Every current assignment of an accessory. Read-only.
+ *
+ * Note this is a different endpoint from users/{id}/accessories, whose qty /
+ * remaining are NOT adjusted for checkouts and must never be used for stock.
+ */
+export async function getAccessoryAssignments(
+  accessoryId: number
+): Promise<AccessoryAssignment[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/accessories/${accessoryId}/checkedout`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || data?.status === "error") {
+    throw new AppError(
+      `Failed to read assignments for accessory ${accessoryId}: ${
+        data?.messages ? JSON.stringify(data.messages) : res.statusText
+      }`,
+      500
+    );
+  }
+
+  const rows: any[] = Array.isArray(data?.rows) ? data.rows : [];
+
+  return rows
+    .filter((r) => typeof r?.id === "number" && typeof r?.assigned_to?.id === "number")
+    .map((r) => ({
+      assignmentId: r.id,
+      userId: r.assigned_to.id,
+      userName: r.assigned_to.name ?? null,
+    }));
+}
+
+/**
+ * Check one accessory assignment back in.
+ *
+ * `assignmentId` MUST come from getAccessoryAssignments — see the id trap
+ * above. Passing an accessory id here would check in an unrelated record.
+ */
+export async function checkinAccessory(
+  assignmentId: number,
+  note = "Checked in via AssetCheckout (record correction)"
+): Promise<unknown> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/accessories/${assignmentId}/checkin`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ note }),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  // Guards Snipe's two failure modes (non-2xx, or 2xx with status:"error"),
+  // the same convention as checkoutAccessory. Precedent for why the body is
+  // checked and not just the status: an accessory checkout POST on this
+  // project once returned a 302 that silently dropped its body.
+  if (!res.ok || data?.status === "error") {
+    throw new AppError(
+      `Accessory checkin failed for assignment ${assignmentId}: ${
+        data?.messages ? JSON.stringify(data.messages) : res.statusText
+      }`,
+      500
+    );
+  }
+
+  return data;
+}
+
+///  +-----------------------------------------------------------------+
 ///  |                   USER ACCESSORY HOLDINGS                       |
 ///  +-----------------------------------------------------------------+
 

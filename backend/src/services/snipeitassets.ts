@@ -804,6 +804,52 @@ export async function updateSnipeAsset(
   return data;
 }
 
+/**
+ * PATCH only the named fields on an asset, leaving everything else alone.
+ *
+ * Deliberately NOT updateSnipeAsset: that one composes a FULL body (company,
+ * status, location, serial, purchase_cost, tier) from the admin's asset-details
+ * form, so calling it to fix one field would blank every field the caller
+ * didn't supply. Record corrections touch exactly one thing, so they need a
+ * patch that means "this field, nothing else".
+ *
+ * `model_id` is the field a WRONG_MODEL correction retargets; `serial` is the
+ * field a SERIAL one fixes.
+ */
+export async function patchAssetFields(
+  assetId: number,
+  fields: { model_id?: number; serial?: string }
+): Promise<unknown> {
+  const body: Record<string, unknown> = {};
+  if (fields.model_id !== undefined) body.model_id = fields.model_id;
+  if (fields.serial !== undefined) body.serial = fields.serial;
+
+  if (Object.keys(body).length === 0) {
+    throw new AppError("patchAssetFields called with no fields to change", 400);
+  }
+
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware/${assetId}`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "PATCH",
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || data?.status === "error") {
+    throw new AppError(
+      `Failed to patch asset ${assetId} in Snipe: ${
+        data?.messages ? JSON.stringify(data.messages) : res.statusText
+      }`,
+      500
+    );
+  }
+
+  return data;
+}
+
 ///  +-----------------------------------------------------------------+
 ///  |                       REFERENCE DATA                            |
 ///  +-----------------------------------------------------------------+
