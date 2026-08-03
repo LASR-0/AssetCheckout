@@ -23,6 +23,9 @@ type Props = {
   onAssetDetails: (request: Request) => void;
   onSelectAccessory: (request: Request) => void;
   onAddAccessoryStock: (request: Request) => void;
+  /** Non-standard accessory quote stage: IT sends it, the manager answers. */
+  onSendQuote: (request: Request) => void;
+  onReviewQuote: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   globalFilter: string;
@@ -113,6 +116,8 @@ export default function RequestsTable({
   onAssetDetails,
   onSelectAccessory,
   onAddAccessoryStock,
+  onSendQuote,
+  onReviewQuote,
   onMarkShipped,
   onMarkReceived,
   globalFilter,
@@ -150,6 +155,8 @@ export default function RequestsTable({
       onAssetDetails,
       onSelectAccessory,
       onAddAccessoryStock,
+      onSendQuote,
+      onReviewQuote,
       onMarkShipped,
       onMarkReceived,
       onMarkReadyForCollection,

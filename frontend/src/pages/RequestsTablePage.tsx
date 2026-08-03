@@ -18,6 +18,8 @@ import AccessoryStockDialog from "@/components/dialogs/AccessoryStockDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
 import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
 import ConfirmApprovalDialog from "@/components/dialogs/ConfirmApprovalDialog";
+import SendQuoteDialog from "@/components/dialogs/SendQuoteDialog";
+import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 
 /**
@@ -76,6 +78,8 @@ export default function RequestTablePage() {
   const [standardResultOpen, setStandardResultOpen] = useState(false);
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
   const [manageCorrectionOpen, setManageCorrectionOpen] = useState(false);
+  const [sendQuoteOpen, setSendQuoteOpen] = useState(false);
+  const [reviewQuoteOpen, setReviewQuoteOpen] = useState(false);
 
   // Manager-stage approval confirmation — on-behalf, department budget, or
   // both. Separate from the misnamed `approveDialogOpen` above, which drives
@@ -400,6 +404,19 @@ export default function RequestTablePage() {
     setAccessoryStockDialogOpen(true);
   }
 
+  // Quote stage, IT's half: record the supplier's quote and send it.
+  function handleSendQuote(request: Request) {
+    setSelectedRequest(request);
+    setSendQuoteOpen(true);
+  }
+
+  // Quote stage, the answer: accept or reject. Opened by the manager from
+  // their row (or the link in their email), and by an admin standing in.
+  function handleReviewQuote(request: Request) {
+    setSelectedRequest(request);
+    setReviewQuoteOpen(true);
+  }
+
   // Corrections get one row action — Manage — and both verbs live inside the
   // dialog. They never reach handleApprove's provisioning paths.
   function handleManageCorrection(request: Request) {
@@ -450,6 +467,8 @@ export default function RequestTablePage() {
             onAssetDetails={handleAssetDetails}
             onSelectAccessory={handleSelectAccessory}
             onAddAccessoryStock={handleAddAccessoryStock}
+            onSendQuote={handleSendQuote}
+            onReviewQuote={handleReviewQuote}
             onMarkShipped={handleMarkShipped}
             onMarkReceived={handleMarkReceived}
             globalFilter={search}
@@ -493,6 +512,24 @@ export default function RequestTablePage() {
             pending={confirmApprovePending}
             error={confirmApproveError}
             onConfirm={handleConfirmApprove}
+          />
+
+          <SendQuoteDialog
+            request={selectedRequest}
+            open={sendQuoteOpen}
+            onOpenChange={setSendQuoteOpen}
+            onSuccess={loadRequests}
+          />
+
+          <ReviewQuoteDialog
+            request={selectedRequest}
+            open={reviewQuoteOpen}
+            onOpenChange={setReviewQuoteOpen}
+            // An admin opening this is always standing in — the row only
+            // offers it to them while the quote is still unanswered, and the
+            // manager's own row uses the same dialog without the notice.
+            onBehalf={role === "ADMIN"}
+            onSuccess={loadRequests}
           />
 
           <CreateModelDialog

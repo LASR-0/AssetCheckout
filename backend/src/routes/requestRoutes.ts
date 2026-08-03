@@ -181,6 +181,12 @@ router.get("/", async (req, res, next) => {
         // restricts corrections to their requester (manager is set to the
         // requester's own name) plus admins, so this exposes nothing new.
         correctionDetail: true,
+        // Null for everything but a non-standard accessory that has reached
+        // the quote stage. Drives the row's quote actions and the waiting
+        // badge. Same visibility reasoning as above: the filter below already
+        // limits non-admins to their own requests and the ones they approve,
+        // and the approving manager is precisely who the quote is for.
+        quoteDetail: true,
       },
     });
 

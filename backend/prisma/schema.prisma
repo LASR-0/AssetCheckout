@@ -59,6 +59,7 @@ model Request {
 
   modelRequest   ModelRequest?
   correctionDetail CorrectionDetail?
+  quoteDetail    QuoteDetail?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -180,6 +181,63 @@ model CorrectionDetail {
   updatedAt      DateTime @updatedAt
 }
 
+/* ===================== QUOTES ===================== */
+// Quote-specific data, hung off Request 1:1 exactly as ModelRequest and
+// CorrectionDetail are. Every column here is null on the overwhelming majority
+// of rows — only non-standard ACCESSORY requests ever get one — so they stay
+// off Request.
+//
+// Quotes exist because IT does not pay for non-standard accessories: the
+// requesting user's department does. That makes the cost the manager's to
+// commit to, which is why there is a document, a figure, and an outcome to
+// record. Assets are deliberately excluded — IT buys those, and the tier
+// average in the asset-details step is all the cost signal that side needs.
+//
+// One quote per request, by decision: a quote cannot be revised or re-sent
+// once it has gone to the manager. If the figure was wrong, the manager
+// rejects and the request ends. That is why this is 1:1 with no history table.
+model QuoteDetail {
+  id             Int      @id @default(autoincrement())
+
+  requestId      Int      @unique
+  request        Request  @relation(fields: [requestId], references: [id])
+
+  /// What the supplier quoted, in dollars. Required — this is the figure the
+  /// manager commits to, and the one the over-$1k purchase logging reads.
+  amount         Float
+  /// Who the quote is from. Named in the email so the manager knows who they
+  /// are committing to buy from.
+  supplier       String
+  /// The supplier's own quote identifier. Optional: plenty of quotes arrive as
+  /// a bare emailed price with no reference to speak of.
+  reference      String?
+
+  /// The quote document. Required — a figure typed into a form is not a quote.
+  /// The file itself lives on disk under QUOTES_DIR rather than in the DB;
+  /// `documentPath` is the leaf name within that directory, never a full path,
+  /// so the storage root can move without a data migration and a stored value
+  /// can never escape the directory.
+  documentName   String
+  documentMime   String
+  documentPath   String
+
+  status         QuoteStatus @default(SENT)
+
+  sentBy         String
+  sentAt         DateTime @default(now())
+
+  respondedBy    String?
+  respondedAt    DateTime?
+  /// True when an admin accepted or rejected in the manager's place, the same
+  /// standing-in an admin can already do at the first approval. Worth its own
+  /// column rather than inferring it from respondedBy: this is the record of
+  /// who committed a department's budget.
+  respondedOnBehalf Boolean @default(false)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 /* ===================== ENUMS ===================== */
 enum RequestType {
   STANDARD
@@ -229,6 +287,17 @@ enum JobStatus {
   Running
   Completed
   Failed
+}
+
+/// Where a quote sits with the manager. Deliberately NOT a RequestStatus: the
+/// request stays APPROVED throughout, and "waiting on the manager's answer" is
+/// derived from this the same way the accessory quantity-wait is derived from
+/// ModelRequest.status + assetReady. Rejection is terminal and drives the
+/// Request to REJECTED through the ordinary rejection path.
+enum QuoteStatus {
+  SENT
+  ACCEPTED
+  REJECTED
 }
 
 enum RequestKind {

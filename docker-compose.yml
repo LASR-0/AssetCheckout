@@ -14,5 +14,8 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/data/database.db
+      # Quote documents, on the same persistent volume as the database — they
+      # evidence what each department committed to spend.
+      - QUOTES_DIR=/data/quotes
       - PORT=3000
     restart: unless-stopped

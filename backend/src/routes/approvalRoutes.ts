@@ -12,11 +12,22 @@ import {
   createNewAccessoryForRequest,
   addAccessoryStockForRequest,
 } from "../services/request.js";
+import {
+  createQuoteForRequest,
+  acceptQuoteForRequest,
+  rejectQuoteForRequest,
+  getQuoteDocument,
+} from "../services/quote.js";
 import { searchModelsByManufacturer } from "../services/snipeitassets.js";
 import { searchAccessories } from "../services/snipeitaccessories.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/errors.js";
-import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
+import {
+  getActorName,
+  getActorEmail,
+  isAdminEmail,
+  normalizeName,
+} from "../config/auth.js";
 
 const router = express.Router();
 
@@ -679,6 +690,241 @@ router.post("/:requestId/receive", async (req, res, next) => {
 
     const result = await markRequestReceived(requestId);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                       QUOTE ROUTES                              |
+///  +-----------------------------------------------------------------+
+//
+//  Non-standard accessories come out of the requester's department budget, so
+//  the manager approves the price as well as the request. Attaching a quote is
+//  IT's job; responding to it is the manager's, with an admin able to stand in
+//  exactly as they can at the first approval.
+//
+//  These are gated properly — admin-only to attach, manager-or-admin to
+//  respond — rather than merely requiring some resolved actor. A quote
+//  acceptance is a financial commitment against a department's budget and is
+//  not something any authenticated user should be able to make.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Resolve who is acting on a quote and whether they are standing in.
+ *
+ * Manager identity is name-matched because that is how the request records it
+ * and how /auth/role resolves the MANAGER role — see authRoutes.ts. Admin
+ * identity is email-matched, which is stable across display-name changes.
+ *
+ * Discriminated on a STRING, not a boolean, for the same reason
+ * CorrectionOutcome is: this project compiles with `strict: false`, and
+ * without strictNullChecks TypeScript will not narrow a union on `ok: true` /
+ * `ok: false`. A string tag narrows regardless.
+ */
+type QuoteActor =
+  | { outcome: "allowed"; name: string; onBehalf: boolean }
+  | { outcome: "denied"; status: number; message: string };
+
+async function resolveQuoteActor(
+  req: express.Request,
+  requestId: number
+): Promise<QuoteActor> {
+  const actorName = getActorName(req);
+  if (!actorName) {
+    return { outcome: "denied", status: 401, message: "Missing actor identity" };
+  }
+
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    select: { manager: true },
+  });
+  if (!request) {
+    return { outcome: "denied", status: 404, message: "Request not found" };
+  }
+
+  const isAdmin = isAdminEmail(getActorEmail(req));
+  const isManager =
+    !!request.manager && normalizeName(request.manager) === normalizeName(actorName);
+
+  if (isManager) {
+    return { outcome: "allowed", name: actorName, onBehalf: false };
+  }
+  if (isAdmin) {
+    return { outcome: "allowed", name: actorName, onBehalf: true };
+  }
+
+  return {
+    outcome: "denied",
+    status: 403,
+    message: "Only the approving manager or an admin can respond to a quote",
+  };
+}
+
+/**
+ * Attach a quote and send it to the manager. Admin only.
+ *
+ * The document arrives base64-encoded in the JSON body rather than as
+ * multipart, which keeps the dependency list as it is; the body limit is
+ * raised on this route alone so the rest of the API keeps Express's default.
+ * The generous headroom over MAX_QUOTE_BYTES covers base64's ~33% inflation
+ * plus the surrounding JSON, so an oversized file is rejected by the size
+ * check with a useful message rather than by the parser with a bare 413.
+ */
+router.post(
+  "/:requestId/quote",
+  express.json({ limit: "15mb" }),
+  async (req, res, next) => {
+    try {
+      const requestId = Number(req.params.requestId);
+      const actorName = getActorName(req);
+
+      if (!actorName) {
+        return res.status(401).json({ success: false, message: "Missing actor identity" });
+      }
+      if (Number.isNaN(requestId)) {
+        return res.status(400).json({ success: false, message: "Invalid requestId" });
+      }
+      if (!isAdminEmail(getActorEmail(req))) {
+        return res.status(403).json({
+          success: false,
+          message: "Only an admin can attach a quote to a request",
+        });
+      }
+
+      const { amount, supplier, reference, document } = req.body ?? {};
+
+      if (typeof amount !== "number" || !Number.isFinite(amount)) {
+        return res.status(400).json({
+          success: false,
+          message: "amount is required and must be a number",
+        });
+      }
+      if (typeof supplier !== "string" || !supplier.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "supplier is required",
+        });
+      }
+      if (
+        !document ||
+        typeof document.base64 !== "string" ||
+        typeof document.mime !== "string" ||
+        typeof document.originalName !== "string"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "document is required and must carry originalName, mime and base64",
+        });
+      }
+
+      const result = await createQuoteForRequest(requestId, actorName, {
+        amount,
+        supplier,
+        reference: typeof reference === "string" ? reference : null,
+        document: {
+          originalName: document.originalName,
+          mime: document.mime,
+          base64: document.base64,
+        },
+      });
+
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/** The manager accepts the quoted price — or an admin accepts in their place. */
+router.post("/:requestId/quote/accept", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    const actor = await resolveQuoteActor(req, requestId);
+    if (actor.outcome === "denied") {
+      return res.status(actor.status).json({ success: false, message: actor.message });
+    }
+
+    const result = await acceptQuoteForRequest(requestId, {
+      name: actor.name,
+      onBehalf: actor.onBehalf,
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * The manager rejects the quoted price — terminal for the request.
+ *
+ * Takes a reason in the same "REJECTED: x\n REQUEST: y" shape the reject
+ * dialog already produces, because the transition itself is delegated to the
+ * ordinary rejectRequest path and the requester gets the existing declined
+ * email, which parses that format.
+ */
+router.post("/:requestId/quote/reject", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    const actor = await resolveQuoteActor(req, requestId);
+    if (actor.outcome === "denied") {
+      return res.status(actor.status).json({ success: false, message: actor.message });
+    }
+
+    const { reason } = req.body ?? {};
+    if (typeof reason !== "string" || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "A reason is required when rejecting a quote",
+      });
+    }
+
+    const result = await rejectQuoteForRequest(
+      requestId,
+      { name: actor.name, onBehalf: actor.onBehalf },
+      reason
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Stream the stored quote document. Manager-or-admin, on the same terms as
+ * responding to it — the file is a supplier's pricing, not something every
+ * authenticated user should be able to pull by guessing a request id.
+ *
+ * Inline rather than an attachment: a PDF or photo opens in the browser,
+ * which is what somebody clicking "view the quote" expects.
+ */
+router.get("/:requestId/quote/document", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    const actor = await resolveQuoteActor(req, requestId);
+    if (actor.outcome === "denied") {
+      return res.status(actor.status).json({ success: false, message: actor.message });
+    }
+
+    const doc = await getQuoteDocument(requestId);
+    res.setHeader("Content-Type", doc.mime);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${doc.name.replace(/"/g, "")}"`
+    );
+    res.send(doc.buffer);
   } catch (err) {
     next(err);
   }

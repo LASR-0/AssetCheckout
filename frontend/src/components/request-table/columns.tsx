@@ -25,6 +25,9 @@ export type RequestsTableMeta = {
   onAssetDetails: (request: Request) => void;
   onSelectAccessory: (request: Request) => void;
   onAddAccessoryStock: (request: Request) => void;
+  /** Non-standard accessory quote stage: IT sends it, the manager answers. */
+  onSendQuote: (request: Request) => void;
+  onReviewQuote: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   onMarkReadyForCollection: (request: Request) => void;
@@ -166,6 +169,7 @@ const STATUS_TIPS: Record<string, string> = {
   REJECTED: "This request was rejected",
   COMPLETED: "Request fulfilled",
   AWAITING_IT: "Approved by manager — waiting for IT to approve and assign an asset",
+  AWAITING_QUOTE: "Quote sent — waiting for the manager to accept the cost",
 };
 
 function BadgeWithTooltip({ status, tip }: { status: StatusBadgeStatus; tip?: string }) {
@@ -227,11 +231,35 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     requestStatus === "APPROVED" &&
     modelRequestStatus === "APPROVED" &&
     !linkedAssetId;
+
+  // ── Quote stage (non-standard accessories only) ──
+  // IT buys assets; departments buy non-standard accessories. So this one
+  // combination gets a quote the manager signs off on, and it sits between
+  // IT's approval and the accessory being selected — nothing is ordered before
+  // the person paying has agreed the price.
+  //
+  // Like the quantity-wait below, this is derived rather than being a status
+  // of its own: the request stays APPROVED throughout and the stage comes off
+  // the quote's own status.
+  const quote = request.quoteDetail ?? null;
+  const isAtQuoteStage =
+    isAccessory &&
+    request.requestType === "NON_STANDARD" &&
+    requestStatus === "APPROVED" &&
+    modelRequestStatus === "APPROVED" &&
+    snipeAccessoryId === null;
+  const isAwaitingQuote = isAtQuoteStage && !quote;
+  const isAwaitingQuoteResponse = isAtQuoteStage && quote?.status === "SENT";
+
+  // Selection now waits on an accepted quote. The backend enforces this too
+  // (loadAccessoryRequestAtSelection) — hiding the action is the courtesy,
+  // the guard is what makes it true.
   const isAccessoryAwaitingSelection =
     isAccessory &&
     requestStatus === "APPROVED" &&
     modelRequestStatus === "APPROVED" &&
-    snipeAccessoryId === null;
+    snipeAccessoryId === null &&
+    (request.requestType !== "NON_STANDARD" || quote?.status === "ACCEPTED");
 
   // Accessory QUANTITY-WAITING stage: an accessory has been selected (linked)
   // but has no available stock. Keyed off LIVE remaining (not the stored
@@ -418,6 +446,19 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         </ActionRow>
       );
     }
+    // The manager's SECOND commitment. They acknowledged the budget when they
+    // approved; this is them agreeing to an actual figure. Both outcomes are
+    // final, so both verbs live inside the dialog rather than on the row.
+    if (isAwaitingQuoteResponse) {
+      return (
+        <ActionRow>
+          <ActionButton icon="request_quote" label="Review quote" color="text-status-model"
+            hoverBg="hover:bg-status-model/10" border="border-status-model/40"
+            title="Accept or reject the quoted cost against your department's budget"
+            onClick={() => meta.onReviewQuote(request)} />
+        </ActionRow>
+      );
+    }
     if (isStandardAwaitingIT) {
       return <BadgeWithTooltip status="AWAITING_IT" />;
     }
@@ -479,6 +520,33 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionButton icon="add_circle" label="Create model" color="text-status-model" hoverBg="hover:bg-status-model/10"
             border="border-status-model/40" title="Create the asset model for this request"
             onClick={() => meta.onCreateModel(request)} />
+        </ActionRow>
+      );
+    }
+    // Quote stage, IT's half: chase a supplier quote and send it to the
+    // manager. Ordered ahead of the selection branch below, which is now
+    // gated on that quote being accepted.
+    if (isAwaitingQuote) {
+      return (
+        <ActionRow>
+          <ActionButton icon="request_quote" label="Send quote" color="text-status-model"
+            hoverBg="hover:bg-status-model/10" border="border-status-model/40"
+            title="Record the supplier's quote and send it to the manager to approve"
+            onClick={() => meta.onSendQuote(request)} />
+        </ActionRow>
+      );
+    }
+    // Quote stage, waiting on the manager. The badge says why the request is
+    // stalled; the action lets an admin answer for a manager who has gone
+    // quiet, the same standing-in they can do at the first approval.
+    if (isAwaitingQuoteResponse) {
+      return (
+        <ActionRow>
+          <BadgeWithTooltip status="AWAITING_QUOTE" />
+          <ActionButton icon="supervisor_account" label="Answer" color="text-status-model"
+            hoverBg="hover:bg-status-model/10" border="border-status-model/40"
+            title={`Accept or reject the quote on ${request.manager || "the manager"}'s behalf`}
+            onClick={() => meta.onReviewQuote(request)} />
         </ActionRow>
       );
     }

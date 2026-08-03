@@ -26,6 +26,36 @@ export type NoLongerHeldReason =
   | "GAVE_AWAY"
   | "OTHER";
 
+/**
+ * Where a quote sits with the approving manager. Deliberately not a
+ * RequestStatus — the request stays APPROVED throughout, and the waiting stage
+ * is derived from this, the same way the accessory quantity-wait is derived
+ * from the ModelRequest.
+ */
+export type QuoteStatus = "SENT" | "ACCEPTED" | "REJECTED";
+
+/**
+ * Present only on non-standard ACCESSORY rows that have reached the quote
+ * stage. IT buys assets; departments buy non-standard accessories, which is
+ * why only this one combination ever carries a quote.
+ */
+export type QuoteDetail = {
+  amount: number;
+  supplier: string;
+  /** The supplier's own quote identifier. Often absent. */
+  reference?: string | null;
+  /** Original-ish filename, for display. The file is fetched from the API. */
+  documentName: string;
+  documentMime: string;
+  status: QuoteStatus;
+  sentBy: string;
+  sentAt: string;
+  respondedBy?: string | null;
+  respondedAt?: string | null;
+  /** True when an admin accepted or rejected in the manager's place. */
+  respondedOnBehalf?: boolean;
+};
+
 export type CorrectionDetail = {
   correctionKind: CorrectionKind;
   subjectKind: CorrectionSubject;
@@ -81,6 +111,8 @@ export interface Request {
 
   /** Present only on CORRECTION rows. */
   correctionDetail?: CorrectionDetail | null;
+  /** Present only on non-standard ACCESSORY rows past the quote stage. */
+  quoteDetail?: QuoteDetail | null;
   manager?: string;
   managerId: number;
 

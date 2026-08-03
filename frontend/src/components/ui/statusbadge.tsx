@@ -135,6 +135,10 @@ const labelMap: Record<string, string> = {
   REJECTED: "Rejected",
   COMPLETED: "Completed",
   AWAITING_IT: "Awaiting IT",
+  // Non-standard accessory whose quote is with the manager. A distinct stage
+  // rather than a plain "Approved", because the request is stalled on someone
+  // outside IT and the row should say so.
+  AWAITING_QUOTE: "Quote with manager",
   READY_TO_COLLECT: "Ready to collect",
   READY_TO_SHIP: "Ready to ship",
   SHIPPED: "Shipped",
@@ -151,6 +155,7 @@ const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
   REJECTED: { bg: "bg-status-error/15", text: "text-status-error", icon: "cancel" },
   PENDING: { bg: "bg-status-pending/15", text: "text-status-pending", icon: "schedule" },
   AWAITING_IT: { bg: "bg-status-awaiting-it/15", text: "text-status-awaiting-it", icon: "shield_person" },
+  AWAITING_QUOTE: { bg: "bg-status-pending/15", text: "text-status-pending", icon: "request_quote" },
   READY_TO_COLLECT: { bg: "bg-status-collect/15", text: "text-status-collect", icon: "package_2" },
   READY_TO_SHIP: { bg: "bg-status-ship/15", text: "text-status-ship", icon: "local_shipping" },
   SHIPPED: { bg: "bg-status-shipped/15", text: "text-status-shipped", icon: "local_shipping" },

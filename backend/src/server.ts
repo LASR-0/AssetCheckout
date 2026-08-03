@@ -6,6 +6,7 @@ import { prisma } from "./db/prisma.js";
 import { ensureDefaults } from "./services/settings.js";
 import { startJobs } from './jobs/index.js';
 import { assertAppLinksConfig } from './jobs/handlers/appLinks.js';
+import { assertQuoteStorage } from './services/quoteStorage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +73,11 @@ async function start() {
   // built. Cheap, synchronous, and catches a missing APP_BASE_URL here
   // instead of in a recipient's inbox.
   assertAppLinksConfig();
+
+  // Same reasoning, for the directory quote documents are written to: a
+  // read-only or unmounted volume should stop the deploy, not surface when an
+  // admin has already chased down a quote and filled in the form.
+  await assertQuoteStorage();
 
   await configureDatabase();
   await ensureDefaults();

@@ -58,11 +58,19 @@ export async function verifyEmailTransport(): Promise<void> {
   await getTransporter().verify();
 }
 
+/** A file to send alongside the body — currently only quote documents. */
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+};
+
 export type SendEmailInput = {
   to: string | string[];
   subject: string;
   text: string;
   html?: string;
+  attachments?: EmailAttachment[];
 };
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
@@ -72,6 +80,7 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     subject: input.subject,
     text: input.text,
     ...(input.html ? { html: input.html } : {}),
+    ...(input.attachments?.length ? { attachments: input.attachments } : {}),
   });
 
   console.log(

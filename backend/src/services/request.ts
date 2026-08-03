@@ -1259,7 +1259,7 @@ async function loadAccessoryRequestAtSelection(
 
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    include: { modelRequest: true },
+    include: { modelRequest: true, quoteDetail: true },
   });
 
   if (!request) {
@@ -1285,6 +1285,27 @@ async function loadAccessoryRequestAtSelection(
       "ModelRequest already has a linked accessory — selection has already happened",
       400
     );
+  }
+  // The department pays for a non-standard accessory, so nothing gets ordered
+  // before the manager has accepted the quoted price. This is the enforcement
+  // point for that ordering — the row action hides itself until the quote is
+  // accepted, but the guard is what makes it true. Standard accessories are
+  // stocked and cost the department nothing, so they never reach here.
+  if (request.requestType === "NON_STANDARD") {
+    if (!request.quoteDetail) {
+      throw new AppError(
+        "No quote has been sent for this request — the manager has to accept a quoted price before a non-standard accessory can be ordered",
+        400
+      );
+    }
+    if (request.quoteDetail.status !== "ACCEPTED") {
+      throw new AppError(
+        request.quoteDetail.status === "SENT"
+          ? "The quote is still awaiting the manager's response"
+          : "The quote for this request was rejected",
+        400
+      );
+    }
   }
 
   return request as Request & { modelRequest: ModelRequest };

@@ -1,7 +1,8 @@
 import { prisma } from "../../db/prisma.js";
 import { resolveUserEmail } from "../../services/snipeitassets.js";
-import { sendEmail } from "../../services/email.js";
+import { sendEmail, type EmailAttachment } from "../../services/email.js";
 import { getSetting } from "../../services/settings.js";
+import { readQuoteDocument } from "../../services/quoteStorage.js";
 import { appLink } from "./appLinks.js";
 import {
   renderEmail,
@@ -23,6 +24,7 @@ const KINDS = [
   "REQUEST_REJECTED",
   "SHIPMENT_REMINDER",
   "SHIPMENT_OVERDUE",
+  "QUOTE_APPROVAL_NEEDED",
 ] as const;
 type NotificationKind = (typeof KINDS)[number];
 
@@ -41,6 +43,16 @@ function parseRejectionReason(reason: string | null): string {
  *  lead-in so the email doesn't open with a bare comma. */
 function greeting(firstName: string | null): string {
   return firstName ? `Hi ${esc(firstName)},` : "Hi there,";
+}
+
+/** "$1,234.56" — quotes are in AUD and always shown to the cent, because this
+ *  is the number the manager is agreeing to spend. */
+function money(amount: number): string {
+  return amount.toLocaleString("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    minimumFractionDigits: 2,
+  });
 }
 
 /**
@@ -66,7 +78,10 @@ export async function sendRequestNotificationHandler(
     return { skipped: true, reason: "invalid_payload", payload };
   }
 
-  const request = await prisma.request.findUnique({ where: { id: requestId } });
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: { quoteDetail: true },
+  });
   if (!request) {
     return { skipped: true, reason: "request_not_found", requestId, kind };
   }
@@ -82,6 +97,7 @@ export async function sendRequestNotificationHandler(
   let subject = "";
   let text = "";
   let content: EmailContent | null = null;
+  let attachments: EmailAttachment[] | undefined;
 
   switch (kind) {
     case "MANAGER_APPROVAL_NEEDED": {
@@ -291,6 +307,70 @@ export async function sendRequestNotificationHandler(
       };
       break;
     }
+
+    case "QUOTE_APPROVAL_NEEDED": {
+      const quote = request.quoteDetail;
+      // No quote row means the job was enqueued out of order or against the
+      // wrong request. Nothing a retry fixes, so skip rather than fail.
+      if (!quote) {
+        return { skipped: true, reason: "no_quote_detail", requestId, kind };
+      }
+
+      to = await resolveUserEmail(request.managerId);
+      const managerFirst = firstNameFromEmail(typeof to === "string" ? to : null);
+      const supplier = esc(quote.supplier);
+      const amount = money(quote.amount);
+
+      // The document IS the quote. If it can't be read, this must not go out
+      // as a quote email with nothing attached — let it throw so the runner
+      // retries and, failing that, surfaces it in the job history where a
+      // broken QUOTES_DIR mount can actually be seen and fixed.
+      attachments = [
+        {
+          filename: quote.documentName,
+          content: await readQuoteDocument(quote.documentPath),
+          contentType: quote.documentMime,
+        },
+      ];
+
+      subject = `Quote for approval: ${request.userName}'s ${request.categoryName}`;
+      text =
+        `A quote is ready for ${request.userName}'s ${request.categoryName} request.\n\n` +
+        `Supplier: ${quote.supplier}\n` +
+        `Amount: ${amount}\n` +
+        (quote.reference ? `Quote reference: ${quote.reference}\n` : "") +
+        `\nThis is a non-standard accessory, so the cost comes out of your department's ` +
+        `budget rather than IT's. The quote is attached.\n\n` +
+        `Nothing will be ordered until you approve it. Log into AssetCheckout to accept ` +
+        `or decline: ${reviewLink}`;
+
+      content = {
+        eyebrow: "Action required",
+        title: "Quote ready for your approval",
+        paragraphs: [
+          greeting(managerFirst),
+          `A quote has come back for <strong style="color:#27242e; font-weight:600;">${userName}</strong>'s ${category} request. It's attached to this email.`,
+          `This is a non-standard accessory, so the cost comes out of <strong style="color:#27242e; font-weight:600;">your department's budget</strong> rather than IT's — which is why it needs your approval rather than just IT's.`,
+          `Nothing will be ordered until you accept it.`,
+        ],
+        detailRows: [
+          { label: "Requested item", value: category },
+          { label: "Requested by", value: userName },
+          { label: "Supplier", value: supplier },
+          { label: "Amount", value: amount },
+          ...(quote.reference
+            ? [{ label: "Quote reference", value: esc(quote.reference), mono: true }]
+            : []),
+        ],
+        cta: { label: "Accept or decline", url: reviewLink },
+        secondaryLink: {
+          prefix: "Or open the request log directly:",
+          label: reviewLink,
+          url: reviewLink,
+        },
+      };
+      break;
+    }
   }
 
   if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -302,12 +382,19 @@ export async function sendRequestNotificationHandler(
 
   const html = content ? renderEmail(content) : undefined;
 
-  await sendEmail({ to, subject, text, ...(html ? { html } : {}) });
+  await sendEmail({
+    to,
+    subject,
+    text,
+    ...(html ? { html } : {}),
+    ...(attachments ? { attachments } : {}),
+  });
 
   return {
     sent: true,
     kind,
     requestId,
     recipient: Array.isArray(to) ? to : [to],
+    ...(attachments ? { attached: attachments.map((a) => a.filename) } : {}),
   };
 }
