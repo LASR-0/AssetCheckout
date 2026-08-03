@@ -503,11 +503,14 @@ function HoldingsBadge({
  * band meets the tile edges. That needs overflow-hidden on the tile, or its
  * square corners overhang the rounded ones.
  *
- * flex-1 on the identity block is now load-bearing, where it used to be inert.
- * Grid rows stretch every tile to the tallest in the row, so a held tile's
- * band makes its unheld neighbours taller too; flex-1 is what absorbs that
- * extra space into the identity block and keeps "Request →" pinned to the
- * foot instead of floating mid-tile.
+ * flex-1 on the identity block is load-bearing, where it used to be inert.
+ * Grid rows stretch every tile to the tallest in the row, and flex-1 is what
+ * absorbs that extra space so the band stays pinned to the foot.
+ *
+ * It also means the band's slot has to exist on EVERY tile, held or not — see
+ * the note on the band below. Without that, flex-1 hands the band's height to
+ * the identity block on unheld tiles and their icons sit lower than their
+ * neighbours'.
  */
 function TileBody({
   icon,
@@ -551,22 +554,35 @@ function TileBody({
         <span className={`${nameClass} `}>{name}</span>
       </div>
 
-      {heldCount > 0 && (
-        <div
-          className="-mx-5 -mb-2 mt-1 border-t border-outline/50 bg-status-success/10 px-5 py-2"
-          // The models by name. Falls back to nothing rather than a generic
-          // phrase — an empty title shows no tooltip, which beats one that
-          // repeats the band.
-          title={heldTitle ?? undefined}
-        >
-          <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-status-success">
-            <span className="material-symbols-outlined !text-[14px]">
-              check_circle
-            </span>
-            You have {heldCount}
+      {/* ALWAYS RENDERED, hidden when there's nothing to say.
+          Not `heldCount > 0 &&` — that made the icons sit at different heights
+          across a row. The identity block above is flex-1, so on a tile with no
+          band it grows by exactly the band's height, and justify-center then
+          centres the icon in that taller box, dropping it lower than its
+          neighbour's. Reserving the space keeps every identity block the same
+          height, so the icons line up whatever anyone happens to hold.
+          `invisible` rather than a hand-built spacer: the placeholder is the
+          real band, so its height can't drift from the thing it stands in for.
+          visibility:hidden also takes it out of the accessibility tree, so
+          nothing announces "You have 0". */}
+      <div
+        className={`-mx-5 -mb-2 mt-1 border-t px-5 py-2 ${
+          heldCount > 0
+            ? "border-outline/50 bg-status-success/10"
+            : "invisible border-transparent"
+        }`}
+        // The models by name. Falls back to nothing rather than a generic
+        // phrase — an empty title shows no tooltip, which beats one that
+        // repeats the band.
+        title={heldCount > 0 ? heldTitle ?? undefined : undefined}
+      >
+        <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-status-success">
+          <span className="material-symbols-outlined !text-[14px]">
+            check_circle
           </span>
-        </div>
-      )}
+          You have {heldCount}
+        </span>
+      </div>
     </>
   );
 }
