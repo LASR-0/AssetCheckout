@@ -227,13 +227,18 @@ export default function RequestsTable({
                   // one. The two are mutually exclusive by construction
                   // (requestType is CORRECTION, never NON_STANDARD).
                   //
-                  // Standard rows get the same 4px border in transparent so
-                  // the first column stays aligned across the table.
+                  // Standard rows now carry their own token too, so every row
+                  // states its kind rather than the unmarked ones being defined
+                  // by absence. It is deliberately the quietest of the three:
+                  // standard is the commonest row, and an accent that shouts on
+                  // the majority would drown the two that mean "look at this".
                   className={`hover:bg-surface-container-low/20 transition-colors border-b border-outline group border-l-4 ${
                     row.original.requestKind === "CORRECTION"
                       ? "border-l-status-correction"
                       : row.original.requestType === "NON_STANDARD"
                       ? "border-l-primary"
+                      : row.original.requestType === "STANDARD"
+                      ? "border-l-status-standard"
                       : "border-l-transparent"
                   }`}
                 >

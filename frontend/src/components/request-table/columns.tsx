@@ -704,6 +704,20 @@ export const columns: ColumnDef<Request>[] = [
             Non-standard
           </span>
         )}
+        {/* Standard rows get a badge too, so the column reads as a labelled
+            set rather than "some rows are marked and the rest are whatever's
+            left". Guarded on requestKind as well: a correction's requestType is
+            CORRECTION, but a legacy row could carry STANDARD, and a correction
+            must never be labelled as an ordinary request. */}
+        {row.original.requestType === "STANDARD" &&
+          row.original.requestKind !== "CORRECTION" && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-standard/10 text-status-standard border border-status-standard/30">
+              <span className="material-symbols-outlined !text-[11px]">
+                verified
+              </span>
+              Standard
+            </span>
+          )}
         {/* Same treatment for corrections, in their own token — names what the
             orangey-yellow row accent means so the accent doesn't have to be
             learned. Mutually exclusive with the badge above: requestType is

@@ -67,6 +67,13 @@
        a KIND of row, not a stage within one — the same reasoning that put the
        non-standard indicator on the unbound brand colour. */
     --status-correction:  #d97706; /* amber-600  — record correction */
+    /* Standard requests. Same reasoning as the two above — a KIND of row, not
+       a stage — so it gets its own unbound token rather than borrowing a
+       lifecycle colour. Teal because every other hue here is already spoken
+       for, and deliberately the calmest of the three: standard is the ordinary
+       case, and if the commonest row shouted loudest the accents on the rows
+       that actually need attention would stop meaning anything. */
+    --status-standard:    #0d9488; /* teal-600   — standard request */
 
     /* modals */
     --modal-text-primary: 52 50 52;
@@ -151,6 +158,7 @@
     --status-assigned:    #a5b4fc; /* indigo-300 */
     --status-model:       #fcd34d; /* amber-300 */
     --status-correction:  #fbbf24; /* amber-400 */
+    --status-standard:    #5eead4; /* teal-300 */
 
     --modal-text-primary: 255 228 189;
     --modal-text-secondary: 255 241 219;
@@ -262,6 +270,7 @@
   --color-status-assigned:    var(--status-assigned);
   --color-status-model:       var(--status-model);
   --color-status-correction:  var(--status-correction);
+  --color-status-standard:    var(--status-standard);
 
    --color-tooltip-bg: rgb(var(--tooltip-bg));
    --color-tooltip-text: rgb(var(--tooltip-text));
