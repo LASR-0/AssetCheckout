@@ -1775,6 +1775,7 @@ export async function getUserAssetHoldings(
       assetTag: asset.asset_tag ?? "",
       serial: asset.serial?.trim() || null,
       model: asset.model?.name ?? null,
+      manufacturer: asset.manufacturer?.name ?? null,
       categoryId: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null,
       categoryName: asset.category?.name ?? null,
       lastCheckout: asset.last_checkout?.datetime ?? null,

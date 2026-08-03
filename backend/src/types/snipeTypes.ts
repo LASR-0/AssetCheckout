@@ -183,6 +183,9 @@ export type AssetHolding = {
   serial: string | null;
   /** Model name. The display field: Snipe's asset `name` is often empty. */
   model: string | null;
+  /** Who made it. Shown beside the model so a user can tell two similar
+   *  records apart without decoding a model number. */
+  manufacturer: string | null;
   categoryId: number | null;
   categoryName: string | null;
   /**

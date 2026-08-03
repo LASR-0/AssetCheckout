@@ -10,7 +10,7 @@ import { getAccessoryCategoriesForMe } from "@/api/accessories";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 import type { Request } from "@/types/requestType"
 import { getMyHoldings } from "@/api/holdings";
-import MyHoldingsDialog from "@/components/dialogs/MyHoldingsDialog";
+import MyHoldingsDialog, { type Row as HoldingRow } from "@/components/dialogs/MyHoldingsDialog";
 import type {
   UserHoldings,
   AssetHolding,
@@ -42,7 +42,7 @@ import {
 //  CARD gained overflow-hidden so the tint clips to the rounded corners.
 
 const CARD =
-  "bg-landing-card border border-landing-border rounded-xl overflow-hidden";
+  "bg-surface-container-lowest border border-landing-border rounded-xl overflow-hidden";
 const RAISED = "bg-landing-raised border border-landing-border rounded-lg";
 
 ///  +-----------------------------------------------------------------+
@@ -151,6 +151,12 @@ function useMyHoldings() {
     assets: [],
     accessories: [],
   });
+  // "Did the fetch actually succeed?" — NOT the same question as "is the list
+  // empty?". The tiles above can treat both the same way (they just render as
+  // they did before holdings existed), but the "what you already have" section
+  // cannot: telling someone they hold nothing when the request failed is a
+  // confident lie, and the whole point of that section is to be trusted.
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
     if (authLoading || !name) return;
@@ -164,6 +170,7 @@ function useMyHoldings() {
           assets: data.assets ?? [],
           accessories: data.accessories ?? [],
         });
+        setResolved(true);
       } catch (err) {
         console.error("Failed to load holdings for home page", err);
       }
@@ -183,12 +190,13 @@ function useMyHoldings() {
     [holdings.accessories]
   );
 
-  return { assetsByCategory, accessoriesByCategory };
+  return { holdings, resolved, assetsByCategory, accessoriesByCategory };
 }
 
 export default function LandingPage() {
   const { requests, loading } = useMyRequests();
-  const { assetsByCategory, accessoriesByCategory } = useMyHoldings();
+  const { holdings, resolved, assetsByCategory, accessoriesByCategory } =
+    useMyHoldings();
 
   return (
     <div className="bg-landing-bg text-on-background flex-grow">
@@ -196,6 +204,7 @@ export default function LandingPage() {
         <HomeHead requests={requests} loading={loading} />
         <QuickStart holdingsByCategory={assetsByCategory} />
         <AccessoryQuickStart holdingsByCategory={accessoriesByCategory} />
+        <MyStuff holdings={holdings} resolved={resolved} />
         <RecentRequests requests={requests} loading={loading} />
         <QuickLinks />
       </main>
@@ -513,7 +522,7 @@ function TileBody({
 }) {
   return (
     <>
-      <div className="flex flex-1 flex-col items-center my-8 justify-center gap-2 text-center">
+      <div className="flex flex-1 flex-col items-center my-6 justify-center gap-2 text-center">
         <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
         {/* On the name rather than a larger parent gap, so the extra breathing
             room lands below the category text only and not also between the
@@ -714,7 +723,7 @@ function RecentRequests({
       />
 
       <div className="p-3 md:p-4">
-        <div className="rounded-lg border border-outline bg-surface/50 overflow-hidden">
+        <div className="rounded-lg border border-outline bg-landing-card/70 overflow-hidden">
           <div
             className={`${RECENT_GRID} px-3 py-2 bg-surface-container-low/20 font-mono text-[11px] uppercase tracking-wider text-info-light`}
           >
@@ -950,6 +959,208 @@ function AccessoryQuickStart({
             );
           })}
         </div>
+      </div>
+    </section>
+  );
+}
+
+///  +-----------------------------------------------------------------+
+///  |                  WHAT YOU ALREADY HAVE                          |
+///  +-----------------------------------------------------------------+
+//
+//  The count badge and name badge on the request tiles were doing two jobs at
+//  once and failing the second. A number in a pill at the top-right corner of
+//  a tile is, by every convention people have learned elsewhere, an unread
+//  count — so "2" on the Laptop tile read as two pending actions rather than
+//  two laptops held. The meaning was only ever in the tooltip, and nobody
+//  hovers a thing they think they already understand.
+//
+//  This section states it outright instead. One tile per actual item, naming
+//  the thing rather than its category, so there is no number left to
+//  misinterpret. The badges above stay: as a hint alongside "Request →" they
+//  are useful ("you already have one of these"), and it's the ambiguity of a
+//  bare count standing alone that was the problem.
+//
+//  Clicking a tile is the correction path — it opens the report dialog with
+//  that item already chosen. Someone who spots a wrong record is looking at
+//  the wrong record when they spot it, so asking them to find it again in a
+//  list is a step that exists only because the list came first.
+//
+//  Rendered only once holdings have actually resolved. An empty list and a
+//  failed fetch look identical from here, and "nothing is assigned to you" is
+//  too confident a claim to make on a request that never came back.
+
+/** One held item, flattened across both kinds so the grid can mix them. */
+type HeldItem = {
+  key: string;
+  subject: "ASSET" | "ACCESSORY";
+  icon: string;
+  title: string;
+  manufacturer: string | null;
+  serial: string | null;
+  /** Shaped exactly as MyHoldingsDialog builds its own rows, so the copy
+   *  downstream reads identically whether you arrived here or via the list. */
+  row: HoldingRow;
+};
+
+function toHeldItems(holdings: UserHoldings): HeldItem[] {
+  const assets: HeldItem[] = (holdings.assets ?? []).map((a: AssetHolding) => ({
+    key: `asset-${a.id}`,
+    subject: "ASSET",
+    icon: iconForCategory(a.categoryName ?? a.model ?? ""),
+    title: a.model?.trim() || "Unnamed model",
+    manufacturer: a.manufacturer,
+    serial: a.serial,
+    row: {
+      snipeRecordId: a.id,
+      title: a.model?.trim() || "Unnamed model",
+      categoryId: a.categoryId,
+      categoryName: a.categoryName,
+      detail: a.serial ? `Serial ${a.serial}` : null,
+    },
+  }));
+
+  const accessories: HeldItem[] = (holdings.accessories ?? []).map(
+    (c: AccessoryHolding) => ({
+      key: `accessory-${c.id}`,
+      subject: "ACCESSORY",
+      icon: iconForCategory(c.categoryName ?? c.name),
+      title: c.name?.trim() || "Unnamed accessory",
+      manufacturer: c.manufacturer,
+      // Accessories are stocked by quantity with no per-unit serial, so there
+      // is nothing to show and the tile simply omits the line.
+      serial: null,
+      row: {
+        snipeRecordId: c.id,
+        title: c.name?.trim() || "Unnamed accessory",
+        categoryId: c.categoryId,
+        categoryName: c.categoryName,
+        detail: c.manufacturer,
+      },
+    })
+  );
+
+  return [...assets, ...accessories];
+}
+
+function MyStuff({
+  holdings,
+  resolved,
+}: {
+  holdings: UserHoldings;
+  /** False until the holdings fetch has actually succeeded — see the note
+   *  above on why an empty list isn't good enough. */
+  resolved: boolean;
+}) {
+  // One dialog for the whole grid. `subject` follows whatever was clicked,
+  // because the dialog is strictly one kind at a time.
+  const [openFor, setOpenFor] = useState<HeldItem | null>(null);
+  const [browse, setBrowse] = useState<"ASSET" | "ACCESSORY" | null>(null);
+
+  const items = useMemo(() => toHeldItems(holdings), [holdings]);
+
+  if (!resolved) return null;
+
+  return (
+    <section className={`${CARD} shadow-sm mb-8`}>
+      <SectionHeader
+        title="What you already have"
+        subtitle="Assigned to you in our records. Something look wrong? Select it and tell us."
+        actions={
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setBrowse("ASSET")}
+              className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
+            >
+              Devices →
+            </button>
+            <button
+              type="button"
+              onClick={() => setBrowse("ACCESSORY")}
+              className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
+            >
+              Accessories →
+            </button>
+          </div>
+        }
+      />
+
+      {/* Keyed on the item so a fresh dialog mounts per tile — otherwise the
+          previous item's answers would still be sitting in its state. */}
+      {openFor && (
+        <MyHoldingsDialog
+          key={openFor.key}
+          open
+          onOpenChange={(next) => !next && setOpenFor(null)}
+          subject={openFor.subject}
+          initialSelection={openFor.row}
+        />
+      )}
+
+      {browse && (
+        <MyHoldingsDialog
+          key={`browse-${browse}`}
+          open
+          onOpenChange={(next) => !next && setBrowse(null)}
+          subject={browse}
+        />
+      )}
+
+      <div className="p-5 md:p-6">
+        {items.length === 0 ? (
+          // Not a dead end: holding nothing is itself often the wrong record,
+          // and this is the one place that says so.
+          <div className="py-6 text-sm text-info-light">
+            <p>Nothing is assigned to you in our records.</p>
+            <button
+              type="button"
+              onClick={() => setBrowse("ASSET")}
+              className="mt-2 font-semibold text-on-background underline hover:cursor-pointer"
+            >
+              Have something that isn't listed? Tell us →
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {items.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setOpenFor(item)}
+                title={`Report a problem with ${item.title}`}
+                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-3 text-left hover:border-purple-500 hover:-translate-y-px transition-all hover:cursor-pointer`}
+              >
+                <div className="flex flex-1 flex-col items-center my-4 justify-center gap-2 text-center">
+                  <span className="material-symbols-outlined !text-[26px]">
+                    {item.icon}
+                  </span>
+                  {/* The model name is the identity here, so it gets the weight
+                      the category name carries on the request tiles. */}
+                  <span className="max-w-full truncate font-bold text-[13px]">
+                    {item.title}
+                  </span>
+                  {item.manufacturer && (
+                    <span className="max-w-full truncate text-[11px] text-info-light">
+                      {item.manufacturer}
+                    </span>
+                  )}
+                  {item.serial && (
+                    // Monospaced because this is the one string a user will
+                    // compare character by character against a physical label.
+                    <span className="max-w-full truncate font-mono text-[10px] text-info-light/80">
+                      {item.serial}
+                    </span>
+                  )}
+                </div>
+
+                <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+                  Not right? →
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

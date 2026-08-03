@@ -17,6 +17,8 @@ export type AssetHolding = {
   serial: string | null;
   /** Model name — the display field. Snipe's asset `name` is often empty. */
   model: string | null;
+  /** Who made it, shown beside the model on the "what you have" tiles. */
+  manufacturer: string | null;
   categoryId: number | null;
   categoryName: string | null;
   /** Sorted newest-first by the backend; not rendered. */

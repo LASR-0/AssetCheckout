@@ -54,7 +54,7 @@ type Phase =
 
 type WrongField = "SERIAL" | "MODEL" | "OTHER";
 
-type Row = {
+export type Row = {
   snipeRecordId: number;
   title: string;
   categoryId: number | null;
@@ -109,11 +109,22 @@ export default function MyHoldingsDialog({
   open,
   onOpenChange,
   subject,
+  initialSelection = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Which kind this instance covers. Strict — the other kind is not shown. */
   subject: "ASSET" | "ACCESSORY";
+  /**
+   * Open straight onto "what's wrong with it?" for this item, skipping the
+   * list. Set when the user clicked a specific thing on the home page — they
+   * have already told us which one, and making them find it again in a list
+   * they didn't ask for is the step this removes.
+   *
+   * Back still returns to the full list, so the shortcut narrows the path
+   * without closing off the browse route.
+   */
+  initialSelection?: Row | null;
 }) {
   const isAsset = subject === "ASSET";
   const noun = isAsset ? "device" : "accessory";
@@ -139,8 +150,10 @@ export default function MyHoldingsDialog({
 
   useEffect(() => {
     if (!open) return;
-    setPhase("list");
-    setSelected(null);
+    // A caller-supplied item lands the user on "what's wrong with it?" for the
+    // thing they clicked; without one this opens on the list as it always has.
+    setPhase(initialSelection ? "choose" : "list");
+    setSelected(initialSelection);
     setWrongField(null);
     setDescription("");
     setSerial("");
@@ -203,7 +216,11 @@ export default function MyHoldingsDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isAsset]);
+    // initialSelection is intentionally keyed by id rather than identity: the
+    // caller rebuilds the object on every render, and depending on the object
+    // would re-run this fetch (and reset the user's in-progress answers) on
+    // every parent re-render.
+  }, [open, isAsset, initialSelection?.snipeRecordId]);
 
   // Guidance follows what the user picked, so it describes their thing rather
   // than listing every device type.
