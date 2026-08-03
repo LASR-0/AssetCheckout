@@ -45,7 +45,16 @@ backend/generated/
 *.db-shm
 *.sqlite
 *.sqlite3
- 
+
+# ----------------------------------------------------------------------------
+# Quote documents (local dev only)
+# ----------------------------------------------------------------------------
+# QUOTES_DIR defaults to ./data/quotes and the server creates it at startup,
+# so a plain `pnpm dev` leaves this behind. These are supplier quotes — real
+# ones name real prices — and belong on the deployment's persistent volume,
+# never in the repository.
+backend/data/
+
 # ----------------------------------------------------------------------------
 # Logs
 # ----------------------------------------------------------------------------
