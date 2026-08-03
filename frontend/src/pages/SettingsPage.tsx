@@ -190,8 +190,14 @@ export default function SettingsPage() {
               Settings
             </h1>
           </div>
+          {/* Deliberately says nothing about saving. Most sections save on
+              change, but the standard accessories, mobile filter and job
+              schedules have their own Save button — so a blanket "changes save
+              automatically" told people the opposite of the truth in exactly
+              the places where losing an edit costs the most. Save behaviour is
+              stated next to the control it applies to, not up here. */}
           <p className="text-info-light">
-            Configure your workspace and asset lifecycle parameters. Changes save automatically.
+            What can be requested, how it's fulfilled, and the background jobs that keep it running.
           </p>
         </div>
 

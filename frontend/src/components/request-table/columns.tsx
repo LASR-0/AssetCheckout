@@ -609,7 +609,14 @@ export const columns: ColumnDef<Request>[] = [
       // the legacy bridge for records created before the enum existed.
       const isNewNumber = r.numberOption ? r.numberOption === "NEW" : !!r.newNumber;
       const isReuse = r.numberOption === "REUSE" || !!r.reuseNumberPhone;
-      const isAccessory = r.requestKind === "ACCESSORY";
+      // A correction's requestKind is CORRECTION for every row, so asking it
+      // whether this is an accessory always answers "no" and every correction
+      // rendered an "Asset" badge regardless of what it was actually about.
+      // What the correction is ABOUT lives on correctionDetail.subjectKind.
+      const isAccessory =
+        r.requestKind === "CORRECTION"
+          ? r.correctionDetail?.subjectKind === "ACCESSORY"
+          : r.requestKind === "ACCESSORY";
       return (
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">

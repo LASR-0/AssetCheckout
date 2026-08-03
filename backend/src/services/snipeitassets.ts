@@ -25,7 +25,9 @@ import type {
   SnipeUserAsset,
   AssetHolding,
   CheckinFailure,
-  OffboardResult
+  OffboardResult,
+  CorrectionModelMatch,
+  CorrectionAssetMatch
 } from '../types/snipeTypes.js';
 
 const BASE_URL = process.env.SNIPEIT_API_URL;
@@ -443,6 +445,210 @@ export async function searchModelsByManufacturer({
   );
 
   return availabilityChecks.sort((a, b) => Number(b.hasAvailable) - Number(a.hasAvailable));
+}
+
+///  +-----------------------------------------------------------------+
+///  |               SEARCH FOR CORRECTION RESOLUTION                  |
+///  +-----------------------------------------------------------------+
+//
+//  Two lookups that let an admin resolving a correction NAME a Snipe record
+//  instead of typing its internal id into a box.
+//
+//  Why these are separate from searchModelsByManufacturer: that one exists to
+//  find a model to provision a non-standard request against, so it demands an
+//  exact manufacturer, excludes configured standard models, and sorts by stock
+//  availability. Every one of those is wrong for a correction. Correcting a
+//  record has nothing to do with stock; the right answer is very often a
+//  standard model; and an admin reading a user's free text ("it's actually an
+//  X1 Carbon") usually has the model name and not the manufacturer.
+//
+//  Reusing it and loosening its filters would have quietly changed what the
+//  provisioning flow returns, which is why these are new functions rather than
+//  extra parameters on that one.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Models whose name or model number contains `query`, optionally narrowed to
+ * one category.
+ *
+ * Substring, case-insensitive, on BOTH name and model number: an admin
+ * translating a user's description is guessing at the wording, and matching
+ * the model number as well means a admin who has read it off the device can
+ * paste that instead.
+ */
+export async function searchModelsForCorrection({
+  query,
+  categoryId,
+}: {
+  query: string;
+  categoryId?: number | null;
+}): Promise<CorrectionModelMatch[]> {
+  const term = query.trim().toLowerCase();
+  if (!term) return [];
+
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/models?limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to fetch models, status: ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  return rows
+    .filter((model) => {
+      // Category is a NARROWING, not a requirement. A miscategorised asset is
+      // a perfectly ordinary reason to be filing a correction, so when the
+      // caller passes no category we search everything rather than hiding the
+      // very record the admin is looking for.
+      if (categoryId != null && Number(model.category?.id) !== categoryId) {
+        return false;
+      }
+      const name = String(model.name ?? "").toLowerCase();
+      const number = String(model.model_number ?? "").toLowerCase();
+      return name.includes(term) || number.includes(term);
+    })
+    .slice(0, 25)
+    .map((model) => ({
+      id: Number(model.id),
+      name: String(model.name ?? "Unnamed model"),
+      manufacturer: model.manufacturer?.name ?? null,
+      modelNumber: model.model_number ?? null,
+      categoryName: model.category?.name ?? null,
+    }));
+}
+
+/**
+ * Assets under `modelId` whose serial contains `serial`.
+ *
+ * Scoped to a model on purpose. Serials are the one identifier a user can read
+ * off the device, but they are also transcribed by hand and frequently wrong
+ * in one character — so an unscoped serial search either misses (exact match)
+ * or returns half the estate (substring). Narrowing to the model the admin has
+ * already identified makes a loose substring match safe.
+ *
+ * Deployability is REPORTED, not filtered. An asset that can't be checked out
+ * is exactly what the admin needs to see — silently omitting it would leave
+ * them searching for a record that is right there in Snipe, wrongly stated.
+ * The apply step is what refuses; this just makes the refusal predictable.
+ */
+export async function searchAssetsBySerial({
+  modelId,
+  serial,
+}: {
+  modelId: number;
+  serial: string;
+}): Promise<CorrectionAssetMatch[]> {
+  const term = serial.trim().toLowerCase();
+  if (!term) return [];
+
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware?model_id=${modelId}&limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(
+      `Failed to fetch assets for model ${modelId}: status ${res.status}`,
+      500
+    );
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  return rows
+    .filter((asset) => String(asset.serial ?? "").toLowerCase().includes(term))
+    .slice(0, 25)
+    .map(describeAssetForCorrection);
+}
+
+/** Shared shaping so the search results and the single-asset guard below can
+ *  never disagree about what "checkoutable" means. */
+function describeAssetForCorrection(asset: any): CorrectionAssetMatch {
+  const statusName = asset.status_label?.name ?? null;
+  // Snipe exposes a deployable flag on the status meta; fall back to the name
+  // for instances whose payload omits it.
+  const readyToDeploy =
+    asset.status_label?.status_meta === "deployable" ||
+    String(statusName ?? "").trim().toLowerCase() === "ready to deploy";
+
+  const assignedToName =
+    asset.assigned_to?.name ?? asset.assigned_to?.username ?? null;
+
+  return {
+    id: Number(asset.id),
+    assetTag: asset.asset_tag ?? "",
+    serial: asset.serial ?? null,
+    modelName: asset.model?.name ?? null,
+    statusName,
+    assignedToName,
+    readyToDeploy,
+    checkoutable: readyToDeploy && !assignedToName,
+  };
+}
+
+/**
+ * One asset's checkout-readiness, read fresh at apply time.
+ *
+ * The search result the admin picked from could be minutes old, and a checkout
+ * against an asset someone else has since taken is precisely the write this
+ * guard exists to stop. Returns null when the asset is gone.
+ */
+export async function getAssetCheckoutState(
+  assetId: number
+): Promise<CorrectionAssetMatch | null> {
+  const asset = await getSnipeAssetDetail(assetId);
+  if (!asset) return null;
+  return describeAssetForCorrection(asset);
+}
+
+/**
+ * Any OTHER live asset already carrying this serial.
+ *
+ * Serials are meant to be unique to a device. Writing a user-reported serial
+ * onto one asset while another already claims it produces two records that
+ * disagree — the same class of wrong data the correction was filed to fix.
+ */
+export async function findAssetsWithSerial(
+  serial: string,
+  excludeAssetId?: number
+): Promise<CorrectionAssetMatch[]> {
+  const term = serial.trim().toLowerCase();
+  if (!term) return [];
+
+  const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware?search=${encodeURIComponent(
+    serial.trim()
+  )}&limit=100`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(`Failed to search assets by serial: status ${res.status}`, 500);
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  // Snipe's `search` spans several columns, so the exact serial match is
+  // re-checked here rather than trusting whatever else it decided to return.
+  return rows
+    .filter(
+      (asset) =>
+        String(asset.serial ?? "").trim().toLowerCase() === term &&
+        Number(asset.id) !== excludeAssetId
+    )
+    .map(describeAssetForCorrection);
 }
 
 ///  +-----------------------------------------------------------------+
@@ -1567,6 +1773,7 @@ export async function getUserAssetHoldings(
     return {
       id: Number(asset.id),
       assetTag: asset.asset_tag ?? "",
+      serial: asset.serial?.trim() || null,
       model: asset.model?.name ?? null,
       categoryId: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null,
       categoryName: asset.category?.name ?? null,

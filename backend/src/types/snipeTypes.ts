@@ -102,6 +102,41 @@ export type SnipeUserDetail = {
 };
 
 export type ModelSearchResult = Model & { hasAvailable: boolean };
+
+/**
+ * A model as offered to an admin resolving a CORRECTION. Deliberately not
+ * ModelSearchResult: correcting a record has nothing to do with whether stock
+ * is available, and standard models are perfectly valid targets here (the
+ * non-standard search excludes them because you can't raise a non-standard
+ * request for a standard model — that reasoning doesn't carry over).
+ */
+export type CorrectionModelMatch = {
+  id: number;
+  name: string;
+  manufacturer: string | null;
+  modelNumber: string | null;
+  categoryName: string | null;
+};
+
+/**
+ * An asset matched by serial while resolving a correction, carrying the state
+ * an admin needs to judge whether it can be checked out — see
+ * searchAssetsBySerial for why deployability is surfaced rather than enforced
+ * silently.
+ */
+export type CorrectionAssetMatch = {
+  id: number;
+  assetTag: string;
+  serial: string | null;
+  modelName: string | null;
+  statusName: string | null;
+  /** Display name of whoever it's checked out to, or null when unassigned. */
+  assignedToName: string | null;
+  /** Snipe's own "this status counts as deployable" flag. */
+  readyToDeploy: boolean;
+  /** readyToDeploy && !assignedToName — the only state a checkout can use. */
+  checkoutable: boolean;
+};
 export type CreateSnipeUserInput = {
   firstName: string;
   lastName: string;
@@ -139,6 +174,13 @@ export type AssetHolding = {
   /** Snipe asset id — the stable identifier for corrections later. */
   id: number;
   assetTag: string;
+  /**
+   * The serial as printed on the device. This is what a user can actually
+   * check against the thing in front of them — an asset tag is an internal
+   * label they may never have looked at — so it's the identifier the holdings
+   * list shows them. Null when Snipe has none recorded, which happens.
+   */
+  serial: string | null;
   /** Model name. The display field: Snipe's asset `name` is often empty. */
   model: string | null;
   categoryId: number | null;

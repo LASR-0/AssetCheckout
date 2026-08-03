@@ -436,7 +436,7 @@ export default function RequestTablePage() {
             <h1 className="text-4xl font-bold">Request Log</h1>
           </div>
           <p className="text-info-light mt-2">
-            Manage non-standard asset approvals and special requests.
+            Approvals, quotes and record corrections for devices and accessories.
           </p>
         </div>
 

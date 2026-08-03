@@ -8,8 +8,8 @@ import {
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import { getMyHoldings } from "@/api/holdings";
 import { submitCorrection, type NoLongerHeldReason } from "@/api/corrections";
-import { getAllAssetCategories } from "@/api/categories";
-import { getAllAccessoryCategories } from "@/api/accessories";
+import { getAssetCategories } from "@/api/categories";
+import { getAccessoryCategories } from "@/api/accessories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { whereToFind } from "@/lib/whereToFind";
 import type { AssetHolding, AccessoryHolding } from "@/types/holdingsType";
@@ -76,6 +76,8 @@ const WRONG_FIELDS: {
   label: string;
   body: string;
   icon: string;
+  /** ASSET only — see the note on SERIAL below. */
+  assetOnly?: boolean;
 }[] = [
   {
     value: "MODEL",
@@ -88,6 +90,12 @@ const WRONG_FIELDS: {
     label: "The serial number is wrong",
     body: "The serial we have doesn't match the one on the device.",
     icon: "tag",
+    // Never offered for accessories. Snipe stocks accessories by quantity with
+    // no per-unit serial, so there is nothing recorded to be wrong — and in
+    // practice a user could not tell us their headset's serial anyway. The
+    // server already refused to patch an accessory serial; this stops us
+    // asking a question whose only possible answer is "not applicable".
+    assetOnly: true,
   },
   {
     value: "OTHER",
@@ -148,11 +156,18 @@ export default function MyHoldingsDialog({
       try {
         const [holdings, categories] = await Promise.all([
           getMyHoldings(),
-          // Every category, not just requestable ones: the user is reporting
-          // something they already have, which may well not be requestable.
+          // The SITE-WIDE requestable list, not every category in Snipe.
+          // Snipe's full list carries plenty an end user should never be
+          // picking from, which turned a short question into a hunt.
+          //
+          // For accessories this is deliberately the site-wide whitelist (L1)
+          // and NOT the asset-derived map (L3) that governs what a given user
+          // may REQUEST. Reporting is not requesting: people hold accessories
+          // their assets wouldn't entitle them to ask for, and those are
+          // precisely the ones most likely to be missing from Snipe.
           isAsset
-            ? getAllAssetCategories().catch(() => [])
-            : getAllAccessoryCategories().catch(() => []),
+            ? getAssetCategories().catch(() => [])
+            : getAccessoryCategories().catch(() => []),
         ]);
         if (cancelled) return;
 
@@ -163,7 +178,11 @@ export default function MyHoldingsDialog({
                 title: a.model?.trim() || "Unnamed model",
                 categoryId: a.categoryId,
                 categoryName: a.categoryName,
-                detail: a.assetTag ? `Tag ${a.assetTag}` : null,
+                // Serial, not asset tag. The user is being asked whether OUR
+                // record matches THEIR device, and the serial is the only
+                // identifier printed on the thing in front of them — the asset
+                // tag is an internal label most of them have never looked at.
+                detail: a.serial ? `Serial ${a.serial}` : null,
               }))
             : (holdings.accessories ?? []).map((c: AccessoryHolding) => ({
                 snipeRecordId: c.id,
@@ -380,7 +399,7 @@ export default function MyHoldingsDialog({
           {/* ---------------- WHICH DETAIL ---------------- */}
           {phase === "wrong-what" && selected && (
             <div className="space-y-3">
-              {WRONG_FIELDS.map((f) => (
+              {WRONG_FIELDS.filter((f) => isAsset || !f.assetOnly).map((f) => (
                 <Choice
                   key={f.value}
                   icon={f.icon}

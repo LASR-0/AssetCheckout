@@ -18,7 +18,11 @@ import {
   rejectQuoteForRequest,
   getQuoteDocument,
 } from "../services/quote.js";
-import { searchModelsByManufacturer } from "../services/snipeitassets.js";
+import {
+  searchModelsByManufacturer,
+  searchModelsForCorrection,
+  searchAssetsBySerial,
+} from "../services/snipeitassets.js";
 import { searchAccessories } from "../services/snipeitaccessories.js";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/errors.js";
@@ -690,6 +694,93 @@ router.post("/:requestId/receive", async (req, res, next) => {
 
     const result = await markRequestReceived(requestId);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |               CORRECTION RESOLUTION LOOKUPS                     |
+///  +-----------------------------------------------------------------+
+//
+//  Let an admin resolving a correction NAME the Snipe record instead of
+//  typing its internal id into a number box. The accessory side already had
+//  this; the asset side asked for a raw model id and a raw asset id, with no
+//  lookup and no confirmation of what was picked — so a plausible-looking
+//  wrong number wrote to the wrong record and reported success.
+//
+//  Admin-gated, not merely actor-gated. These read the asset estate, and there
+//  is already a flagged gap where the accessory selection routes settle for
+//  any resolved actor; this does not add to it.
+///  +-----------------------------------------------------------------+
+
+/** Models matching a name or model number, narrowed to the correction's
+ *  category by default. */
+router.get("/:requestId/correction/search-models", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admins only" });
+    }
+
+    const query = String(req.query.query ?? "").trim();
+    if (!query) {
+      return res.status(400).json({ success: false, message: "query is required" });
+    }
+
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { categoryId: true },
+    });
+    if (!request) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    // allCategories=true lets the admin widen the search when the correction
+    // is itself about the thing being in the wrong category — the common case
+    // is still the narrowed one, so that stays the default.
+    const searchAll = req.query.allCategories === "true";
+
+    const matches = await searchModelsForCorrection({
+      query,
+      categoryId: searchAll ? null : request.categoryId,
+    });
+
+    res.json({ success: true, matches });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Assets under a model whose serial matches, with their checkout state. */
+router.get("/:requestId/correction/search-assets", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admins only" });
+    }
+
+    const modelId = Number(req.query.modelId);
+    const serial = String(req.query.serial ?? "").trim();
+
+    if (!Number.isFinite(modelId)) {
+      return res.status(400).json({
+        success: false,
+        message: "modelId is required — pick the model before searching serials",
+      });
+    }
+    if (!serial) {
+      return res.status(400).json({ success: false, message: "serial is required" });
+    }
+
+    const matches = await searchAssetsBySerial({ modelId, serial });
+    res.json({ success: true, matches });
   } catch (err) {
     next(err);
   }

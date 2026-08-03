@@ -1,5 +1,11 @@
 import type { Request, CorrectionDetail } from "../../generated/prisma_client/client.js";
-import { checkinAsset, checkoutAsset, patchAssetFields } from "./snipeitassets.js";
+import {
+  checkinAsset,
+  checkoutAsset,
+  patchAssetFields,
+  getAssetCheckoutState,
+  findAssetsWithSerial,
+} from "./snipeitassets.js";
 import {
   checkinAccessory,
   checkoutAccessory,
@@ -192,6 +198,24 @@ async function applyWrongModel(
           "Ask them for it, or fix it in Snipe and resolve this manually."
       );
     }
+
+    // The serial is the requester's transcription of something printed on a
+    // device, and it goes straight into Snipe. If another asset already
+    // carries it, one of the two records is wrong and writing this one makes
+    // it two — the same kind of bad data the correction was filed to fix.
+    // Refuse and name the clash so an admin can work out which is real.
+    const clashes = await findAssetsWithSerial(serial, recordId);
+    if (clashes.length > 0) {
+      const named = clashes
+        .map((a) => `${a.assetTag || `#${a.id}`}${a.modelName ? ` (${a.modelName})` : ""}`)
+        .join(", ");
+      return blocked(
+        `Serial "${serial}" is already recorded against ${named}. ` +
+          "Two assets can't share a serial — check which record is right in Snipe, " +
+          "fix it there, then resolve this manually."
+      );
+    }
+
     await patchAssetFields(recordId, { serial });
     return applied(`Asset ${recordId} serial set to ${serial}.`);
   }
@@ -243,8 +267,36 @@ async function applyUnlogged(
   }
 
   if (detail.subjectKind === "ASSET") {
+    // Re-read the asset's state rather than trusting what the admin's search
+    // showed them: that result could be minutes old, and the failure this
+    // guards against — checking out something someone else has since taken —
+    // is exactly the kind that opens in the gap.
+    const state = await getAssetCheckoutState(targetId);
+
+    if (!state) {
+      return blocked(
+        `Asset ${targetId} could not be read from Snipe. It may have been deleted.`
+      );
+    }
+
+    // Snipe will only deploy an asset that is Ready to Deploy and unassigned.
+    // Anything else means the Snipe record disagrees with reality and needs an
+    // admin's judgement before this correction writes to it — checking out on
+    // top of a wrong status just buries the problem under another one.
+    if (!state.checkoutable) {
+      const why = state.assignedToName
+        ? `it's already checked out to ${state.assignedToName}`
+        : `its status is "${state.statusName ?? "unknown"}" rather than Ready to Deploy`;
+      return blocked(
+        `${state.assetTag || `Asset ${targetId}`} can't be checked out because ${why}. ` +
+          `Fix the record in Snipe, then come back and apply this correction.`
+      );
+    }
+
     await checkoutAsset(targetId, request.userId);
-    return applied(`Asset ${targetId} checked out to ${request.userName}.`);
+    return applied(
+      `${state.assetTag || `Asset ${targetId}`} checked out to ${request.userName}.`
+    );
   }
 
   // Stock is read from the accessory's own record — never from

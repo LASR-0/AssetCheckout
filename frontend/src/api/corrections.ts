@@ -87,3 +87,64 @@ export async function approveCorrection(
     body: resolution,
   });
 }
+
+///  +-----------------------------------------------------------------+
+///  |                    RESOLUTION LOOKUPS                           |
+///  +-----------------------------------------------------------------+
+//
+//  Search, so the admin picks a named record instead of typing an internal
+//  Snipe id. The asset side used to take both the model id and the asset id
+//  as bare numbers, which meant a wrong-but-valid id wrote to the wrong
+//  record and reported success.
+///  +-----------------------------------------------------------------+
+
+export type CorrectionModelMatch = {
+  id: number;
+  name: string;
+  manufacturer: string | null;
+  modelNumber: string | null;
+  categoryName: string | null;
+};
+
+export type CorrectionAssetMatch = {
+  id: number;
+  assetTag: string;
+  serial: string | null;
+  modelName: string | null;
+  statusName: string | null;
+  /** Who it's checked out to, or null when unassigned. */
+  assignedToName: string | null;
+  readyToDeploy: boolean;
+  /** Ready to Deploy AND unassigned — the only state a checkout can use. */
+  checkoutable: boolean;
+};
+
+/** Models matching a name or model number. Narrowed to the correction's own
+ *  category unless `allCategories` — the widening exists because "it's in the
+ *  wrong category" is itself a thing people file corrections about. */
+export async function searchCorrectionModels(
+  requestId: number,
+  query: string,
+  allCategories = false
+): Promise<CorrectionModelMatch[]> {
+  const params = new URLSearchParams({ query });
+  if (allCategories) params.set("allCategories", "true");
+  const data = await apiFetch<{ matches: CorrectionModelMatch[] }>(
+    `/api/approval/${requestId}/correction/search-models?${params}`
+  );
+  return data.matches ?? [];
+}
+
+/** Assets under a model whose serial matches, with the state that decides
+ *  whether they can be checked out. */
+export async function searchCorrectionAssets(
+  requestId: number,
+  modelId: number,
+  serial: string
+): Promise<CorrectionAssetMatch[]> {
+  const params = new URLSearchParams({ modelId: String(modelId), serial });
+  const data = await apiFetch<{ matches: CorrectionAssetMatch[] }>(
+    `/api/approval/${requestId}/correction/search-assets?${params}`
+  );
+  return data.matches ?? [];
+}

@@ -8,7 +8,14 @@ import {
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import InfoHint from "@/components/ui/infohint";
 import type { Request } from "@/types/requestType";
-import { approveCorrection, type CorrectionResolution } from "@/api/corrections";
+import {
+  approveCorrection,
+  searchCorrectionModels,
+  searchCorrectionAssets,
+  type CorrectionResolution,
+  type CorrectionModelMatch,
+  type CorrectionAssetMatch,
+} from "@/api/corrections";
 import { searchAccessoriesForRequest, type AccessorySearchMatch } from "@/api/accessories";
 
 ///  +-----------------------------------------------------------------+
@@ -93,12 +100,25 @@ export default function ManageCorrectionDialog({
   // Admin-supplied targets. Only the ones the correction actually needs are
   // rendered — see needsAccessoryTarget / needsModel / needsAssetTarget.
   const [manualResolve, setManualResolve] = useState(false);
-  const [modelId, setModelId] = useState("");
-  const [assetId, setAssetId] = useState("");
   const [accessoryQuery, setAccessoryQuery] = useState("");
   const [accessoryMatches, setAccessoryMatches] = useState<AccessorySearchMatch[] | null>(null);
   const [accessoryId, setAccessoryId] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
+
+  // Asset resolution is a two-step search: name the MODEL, then find the
+  // asset by serial within it. Both steps replace what used to be a bare
+  // "type the Snipe id" box, which had no way to tell a right id from a
+  // plausible wrong one.
+  const [modelQuery, setModelQuery] = useState("");
+  const [modelMatches, setModelMatches] = useState<CorrectionModelMatch[] | null>(null);
+  const [pickedModel, setPickedModel] = useState<CorrectionModelMatch | null>(null);
+  const [searchAllCategories, setSearchAllCategories] = useState(false);
+  const [searchingModels, setSearchingModels] = useState(false);
+
+  const [serialQuery, setSerialQuery] = useState("");
+  const [assetMatches, setAssetMatches] = useState<CorrectionAssetMatch[] | null>(null);
+  const [pickedAsset, setPickedAsset] = useState<CorrectionAssetMatch | null>(null);
+  const [searchingAssets, setSearchingAssets] = useState(false);
 
   const detail = request?.correctionDetail ?? null;
 
@@ -111,12 +131,19 @@ export default function ManageCorrectionDialog({
       setRejecting(false);
       setRejectReason("");
       setManualResolve(false);
-      setModelId("");
-      setAssetId("");
       setAccessoryQuery("");
       setAccessoryMatches(null);
       setAccessoryId(null);
       setSearching(false);
+      setModelQuery("");
+      setModelMatches(null);
+      setPickedModel(null);
+      setSearchAllCategories(false);
+      setSearchingModels(false);
+      setSerialQuery("");
+      setAssetMatches(null);
+      setPickedAsset(null);
+      setSearchingAssets(false);
     }, 200);
     return () => clearTimeout(t);
   }, [open]);
@@ -144,20 +171,23 @@ export default function ManageCorrectionDialog({
   const resolution: CorrectionResolution = manualResolve
     ? { resolvedManually: true }
     : {
-        modelId: needsModel && modelId.trim() ? Number(modelId.trim()) : null,
+        modelId: needsModel ? pickedModel?.id ?? null : null,
         snipeRecordId: needsAccessoryTarget
           ? accessoryId
-          : needsAssetTarget && assetId.trim()
-          ? Number(assetId.trim())
+          : needsAssetTarget
+          ? pickedAsset?.id ?? null
           : null,
       };
 
+  // A picked asset that can't be checked out doesn't enable Approve. The
+  // server refuses it anyway, but making the admin round-trip to be told so
+  // wastes their time when the reason is already on screen.
   const canApprove =
     manualResolve ||
     !needsSomething ||
     (needsAccessoryTarget && accessoryId !== null) ||
-    (needsAssetTarget && !!assetId.trim()) ||
-    (needsModel && !!modelId.trim());
+    (needsAssetTarget && pickedAsset !== null && pickedAsset.checkoutable) ||
+    (needsModel && pickedModel !== null);
 
   async function handleSearchAccessories() {
     if (!request || !accessoryQuery.trim()) return;
@@ -172,6 +202,47 @@ export default function ManageCorrectionDialog({
     } finally {
       setSearching(false);
     }
+  }
+
+  async function handleSearchModels() {
+    if (!request || !modelQuery.trim()) return;
+    setSearchingModels(true);
+    try {
+      const matches = await searchCorrectionModels(
+        request.id,
+        modelQuery.trim(),
+        searchAllCategories
+      );
+      setModelMatches(matches);
+    } catch (err) {
+      setState({ phase: "error", message: messageOf(err, "Model search failed.") });
+    } finally {
+      setSearchingModels(false);
+    }
+  }
+
+  async function handleSearchAssets() {
+    if (!request || !pickedModel || !serialQuery.trim()) return;
+    setSearchingAssets(true);
+    try {
+      const matches = await searchCorrectionAssets(
+        request.id,
+        pickedModel.id,
+        serialQuery.trim()
+      );
+      setAssetMatches(matches);
+    } catch (err) {
+      setState({ phase: "error", message: messageOf(err, "Serial search failed.") });
+    } finally {
+      setSearchingAssets(false);
+    }
+  }
+
+  /** Changing the model invalidates everything found under the old one. */
+  function pickModel(m: CorrectionModelMatch) {
+    setPickedModel(m);
+    setAssetMatches(null);
+    setPickedAsset(null);
   }
 
   async function handleApprove() {
@@ -360,41 +431,182 @@ export default function ManageCorrectionDialog({
                 </div>
               )}
 
-              {needsAssetTarget && !manualResolve && (
+              {/* MODEL SEARCH — shared by both asset branches. UNLOGGED needs
+                  it to narrow the serial search; WRONG_MODEL needs the model
+                  itself as the answer. */}
+              {(needsAssetTarget || needsModel) && !manualResolve && (
                 <div className="space-y-2">
                   <FieldLabel>
-                    Snipe asset ID to check out to them
+                    {needsModel ? "Which model should it be?" : "Which model is it?"}
                     <InfoHint>
-                      Create the asset in Snipe first if it doesn't exist — this
-                      checks out an existing record, it doesn't create one.
+                      {needsModel
+                        ? `"${detail.correctedModel ?? "their description"}" is the requester's wording, not a Snipe model. Find the real one.`
+                        : "Find the model first — the serial search below is scoped to it, which is what makes a loose serial match safe."}
                     </InfoHint>
                   </FieldLabel>
-                  <input
-                    value={assetId}
-                    onChange={(e) => setAssetId(e.target.value.replace(/\D/g, ""))}
-                    inputMode="numeric"
-                    placeholder="e.g. 1234"
-                    className={INPUT}
-                  />
+
+                  <div className="flex gap-2">
+                    <input
+                      value={modelQuery}
+                      onChange={(e) => setModelQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearchModels()}
+                      placeholder="Model name or model number…"
+                      className={INPUT}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearchModels}
+                      disabled={searchingModels || !modelQuery.trim()}
+                      className={SECONDARY_BTN}
+                    >
+                      {searchingModels ? "Searching…" : "Search"}
+                    </button>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-info-light hover:cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={searchAllCategories}
+                      onChange={(e) => {
+                        setSearchAllCategories(e.target.checked);
+                        setModelMatches(null);
+                      }}
+                      className="accent-status-correction hover:cursor-pointer"
+                    />
+                    Search every category, not just {request.categoryName}
+                  </label>
+
+                  {modelMatches?.length === 0 && (
+                    <p className="text-xs text-info-light">
+                      No model matches that.{" "}
+                      {searchAllCategories
+                        ? "Check the spelling, or create the model in Snipe first."
+                        : "Try ticking the box above to search outside this category."}
+                    </p>
+                  )}
+
+                  {!!modelMatches?.length && (
+                    <ul className="space-y-1.5">
+                      {modelMatches.map((m) => (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            onClick={() => pickModel(m)}
+                            className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors hover:cursor-pointer ${
+                              pickedModel?.id === m.id
+                                ? "border-status-correction bg-status-correction/10"
+                                : "border-modal-border hover:bg-modal-surface-accent/40"
+                            }`}
+                          >
+                            <span className="font-semibold">{m.name}</span>
+                            <span className="block text-xs text-info-light">
+                              {[m.manufacturer, m.modelNumber, m.categoryName]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
-              {needsModel && !manualResolve && (
+              {/* SERIAL SEARCH — UNLOGGED only, and only once a model is
+                  chosen. The serial is the one identifier the requester could
+                  actually read off the device. */}
+              {needsAssetTarget && !manualResolve && pickedModel && (
                 <div className="space-y-2">
                   <FieldLabel>
-                    Correct Snipe model ID
+                    Find it by serial
                     <InfoHint>
-                      "{detail.correctedModel}" is the requester's wording, not a
-                      model. Give the id of the model the asset should point at.
+                      Searching within {pickedModel.name} only. This checks out an
+                      existing record — it doesn't create one, so make the asset in
+                      Snipe first if it isn't there.
                     </InfoHint>
                   </FieldLabel>
-                  <input
-                    value={modelId}
-                    onChange={(e) => setModelId(e.target.value.replace(/\D/g, ""))}
-                    inputMode="numeric"
-                    placeholder="e.g. 42"
-                    className={INPUT}
-                  />
+
+                  {detail.serial && (
+                    <p className="text-xs text-info-light">
+                      They reported serial{" "}
+                      <span className="font-semibold text-modal-text-primary">
+                        {detail.serial}
+                      </span>
+                      .
+                    </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      value={serialQuery}
+                      onChange={(e) => setSerialQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearchAssets()}
+                      placeholder={detail.serial ?? "Serial number…"}
+                      className={INPUT}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearchAssets}
+                      disabled={searchingAssets || !serialQuery.trim()}
+                      className={SECONDARY_BTN}
+                    >
+                      {searchingAssets ? "Searching…" : "Search"}
+                    </button>
+                  </div>
+
+                  {assetMatches?.length === 0 && (
+                    <p className="text-xs text-info-light">
+                      No asset under {pickedModel.name} has a serial like that.
+                    </p>
+                  )}
+
+                  {!!assetMatches?.length && (
+                    <ul className="space-y-1.5">
+                      {assetMatches.map((a) => (
+                        <li key={a.id}>
+                          <button
+                            type="button"
+                            onClick={() => setPickedAsset(a)}
+                            className={`w-full text-left rounded-lg border px-3 py-2 text-sm transition-colors hover:cursor-pointer ${
+                              pickedAsset?.id === a.id
+                                ? "border-status-correction bg-status-correction/10"
+                                : "border-modal-border hover:bg-modal-surface-accent/40"
+                            }`}
+                          >
+                            <span className="font-semibold">
+                              {a.serial ?? "No serial"}
+                            </span>
+                            <span className="text-xs text-info-light ml-2">
+                              {a.assetTag || `#${a.id}`}
+                            </span>
+                            {/* Unavailable assets are LISTED, not hidden. The
+                                admin needs to see that the record exists and
+                                why it can't be used — hiding it just sends
+                                them hunting for something that's right there. */}
+                            <span
+                              className={`block text-xs ${
+                                a.checkoutable ? "text-status-success" : "text-status-pending"
+                              }`}
+                            >
+                              {a.checkoutable
+                                ? "Ready to deploy · unassigned"
+                                : a.assignedToName
+                                ? `Already checked out to ${a.assignedToName}`
+                                : `Status is "${a.statusName ?? "unknown"}", not Ready to Deploy`}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {pickedAsset && !pickedAsset.checkoutable && (
+                    <Notice tone="pending" icon="build" title="Fix this in Snipe first">
+                      {pickedAsset.assignedToName
+                        ? `Snipe has this checked out to ${pickedAsset.assignedToName}, so it can't also go to ${request.userName}. Check it in first if that's wrong.`
+                        : `Snipe won't deploy an asset whose status is "${pickedAsset.statusName ?? "unknown"}". Set it to Ready to Deploy, then come back.`}
+                    </Notice>
+                  )}
                 </div>
               )}
 
@@ -528,8 +740,13 @@ const INPUT =
 const PRIMARY_BTN =
   "w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
 
+// bg-modal-error, NOT bg-status-error. The status token goes pastel on the
+// dark theme (rose-400) because it's tuned for small badge text on a tinted
+// pill — as a solid fill under white label text it washed out into an
+// unreadable pink. modal-error is the modal-scoped token and stays dark enough
+// to carry white text in both themes.
 const DANGER_BTN =
-  "w-full sm:w-auto px-8 py-3.5 rounded-lg bg-status-error text-white font-bold text-sm hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
+  "w-full sm:w-auto px-8 py-3.5 rounded-lg bg-modal-error text-white font-bold text-sm hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
 
 const GHOST_BTN =
   "w-full sm:w-auto px-8 py-3.5 rounded-lg text-modal-text-secondary font-bold text-sm hover:bg-modal-error/10 hover:cursor-pointer hover:text-modal-error transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
