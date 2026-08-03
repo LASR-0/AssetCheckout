@@ -16,11 +16,11 @@ import type {
   AssetHolding,
   AccessoryHolding,
 } from "@/types/holdingsType";
-// summariseAssetHoldings / summariseAccessoryHoldings are no longer used here:
-// the request tiles now state a count in words rather than naming models, and
-// the models themselves are named properly one section down where there's room
-// for them. Both helpers are still exported for that purpose.
-import { groupByCategoryId } from "@/lib/holdings";
+import {
+  groupByCategoryId,
+  summariseAssetHoldings,
+  summariseAccessoryHoldings,
+} from "@/lib/holdings";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     HOME PAGE (internal tool)                   |
@@ -525,17 +525,24 @@ function TileBody({
    *  a category you own nothing in looks exactly as it did before. */
   heldCount: number;
   /**
-   * Hover text, supplied per kind rather than baked in, because the number
-   * means different things. Assets are one row per physical item, so it's a
-   * true count. For accessories it's how many accessory records Snipe returns
-   * for this user here — the endpoint exposes no per-user quantity (its
-   * qty/remaining are stock at a location, and checkouts_count comes back
-   * null), so the copy must not claim "you hold N of these".
+   * Hover text for the band: what they actually hold, by name
+   * ("ThinkPad T16 Gen 1 +1"). The band states a count because a count can't
+   * truncate; the names are what someone hovering actually wants, and they're
+   * too long to sit on the tile itself.
    */
-  heldTitle: string;
+  heldTitle: string | null;
 }) {
   return (
     <>
+      {/* Request → leads rather than trails. It's the tile's purpose, and at
+          the foot it competed with the holdings band directly beneath it for
+          the same corner of the eye. */}
+      <div className="flex w-full items-center">
+        <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
+          Request →
+        </span>
+      </div>
+
       <div className="flex flex-1 flex-col items-center my-6 justify-center gap-2 text-center">
         <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
         {/* On the name rather than a larger parent gap, so the extra breathing
@@ -544,18 +551,15 @@ function TileBody({
         <span className={`${nameClass} `}>{name}</span>
       </div>
 
-      <div className="flex w-full items-center">
-        <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-          Request →
-        </span>
-      </div>
-
       {heldCount > 0 && (
         <div
-          className="-mx-5 -mb-2 mt-1 border-t border-outline/50 bg-status-assigned/10 px-5 py-2"
-          title={heldTitle}
+          className="-mx-5 -mb-2 mt-1 border-t border-outline/50 bg-status-success/10 px-5 py-2"
+          // The models by name. Falls back to nothing rather than a generic
+          // phrase — an empty title shows no tooltip, which beats one that
+          // repeats the band.
+          title={heldTitle ?? undefined}
         >
-          <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-status-assigned">
+          <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-status-success">
             <span className="material-symbols-outlined !text-[14px]">
               check_circle
             </span>
@@ -665,11 +669,7 @@ function QuickStart({
                     nameClass="font-bold text-[13px]"
                     // One row per physical asset, so this is a true count.
                     heldCount={held.length}
-                    heldTitle={
-                      held.length === 1
-                        ? "1 of these is assigned to you"
-                        : `${held.length} of these are assigned to you`
-                    }
+                    heldTitle={summariseAssetHoldings(held)}
                   />
                 </Link>
               );
@@ -956,13 +956,10 @@ function AccessoryQuickStart({
                   iconClass="!text-[28px]"
                   nameClass="font-bold text-[15px]"
                   // Accessory records Snipe returns for this user here — NOT a
-                  // quantity, hence the wording. See the note on heldTitle.
+                  // quantity. summariseAccessoryHoldings keeps that distinction
+                  // in the tooltip: "+N" for more records, never "xN".
                   heldCount={held.length}
-                  heldTitle={
-                    held.length === 1
-                      ? "1 accessory assigned to you in this category"
-                      : `${held.length} accessories assigned to you in this category`
-                  }
+                  heldTitle={summariseAccessoryHoldings(held)}
                 />
               </Link>
             );
