@@ -148,6 +148,27 @@ export async function searchCorrectionModels(
   return data.matches ?? [];
 }
 
+/**
+ * Other assets already carrying this serial. Advisory — backs the live badge
+ * while the admin types.
+ *
+ * Not a substitute for the check at apply time: this answer is already stale
+ * by the time they click Approve, and the write-time check is what actually
+ * refuses. The correction's own record is excluded server-side.
+ */
+export async function checkSerialInUse(
+  requestId: number,
+  serial: string,
+  signal?: AbortSignal
+): Promise<CorrectionAssetMatch[]> {
+  const params = new URLSearchParams({ serial });
+  const data = await apiFetch<{ matches: CorrectionAssetMatch[] }>(
+    `/api/approval/${requestId}/correction/serial-check?${params}`,
+    { signal }
+  );
+  return data.matches ?? [];
+}
+
 /** Assets under a model whose serial matches, with the state that decides
  *  whether they can be checked out. */
 export async function searchCorrectionAssets(

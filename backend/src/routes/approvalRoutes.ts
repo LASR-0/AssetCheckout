@@ -22,6 +22,7 @@ import {
   searchModelsByManufacturer,
   searchModelsForCorrection,
   searchAssetsBySerial,
+  findAssetsWithSerial,
 } from "../services/snipeitassets.js";
 import { searchAccessories } from "../services/snipeitaccessories.js";
 import { prisma } from "../db/prisma.js";
@@ -752,6 +753,49 @@ router.get("/:requestId/correction/search-models", async (req, res, next) => {
       query,
       categoryId: searchAll ? null : request.categoryId,
     });
+
+    res.json({ success: true, matches });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Is this serial already on another asset? Advisory only.
+ *
+ * Backs the live badge on the Manage dialog so the admin finds out while
+ * they're typing rather than after submitting. It does NOT replace the check
+ * at apply time: this answer is seconds old by the time they click, and
+ * another admin could claim the serial in between. The write-time check in
+ * applyCorrectionToSnipe stays authoritative.
+ *
+ * The correction's own record is excluded — an admin re-entering the serial
+ * the asset already carries is not a clash, it's a no-op.
+ */
+router.get("/:requestId/correction/serial-check", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admins only" });
+    }
+
+    const serial = String(req.query.serial ?? "").trim();
+    if (!serial) {
+      return res.json({ success: true, matches: [] });
+    }
+
+    const detail = await prisma.correctionDetail.findUnique({
+      where: { requestId },
+      select: { snipeRecordId: true },
+    });
+
+    const matches = await findAssetsWithSerial(
+      serial,
+      detail?.snipeRecordId ?? undefined
+    );
 
     res.json({ success: true, matches });
   } catch (err) {

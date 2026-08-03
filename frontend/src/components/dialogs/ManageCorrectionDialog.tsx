@@ -12,6 +12,7 @@ import {
   approveCorrection,
   searchCorrectionModels,
   searchCorrectionAssets,
+  checkSerialInUse,
   type CorrectionResolution,
   type CorrectionModelMatch,
   type CorrectionAssetMatch,
@@ -79,6 +80,17 @@ function messageOf(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
+/** Live "is this serial already taken?" state, shown as a badge beside the
+ *  field. Advisory: the write-time check is what actually refuses. */
+type SerialCheck =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "clear" }
+  | { state: "clash"; matches: CorrectionAssetMatch[] }
+  /** The lookup itself failed. Says so rather than implying the serial is
+   *  clear, which would be the dangerous way to be wrong. */
+  | { state: "failed" };
+
 type Phase =
   | { phase: "review" }
   | { phase: "working" }
@@ -124,6 +136,7 @@ export default function ManageCorrectionDialog({
   // reported and editable, because they were reading characters off a small
   // label — O/0 and I/1 are the routine slips — and this value goes into Snipe.
   const [serialEdit, setSerialEdit] = useState("");
+  const [serialCheck, setSerialCheck] = useState<SerialCheck>({ state: "idle" });
 
   const detail = request?.correctionDetail ?? null;
 
@@ -150,6 +163,7 @@ export default function ManageCorrectionDialog({
       setPickedAsset(null);
       setSearchingAssets(false);
       setSerialEdit("");
+      setSerialCheck({ state: "idle" });
     }, 200);
     return () => clearTimeout(t);
   }, [open]);
@@ -160,6 +174,44 @@ export default function ManageCorrectionDialog({
   useEffect(() => {
     if (open) setSerialEdit(detail?.serial ?? "");
   }, [open, detail?.serial]);
+
+  // Live duplicate check, debounced.
+  //
+  // Every keystroke would otherwise be a round trip to Snipe via our API, and
+  // a serial is a dozen characters — so wait for a pause in typing. The
+  // in-flight request is aborted when the value moves on, which also stops a
+  // slow earlier response from landing on top of a newer one and telling the
+  // admin the wrong thing about the serial now in the box.
+  const serialToCheck = open && detail?.wrongField === "SERIAL" ? serialEdit.trim() : "";
+
+  useEffect(() => {
+    if (!request || !serialToCheck) {
+      setSerialCheck({ state: "idle" });
+      return;
+    }
+
+    const controller = new AbortController();
+    setSerialCheck({ state: "checking" });
+
+    const timer = setTimeout(() => {
+      checkSerialInUse(request.id, serialToCheck, controller.signal)
+        .then((matches) =>
+          setSerialCheck(
+            matches.length ? { state: "clash", matches } : { state: "clear" }
+          )
+        )
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          console.error("Serial check failed", err);
+          setSerialCheck({ state: "failed" });
+        });
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [request?.id, serialToCheck]);
 
   if (!request || !detail) return null;
 
@@ -481,6 +533,8 @@ export default function ManageCorrectionDialog({
                     placeholder="Serial number"
                     className={`${INPUT} font-mono`}
                   />
+                  <SerialCheckBadge check={serialCheck} />
+
                   {detail.serial && serialEdit.trim() !== detail.serial.trim() && (
                     <p className="text-xs text-status-pending">
                       Changed from what they reported ({detail.serial}).
@@ -858,6 +912,71 @@ const GHOST_BTN =
 
 const SECONDARY_BTN =
   "shrink-0 rounded-lg border border-modal-border px-4 py-2 text-sm font-semibold text-modal-text-secondary hover:bg-modal-surface-accent/40 hover:cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+
+/**
+ * Live duplicate-serial indicator.
+ *
+ * A "failed" lookup reads as failed, never as clear. Showing a green tick
+ * because the request errored would be the one wrong answer with a real cost —
+ * it would tell the admin the serial is free when nobody actually checked.
+ */
+function SerialCheckBadge({ check }: { check: SerialCheck }) {
+  if (check.state === "idle") return null;
+
+  if (check.state === "checking") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-info-light">
+        <span className="animate-spin h-3 w-3 border-2 border-info-light/40 border-t-info-light rounded-full" />
+        Checking Snipe for this serial…
+      </span>
+    );
+  }
+
+  if (check.state === "failed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-info-light">
+        <span className="material-symbols-outlined !text-[14px]">cloud_off</span>
+        Couldn't check for duplicates — it's still verified when you apply.
+      </span>
+    );
+  }
+
+  if (check.state === "clear") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-status-success bg-status-success/10 px-2 py-1 text-[12px] font-semibold text-status-success">
+        <span className="material-symbols-outlined !text-[14px]">check_circle</span>
+        No other asset has this serial
+      </span>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <span className="inline-flex items-start gap-1.5 rounded-md border border-dashed border-status-pending bg-status-pending/10 px-2 py-1 text-[12px] font-semibold text-status-pending">
+        <span className="material-symbols-outlined !text-[14px] shrink-0">warning</span>
+        {check.matches.length === 1
+          ? "Another asset already has this serial"
+          : `${check.matches.length} other assets already have this serial`}
+      </span>
+      {/* Named right here, so the admin can go and look before submitting
+          rather than finding out from the block afterwards. */}
+      <ul className="space-y-1">
+        {check.matches.map((a) => (
+          <li key={a.id} className="text-xs text-info-light">
+            <span className="font-semibold text-modal-text-primary">
+              {a.assetTag || `#${a.id}`}
+            </span>
+            {" · "}
+            {[a.modelName, a.assignedToName ? `held by ${a.assignedToName}` : "unassigned"]
+              .filter(Boolean)
+              .join(" · ")}
+            <span className="text-info-light/70"> · id {a.id}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
