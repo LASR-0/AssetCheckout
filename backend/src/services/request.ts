@@ -578,6 +578,10 @@ async function handleCorrectionApproval(
       request,
       applied: false,
       message: outcome.blockedReason,
+      // Transient, not persisted: re-approving re-runs the search, so a stale
+      // list is worse than no list. applyError keeps the human-readable reason
+      // on the row for anyone who reopens it later.
+      ...(outcome.serialClashes ? { serialClashes: outcome.serialClashes } : {}),
     };
   }
 

@@ -83,7 +83,7 @@ type Phase =
   | { phase: "review" }
   | { phase: "working" }
   | { phase: "applied"; message: string }
-  | { phase: "blocked"; message: string }
+  | { phase: "blocked"; message: string; serialClashes?: CorrectionAssetMatch[] }
   | { phase: "error"; message: string };
 
 export default function ManageCorrectionDialog({
@@ -120,6 +120,11 @@ export default function ManageCorrectionDialog({
   const [pickedAsset, setPickedAsset] = useState<CorrectionAssetMatch | null>(null);
   const [searchingAssets, setSearchingAssets] = useState(false);
 
+  // The serial that will actually be written. Seeded from what the requester
+  // reported and editable, because they were reading characters off a small
+  // label — O/0 and I/1 are the routine slips — and this value goes into Snipe.
+  const [serialEdit, setSerialEdit] = useState("");
+
   const detail = request?.correctionDetail ?? null;
 
   // Reset on close. Delayed so the fields don't visibly clear during the
@@ -144,9 +149,17 @@ export default function ManageCorrectionDialog({
       setAssetMatches(null);
       setPickedAsset(null);
       setSearchingAssets(false);
+      setSerialEdit("");
     }, 200);
     return () => clearTimeout(t);
   }, [open]);
+
+  // Seed the editable serial from the report each time the dialog opens, so
+  // reopening a row the admin abandoned starts from the requester's value
+  // again rather than a half-finished edit.
+  useEffect(() => {
+    if (open) setSerialEdit(detail?.serial ?? "");
+  }, [open, detail?.serial]);
 
   if (!request || !detail) return null;
 
@@ -160,6 +173,10 @@ export default function ManageCorrectionDialog({
   const needsAssetTarget = detail.correctionKind === "UNLOGGED" && isAsset;
   const needsModel =
     detail.correctionKind === "WRONG_MODEL" && isAsset && detail.wrongField === "MODEL";
+  // Not a "target" like the others — the record is already known — but it IS a
+  // value the admin has to stand behind before it's written to Snipe.
+  const needsSerial =
+    detail.correctionKind === "WRONG_MODEL" && isAsset && detail.wrongField === "SERIAL";
   const needsSomething = needsAccessoryTarget || needsAssetTarget || needsModel;
 
   // Nothing this dialog can express as a field write — the server will block
@@ -172,6 +189,7 @@ export default function ManageCorrectionDialog({
     ? { resolvedManually: true }
     : {
         modelId: needsModel ? pickedModel?.id ?? null : null,
+        serial: needsSerial ? serialEdit.trim() || null : null,
         snipeRecordId: needsAccessoryTarget
           ? accessoryId
           : needsAssetTarget
@@ -184,10 +202,13 @@ export default function ManageCorrectionDialog({
   // wastes their time when the reason is already on screen.
   const canApprove =
     manualResolve ||
-    !needsSomething ||
-    (needsAccessoryTarget && accessoryId !== null) ||
-    (needsAssetTarget && pickedAsset !== null && pickedAsset.checkoutable) ||
-    (needsModel && pickedModel !== null);
+    // Emptying the serial field can't be a way to skip the check.
+    (needsSerial
+      ? serialEdit.trim() !== ""
+      : !needsSomething ||
+        (needsAccessoryTarget && accessoryId !== null) ||
+        (needsAssetTarget && pickedAsset !== null && pickedAsset.checkoutable) ||
+        (needsModel && pickedModel !== null));
 
   async function handleSearchAccessories() {
     if (!request || !accessoryQuery.trim()) return;
@@ -255,7 +276,11 @@ export default function ManageCorrectionDialog({
       setState(
         result.applied
           ? { phase: "applied", message: result.message }
-          : { phase: "blocked", message: result.message }
+          : {
+              phase: "blocked",
+              message: result.message,
+              serialClashes: result.serialClashes,
+            }
       );
       onSuccess();
     } catch (err) {
@@ -359,8 +384,12 @@ export default function ManageCorrectionDialog({
             </Notice>
           )}
 
-          {/* RESOLUTION — only for the corrections that need a target. */}
-          {state.phase === "review" && !rejecting && (
+          {/* RESOLUTION — only for the corrections that need a target.
+              Stays visible while BLOCKED, not just on first review: the footer
+              offers "Try again", and being blocked is precisely when the admin
+              needs to change what they picked or typed. Hiding the fields left
+              that button with nothing to act on. */}
+          {(state.phase === "review" || state.phase === "blocked") && !rejecting && (
             <section className="space-y-3">
               {manualOnly && !manualResolve && (
                 <Notice tone="pending" icon="info" title="No automatic update for this one">
@@ -427,6 +456,35 @@ export default function ManageCorrectionDialog({
                         </li>
                       ))}
                     </ul>
+                  )}
+                </div>
+              )}
+
+              {/* SERIAL — editable, not just displayed. This value goes
+                  straight into Snipe, and it was typed by someone squinting at
+                  a label, so the admin gets to correct it before it lands.
+                  Note the asymmetry this closes: the MODEL branch never
+                  trusted the requester's words either. */}
+              {needsSerial && !manualResolve && (
+                <div className="space-y-2">
+                  <FieldLabel>
+                    Serial to write
+                    <InfoHint>
+                      Pre-filled with what {request.userName} reported. Check it
+                      against the device or the paperwork and correct it if
+                      needed — this is written to Snipe exactly as it stands.
+                    </InfoHint>
+                  </FieldLabel>
+                  <input
+                    value={serialEdit}
+                    onChange={(e) => setSerialEdit(e.target.value)}
+                    placeholder="Serial number"
+                    className={`${INPUT} font-mono`}
+                  />
+                  {detail.serial && serialEdit.trim() !== detail.serial.trim() && (
+                    <p className="text-xs text-status-pending">
+                      Changed from what they reported ({detail.serial}).
+                    </p>
                   )}
                 </div>
               )}
@@ -654,10 +712,57 @@ export default function ManageCorrectionDialog({
             </Notice>
           )}
           {state.phase === "blocked" && (
-            <Notice tone="pending" icon="pending_actions" title="Not applied yet">
-              {state.message} The correction stays in the queue so you can try
-              again once that's sorted.
-            </Notice>
+            <>
+              <Notice tone="pending" icon="pending_actions" title="Not applied yet">
+                {state.message} The correction stays in the queue so you can try
+                again once that's sorted.
+              </Notice>
+
+              {/* The clashing records, not just the fact of a clash. The admin
+                  has to open Snipe and work out which of the two is the real
+                  device, so they need something to search on — a tag, a model,
+                  and who it's currently against. */}
+              {!!state.serialClashes?.length && (
+                <div className="space-y-2">
+                  <FieldLabel>
+                    Already using this serial
+                    <InfoHint>
+                      Look these up in Snipe. One of them has the wrong serial —
+                      fix that record first, then apply this correction.
+                    </InfoHint>
+                  </FieldLabel>
+                  <ul className="space-y-1.5">
+                    {state.serialClashes.map((a) => (
+                      <li
+                        key={a.id}
+                        className="rounded-lg border border-status-pending/40 bg-status-pending/5 px-3 py-2 text-sm"
+                      >
+                        <span className="font-semibold text-modal-text-primary">
+                          {a.assetTag || `Asset #${a.id}`}
+                        </span>
+                        <span className="font-mono text-xs text-info-light ml-2">
+                          {a.serial}
+                        </span>
+                        <span className="block text-xs text-info-light">
+                          {[
+                            a.modelName,
+                            a.statusName,
+                            a.assignedToName
+                              ? `held by ${a.assignedToName}`
+                              : "unassigned",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                        <span className="block text-[11px] text-info-light/70 mt-0.5">
+                          Snipe asset id {a.id}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
           {state.phase === "error" && (
             <Notice tone="error" icon="error" title="Something went wrong">

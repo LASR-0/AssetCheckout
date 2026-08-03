@@ -54,6 +54,12 @@ export type CorrectionResolution = {
   modelId?: number | null;
   /** UNLOGGED: the accessory or asset the report was matched to. */
   snipeRecordId?: number | null;
+  /**
+   * WRONG_MODEL + SERIAL: the serial to write, as the admin confirmed it.
+   * Defaults to the requester's value when untouched — they're transcribing
+   * characters off a small label, so the admin gets to correct it first.
+   */
+  serial?: string | null;
   /** The admin already fixed Snipe by hand — skip the write, complete the row. */
   resolvedManually?: boolean;
 };
@@ -68,6 +74,13 @@ export type ApplyCorrectionResult = {
    */
   applied: boolean;
   message: string;
+  /**
+   * Set when the block was a duplicate serial: the OTHER assets already
+   * carrying it. Rendered so the admin has something to search Snipe with —
+   * they have to decide which of the two records is real, and can't do that
+   * from a sentence.
+   */
+  serialClashes?: CorrectionAssetMatch[];
 };
 
 /**

@@ -60,7 +60,7 @@ router.post("/:requestId/approve", async (req, res, next) => {
     // Corrections only. The Manage dialog supplies the Snipe record the admin
     // matched a free-text report to, or states they fixed Snipe by hand.
     // Ignored by every provisioning path — those derive their own targets.
-    const { modelId, snipeRecordId, resolvedManually } = req.body ?? {};
+    const { modelId, snipeRecordId, resolvedManually, serial } = req.body ?? {};
 
     const result = await approveRequest(
       requestId,
@@ -68,6 +68,10 @@ router.post("/:requestId/approve", async (req, res, next) => {
       {
         modelId: typeof modelId === "number" ? modelId : null,
         snipeRecordId: typeof snipeRecordId === "number" ? snipeRecordId : null,
+        // The admin's corrected serial, where they changed it. Null (not
+        // undefined) leaves the service falling back to what the requester
+        // reported, which is what an untouched field means.
+        serial: typeof serial === "string" && serial.trim() ? serial.trim() : null,
         resolvedManually: resolvedManually === true,
       }
     );

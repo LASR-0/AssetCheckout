@@ -1,4 +1,5 @@
 import type { Request, ModelRequest, RequestType } from "../../generated/prisma_client/client.js";
+import type { CorrectionAssetMatch } from "./snipeTypes.js";
 
 export type Actor = { name: string; isAdmin: boolean };
 
@@ -166,6 +167,13 @@ export type CorrectionApproveResponse = {
    */
   applied: boolean;
   message: string;
+  /**
+   * Blocked-on-a-duplicate-serial only: the OTHER assets already carrying the
+   * serial the admin tried to write. Present so the dialog can show enough to
+   * go and find them in Snipe — a sentence saying "it clashes" isn't something
+   * an admin can act on.
+   */
+  serialClashes?: CorrectionAssetMatch[];
 };
 
 export type ApproveResponse =

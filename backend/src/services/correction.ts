@@ -6,6 +6,7 @@ import {
   getAssetCheckoutState,
   findAssetsWithSerial,
 } from "./snipeitassets.js";
+import type { CorrectionAssetMatch } from "../types/snipeTypes.js";
 import {
   checkinAccessory,
   checkoutAccessory,
@@ -52,6 +53,17 @@ export type CorrectionResolution = {
    */
   snipeRecordId?: number | null;
   /**
+   * WRONG_MODEL + SERIAL: the serial to actually write.
+   *
+   * Defaults to what the requester reported, but the admin can correct it
+   * before it lands. The requester is transcribing characters off a physical
+   * label — O for 0, I for 1, 8 for B — and until this existed their typing
+   * went into Snipe verbatim with nothing but an admin's eyes in between.
+   * Note the asymmetry this closes: the MODEL branch already refused to trust
+   * the requester's words and made the admin name the real record.
+   */
+  serial?: string | null;
+  /**
    * The admin states they have already fixed Snipe by hand. Skips the write
    * entirely and completes the correction. The escape hatch for everything
    * this module cannot express as a single field write — a WRONG_MODEL/OTHER
@@ -70,8 +82,19 @@ export type CorrectionResolution = {
 export type ApplyOutcome =
   /** Snipe was written (or the admin fixed it by hand). Correction completes. */
   | { status: "applied"; summary: string }
-  /** Nothing was written. The correction stays APPROVED with this reason. */
-  | { status: "blocked"; blockedReason: string };
+  /**
+   * Nothing was written. The correction stays APPROVED with this reason.
+   *
+   * `serialClashes` carries the OTHER assets already holding the serial the
+   * admin tried to write. A sentence naming them isn't enough to act on — the
+   * admin has to go into Snipe and work out which of the two records is real,
+   * so they get the tag, model, status and holder to search on.
+   */
+  | {
+      status: "blocked";
+      blockedReason: string;
+      serialClashes?: CorrectionAssetMatch[];
+    };
 
 const NOTE = "Record correction applied via AssetCheckout";
 
@@ -79,8 +102,11 @@ function applied(summary: string): ApplyOutcome {
   return { status: "applied", summary };
 }
 
-function blocked(blockedReason: string): ApplyOutcome {
-  return { status: "blocked", blockedReason };
+function blocked(
+  blockedReason: string,
+  serialClashes?: CorrectionAssetMatch[]
+): ApplyOutcome {
+  return { status: "blocked", blockedReason, ...(serialClashes ? { serialClashes } : {}) };
 }
 
 /**
@@ -191,7 +217,9 @@ async function applyWrongModel(
   }
 
   if (detail.wrongField === "SERIAL") {
-    const serial = detail.serial?.trim();
+    // The admin's value wins where they supplied one — they can see the
+    // device or the paperwork; the requester was reading a small label.
+    const serial = (resolution.serial ?? detail.serial)?.trim();
     if (!serial) {
       return blocked(
         "The requester reported the serial as wrong but didn't supply the correct one. " +
@@ -199,20 +227,21 @@ async function applyWrongModel(
       );
     }
 
-    // The serial is the requester's transcription of something printed on a
-    // device, and it goes straight into Snipe. If another asset already
-    // carries it, one of the two records is wrong and writing this one makes
-    // it two — the same kind of bad data the correction was filed to fix.
-    // Refuse and name the clash so an admin can work out which is real.
+    // Searched across the WHOLE estate, not just this model. A serial is
+    // meant to be unique to a device, so a match anywhere means one of the
+    // two records is wrong — and writing this one would make it two, which is
+    // the same class of bad data the correction was filed to fix.
+    //
+    // The clashing assets come back with the outcome rather than only being
+    // named in a sentence: the admin has to go into Snipe and decide which
+    // record is real, and they can't do that from a message.
     const clashes = await findAssetsWithSerial(serial, recordId);
     if (clashes.length > 0) {
-      const named = clashes
-        .map((a) => `${a.assetTag || `#${a.id}`}${a.modelName ? ` (${a.modelName})` : ""}`)
-        .join(", ");
       return blocked(
-        `Serial "${serial}" is already recorded against ${named}. ` +
-          "Two assets can't share a serial — check which record is right in Snipe, " +
-          "fix it there, then resolve this manually."
+        `Serial "${serial}" is already recorded against ${clashes.length === 1 ? "another asset" : `${clashes.length} other assets`}. ` +
+          "Two assets can't share a serial — sort out which record is right in Snipe, " +
+          "then come back and apply this.",
+        clashes
       );
     }
 
