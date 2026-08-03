@@ -32,7 +32,7 @@ import { searchAccessoriesForRequest, type AccessorySearchMatch } from "@/api/ac
 //  green tick over an unapplied correction is exactly the kind of wrong record
 //  this feature exists to fix.
 //
-//  Chrome follows ConfirmOnBehalfApprovalDialog so the confirm-a-decision
+//  Chrome follows ConfirmApprovalDialog so the confirm-a-decision
 //  dialogs on this table read as a family.
 ///  +-----------------------------------------------------------------+
 

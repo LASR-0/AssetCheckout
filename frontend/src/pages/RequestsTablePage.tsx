@@ -17,7 +17,7 @@ import CreateAccessoryDialog from "@/components/dialogs/CreateAccessoryDialog";
 import AccessoryStockDialog from "@/components/dialogs/AccessoryStockDialog";
 import StandardApprovalResultDialog from "@/components/dialogs/StandardApprovalResultDialog";
 import FeedbackNudgeDialog from "@/components/dialogs/FeedbackNudgeDialog";
-import ConfirmOnBehalfApprovalDialog from "@/components/dialogs/ConfirmOnBehalfApprovalDialog";
+import ConfirmApprovalDialog from "@/components/dialogs/ConfirmApprovalDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 
 /**
@@ -77,11 +77,12 @@ export default function RequestTablePage() {
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
   const [manageCorrectionOpen, setManageCorrectionOpen] = useState(false);
 
-  // Admin-approving-for-a-manager confirmation. Separate from the misnamed
-  // `approveDialogOpen` above, which drives CreateModelDialog.
-  const [onBehalfOpen, setOnBehalfOpen] = useState(false);
-  const [onBehalfPending, setOnBehalfPending] = useState(false);
-  const [onBehalfError, setOnBehalfError] = useState<string | null>(null);
+  // Manager-stage approval confirmation — on-behalf, department budget, or
+  // both. Separate from the misnamed `approveDialogOpen` above, which drives
+  // CreateModelDialog.
+  const [confirmApproveOpen, setConfirmApproveOpen] = useState(false);
+  const [confirmApprovePending, setConfirmApprovePending] = useState(false);
+  const [confirmApproveError, setConfirmApproveError] = useState<string | null>(null);
   const [standardResult, setStandardResult] = useState<
     | { type: "success"; stage: "SHIPPED" | "READY_FOR_COLLECTION"; userName: string; categoryName: string }
     | { type: "error"; message: string }
@@ -176,6 +177,29 @@ export default function RequestTablePage() {
     return role === "ADMIN" && request.status === "PENDING";
   }
 
+  /**
+   * True when approving this request commits a department budget: a
+   * non-standard accessory, at the manager stage. Both discriminators are
+   * needed — `requestType` separates standard from non-standard, `requestKind`
+   * separates asset from accessory — because IT pays for assets and only the
+   * accessory side falls to the requester's department.
+   *
+   * PENDING-only: the acknowledgment belongs to the manager decision. By the
+   * admin's IT sign-off the budget has already been accepted, and repeating it
+   * there would just be noise.
+   *
+   * Nothing about the acknowledgment is persisted. A request cannot reach the
+   * later quote stage without having passed here, so the state machine is the
+   * record — see ConfirmApprovalDialog.
+   */
+  function isBudgetApproval(request: Request) {
+    return (
+      request.status === "PENDING" &&
+      request.requestKind === "ACCESSORY" &&
+      request.requestType === "NON_STANDARD"
+    );
+  }
+
   /** The approve POST plus refresh. Throws, so each caller can surface the
    *  failure where the user is looking — inline in the on-behalf dialog, or
    *  the pre-existing result-dialog/alert path. */
@@ -191,34 +215,37 @@ export default function RequestTablePage() {
     await loadRequests();
   }
 
-  /** Confirm handler for the on-behalf dialog. Closes only on success; a
-   *  failure keeps the dialog open with the reason so the admin can retry
-   *  rather than being dropped back to an unchanged-looking row. */
-  async function handleConfirmOnBehalfApprove() {
+  /** Confirm handler for the manager-stage approval dialog. Closes only on
+   *  success; a failure keeps the dialog open with the reason so the actor can
+   *  retry rather than being dropped back to an unchanged-looking row. */
+  async function handleConfirmApprove() {
     if (!selectedRequest) return;
 
-    setOnBehalfPending(true);
-    setOnBehalfError(null);
+    setConfirmApprovePending(true);
+    setConfirmApproveError(null);
     try {
       await approveRequest(selectedRequest);
-      setOnBehalfOpen(false);
+      setConfirmApproveOpen(false);
       setSelectedRequest(null);
     } catch (err) {
-      setOnBehalfError(
+      setConfirmApproveError(
         err instanceof Error && err.message
           ? err.message
           : "Approval failed. Please try again."
       );
     } finally {
-      setOnBehalfPending(false);
+      setConfirmApprovePending(false);
     }
   }
 
   async function handleApprove(request: Request) {
-    if (isOnBehalfApproval(request)) {
+    // Either reason to confirm routes through the same dialog, which renders
+    // whichever blocks apply — an admin standing in on a non-standard
+    // accessory gets both rather than two dialogs in sequence.
+    if (isOnBehalfApproval(request) || isBudgetApproval(request)) {
       setSelectedRequest(request);
-      setOnBehalfError(null);
-      setOnBehalfOpen(true);
+      setConfirmApproveError(null);
+      setConfirmApproveOpen(true);
       return;
     }
 
@@ -449,21 +476,23 @@ export default function RequestTablePage() {
             }
           />
 
-          <ConfirmOnBehalfApprovalDialog
-            open={onBehalfOpen}
+          <ConfirmApprovalDialog
+            open={confirmApproveOpen}
             onOpenChange={(next) => {
-              setOnBehalfOpen(next);
+              setConfirmApproveOpen(next);
               if (!next) {
-                setOnBehalfError(null);
+                setConfirmApproveError(null);
                 setSelectedRequest(null);
               }
             }}
             userName={selectedRequest?.userName ?? ""}
             categoryName={selectedRequest?.categoryName ?? ""}
             managerName={selectedRequest?.manager ?? null}
-            pending={onBehalfPending}
-            error={onBehalfError}
-            onConfirm={handleConfirmOnBehalfApprove}
+            onBehalf={!!selectedRequest && isOnBehalfApproval(selectedRequest)}
+            budget={!!selectedRequest && isBudgetApproval(selectedRequest)}
+            pending={confirmApprovePending}
+            error={confirmApproveError}
+            onConfirm={handleConfirmApprove}
           />
 
           <CreateModelDialog
