@@ -970,7 +970,10 @@ function AccessoryQuickStart({
                   icon={iconForCategory(cat.name)}
                   name={cat.name}
                   iconClass="!text-[28px]"
-                  nameClass="font-bold text-[15px]"
+                  // Matches the asset tiles. The two sets sit one above the
+                  // other on the same page, so a different type size read as
+                  // an accident rather than a distinction.
+                  nameClass="font-bold text-[13px]"
                   // Accessory records Snipe returns for this user here — NOT a
                   // quantity. summariseAccessoryHoldings keeps that distinction
                   // in the tooltip: "+N" for more records, never "xN".
