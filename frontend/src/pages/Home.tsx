@@ -16,11 +16,11 @@ import type {
   AssetHolding,
   AccessoryHolding,
 } from "@/types/holdingsType";
-import {
-  groupByCategoryId,
-  summariseAssetHoldings,
-  summariseAccessoryHoldings,
-} from "@/lib/holdings";
+// summariseAssetHoldings / summariseAccessoryHoldings are no longer used here:
+// the request tiles now state a count in words rather than naming models, and
+// the models themselves are named properly one section down where there's room
+// for them. Both helpers are still exported for that purpose.
+import { groupByCategoryId } from "@/lib/holdings";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     HOME PAGE (internal tool)                   |
@@ -484,30 +484,55 @@ function HoldingsBadge({
 }
 
 /**
- * The shared tile body: icon and category name centred, with the holdings
- * badge and the "Request →" affordance on a row beneath. Used by both tile
- * sets so the two can't drift.
+ * The shared tile body: icon and category name centred, the "Request →"
+ * affordance beneath, and — when the user holds something here — a tinted band
+ * across the foot of the tile. Used by both tile sets so the two can't drift.
  *
- * Tile height is content-driven, so flex-1/justify-center on the identity
- * block are inert today — they're kept so the layout still distributes
- * correctly if the tile is ever given a fixed height. The visible effect is
- * the horizontal centring from items-center/text-center.
+ * WHY A BAND. The thing being fixed is that holdings didn't read as holdings.
+ * A count in the corner read as an unread badge; a grey pill beside "Request →"
+ * read as metadata. A band is a different surface from the rest of the tile,
+ * so a held tile is distinguishable while scanning the grid rather than only
+ * once you're reading one — and it says "You have" in words, so there is no
+ * icon or number left to interpret.
  *
- * Request → is pushed right with ml-auto rather than justify-between, so it
- * still sits at the right when there's no holdings badge beside it.
+ * It sits BELOW the action and behind a hairline on purpose: what you already
+ * have and what you're about to request are two different statements, and the
+ * old layout put them on one line where they read as one.
+ *
+ * Full-bleed via negative margins that cancel the tile's own padding, so the
+ * band meets the tile edges. That needs overflow-hidden on the tile, or its
+ * square corners overhang the rounded ones.
+ *
+ * flex-1 on the identity block is now load-bearing, where it used to be inert.
+ * Grid rows stretch every tile to the tallest in the row, so a held tile's
+ * band makes its unheld neighbours taller too; flex-1 is what absorbs that
+ * extra space into the identity block and keeps "Request →" pinned to the
+ * foot instead of floating mid-tile.
  */
 function TileBody({
   icon,
   name,
   nameClass,
   iconClass,
-  summary,
+  heldCount,
+  heldTitle,
 }: {
   icon: string;
   name: string;
   nameClass: string;
   iconClass: string;
-  summary: string | null;
+  /** How many the user holds in this category. 0 renders no band at all, so
+   *  a category you own nothing in looks exactly as it did before. */
+  heldCount: number;
+  /**
+   * Hover text, supplied per kind rather than baked in, because the number
+   * means different things. Assets are one row per physical item, so it's a
+   * true count. For accessories it's how many accessory records Snipe returns
+   * for this user here — the endpoint exposes no per-user quantity (its
+   * qty/remaining are stock at a location, and checkouts_count comes back
+   * null), so the copy must not claim "you hold N of these".
+   */
+  heldTitle: string;
 }) {
   return (
     <>
@@ -519,20 +544,25 @@ function TileBody({
         <span className={`${nameClass} `}>{name}</span>
       </div>
 
-      {/* Stacked on mobile — the badge on its own line with "Request →" beneath
-          it — because side by side there isn't room for a model name and the
-          affordance on one narrow line. Side by side from sm up.
-          items-center centres the badge under the icon and category name above
-          it, so a short name doesn't sit off to one side. It also serves as the
-          row's vertical centring from sm up, so no separate sm: variant.
-          "Request →" keeps ml-auto and stays right in both directions: in a
-          column the cross axis is horizontal, so it right-aligns there too. */}
-      <div className="flex w-full flex-col items-center gap-1 sm:flex-row sm:gap-2">
-        <HoldingsBadge summary={summary} />
+      <div className="flex w-full items-center">
         <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
           Request →
         </span>
       </div>
+
+      {heldCount > 0 && (
+        <div
+          className="-mx-5 -mb-2 mt-1 border-t border-outline/50 bg-status-assigned/10 px-5 py-2"
+          title={heldTitle}
+        >
+          <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-status-assigned">
+            <span className="material-symbols-outlined !text-[14px]">
+              check_circle
+            </span>
+            You have {heldCount}
+          </span>
+        </div>
+      )}
     </>
   );
 }
@@ -622,18 +652,24 @@ function QuickStart({
                 <Link
                   key={cat.id}
                   to={`/assets?categoryId=${cat.id}`}
-                  // Height stays content-driven — the tile keeps its original
-                  // rectangular proportions. pb-2 rather than py-5 keeps the
-                  // bottom row 8px off the edge, the spacing the corner count
-                  // used to set before it was removed.
-                  className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                  // overflow-hidden clips the full-bleed holdings band to the
+                  // rounded corners. Tiles stay level with each other — grid
+                  // rows stretch to the tallest — so the band reads as a
+                  // difference in surface, not a difference in height.
+                  className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
                 >
                   <TileBody
                     icon={iconForCategory(cat.name)}
                     name={cat.name}
                     iconClass="!text-[26px]"
                     nameClass="font-bold text-[13px]"
-                    summary={summariseAssetHoldings(held)}
+                    // One row per physical asset, so this is a true count.
+                    heldCount={held.length}
+                    heldTitle={
+                      held.length === 1
+                        ? "1 of these is assigned to you"
+                        : `${held.length} of these are assigned to you`
+                    }
                   />
                 </Link>
               );
@@ -912,14 +948,21 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
                 <TileBody
                   icon={iconForCategory(cat.name)}
                   name={cat.name}
                   iconClass="!text-[28px]"
                   nameClass="font-bold text-[15px]"
-                  summary={summariseAccessoryHoldings(held)}
+                  // Accessory records Snipe returns for this user here — NOT a
+                  // quantity, hence the wording. See the note on heldTitle.
+                  heldCount={held.length}
+                  heldTitle={
+                    held.length === 1
+                      ? "1 accessory assigned to you in this category"
+                      : `${held.length} accessories assigned to you in this category`
+                  }
                 />
               </Link>
             );
