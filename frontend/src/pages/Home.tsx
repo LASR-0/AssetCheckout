@@ -439,46 +439,35 @@ function StatBody({
 ///  |                  HOLDINGS ON A QUICK START TILE                 |
 ///  +-----------------------------------------------------------------+
 //
-//  Two small pieces shared by the asset and accessory tiles so the treatment
-//  can't drift between them.
+//  THE CORNER COUNT IS GONE. A number in a pill at a tile's top-right is, by
+//  every convention people have met elsewhere, an unread badge — so "2" on the
+//  Laptop tile read as two pending actions rather than two laptops held, and
+//  the real meaning lived only in a tooltip nobody hovers over something they
+//  think they already understand.
 //
-//  BOTH tile kinds show the count badge, for consistency — a number on one and
-//  not the other read as odd. What the number MEANS differs, though, so the
-//  hover text is supplied per kind rather than baked in:
-//
-//    Assets      — one row per physical asset, so the count is a true count of
-//                  items held.
-//    Accessories — the number of records Snipe returns for this user in this
-//                  category. It is NOT a quantity: the endpoint exposes no
-//                  per-user quantity (its qty/remaining are stock at a
-//                  location, and checkouts_count comes back null), so the copy
-//                  avoids claiming "you hold N of these".
-//
-//  The name line keeps the same distinction: assets can say "x2" for a
-//  repeated model, accessories never do.
-
-function HoldingsCount({ count, title }: { count: number; title: string }) {
-  return (
-    <span
-      // Absolute so it never affects the tile's flex flow, and the tile keeps
-      // its existing height whether or not anything is held. Requires
-      // `relative` on the tile.
-      className="absolute top-2 right-2 inline-flex min-w-5 items-center justify-center rounded-full bg-status-model/15 px-1.5 py-0.5 text-[11px] font-bold text-status-model"
-      title={title}
-    >
-      {count}
-    </span>
-  );
-}
+//  The NAME badge stays. It says what it means in words, and beside "Request →"
+//  that is useful context: you already have one of these. What misled was a
+//  bare number standing alone, not the idea of showing holdings here. The
+//  full picture now lives in "What you already have" further down the page.
 
 /**
  * The held model name(s) as a badge. No icon — the tile's own icon already
  * says what kind of thing this is, and a second glyph here competes with it.
  *
+ * Also used for the serial on the "what you already have" tiles, so the two
+ * treatments can't drift apart.
+ *
  * min-w-0 + truncate because it shares its row with "Request →" and model
  * names run long ("ThinkPad T16 Gen 1"); the full text stays on hover.
  */
-function HoldingsBadge({ summary }: { summary: string | null }) {
+function HoldingsBadge({
+  summary,
+  title,
+}: {
+  summary: string | null;
+  /** Hover text. Defaults to the holdings phrasing the request tiles use. */
+  title?: string;
+}) {
   if (!summary) return null;
   return (
     <span
@@ -487,7 +476,7 @@ function HoldingsBadge({ summary }: { summary: string | null }) {
       // is shrink-to-fit, so without a cap it grew past the tile instead of
       // ellipsing.
       className="max-w-full min-w-0 truncate rounded-full border border-outline bg-surface-container-low/40 px-2 py-0.5 text-[10px] font-semibold text-info-light"
-      title={`You already hold: ${summary}`}
+      title={title ?? `You already hold: ${summary}`}
     >
       {summary}
     </span>
@@ -633,21 +622,12 @@ function QuickStart({
                 <Link
                   key={cat.id}
                   to={`/assets?categoryId=${cat.id}`}
-                  // `relative` anchors the count badge. Height stays
-                  // content-driven — the tile keeps its original rectangular
-                  // proportions. pb-2 rather than py-5 so the bottom row sits
-                  // the same 8px off the edge as the count badge does at
-                  // top-2/right-2.
-                  className={`${RAISED} group relative flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                  // Height stays content-driven — the tile keeps its original
+                  // rectangular proportions. pb-2 rather than py-5 keeps the
+                  // bottom row 8px off the edge, the spacing the corner count
+                  // used to set before it was removed.
+                  className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
                 >
-                  {/* Assets are one row per physical item, so this is a true
-                      count of what the user holds. */}
-                  {held.length > 0 && (
-                    <HoldingsCount
-                      count={held.length}
-                      title={`You already hold ${held.length} of these`}
-                    />
-                  )}
                   <TileBody
                     icon={iconForCategory(cat.name)}
                     name={cat.name}
@@ -932,22 +912,8 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                // `relative` anchors the count badge.
-                className={`${RAISED} group relative flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
               >
-                {/* Same badge as the asset tiles, for consistency. The number
-                    is how many accessory records Snipe returns for this user
-                    here — not a quantity, hence the wording. */}
-                {held.length > 0 && (
-                  <HoldingsCount
-                    count={held.length}
-                    title={
-                      held.length === 1
-                        ? "1 accessory assigned to you in this category"
-                        : `${held.length} accessories assigned to you in this category`
-                    }
-                  />
-                )}
                 <TileBody
                   icon={iconForCategory(cat.name)}
                   name={cat.name}
@@ -1073,7 +1039,7 @@ function MyStuff({
               onClick={() => setBrowse("ASSET")}
               className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
             >
-              Devices →
+              Assets →
             </button>
             <button
               type="button"
@@ -1145,13 +1111,12 @@ function MyStuff({
                       {item.manufacturer}
                     </span>
                   )}
-                  {item.serial && (
-                    // Monospaced because this is the one string a user will
-                    // compare character by character against a physical label.
-                    <span className="max-w-full truncate font-mono text-[10px] text-info-light/80">
-                      {item.serial}
-                    </span>
-                  )}
+                  {/* Same badge treatment as the model-name badges on the
+                      request tiles above, so the two read as one system. */}
+                  <HoldingsBadge
+                    summary={item.serial}
+                    title={`Serial ${item.serial}`}
+                  />
                 </div>
 
                 <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
