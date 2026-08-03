@@ -14,15 +14,25 @@ export type JobStatsResponse = {
   failed: number;
 };
 
+/**
+ * Mirrors the Prisma JobType enum. The backend derives its own copy from the
+ * generated client so it cannot drift; this one can't reach that, so it is
+ * hand-maintained — but JOB_TYPE_LABELS is typed Record<JobType, string>, so
+ * adding a member here without labelling it fails the build.
+ *
+ * It HAD drifted: REFRESH_ACCESSORIES_CACHE was missing.
+ */
 export type JobType =
   | "SEND_REQUEST_NOTIFICATION"
   | "SYNC_REQUEST_TO_SHAREPOINT"
   | "REFRESH_CATEGORIES_CACHE"
   | "REFRESH_PRICES_CACHE"
+  | "REFRESH_ACCESSORIES_CACHE"
   | "CLEANUP_STALE_REQUESTS"
   | "CLEANUP_ORPHAN_SNIPE_MODELS"
   | "PURGE_OLD_JOB_HISTORY"
-  | "REMIND_SHIPPED_REQUESTS";
+  | "REMIND_SHIPPED_REQUESTS"
+  | "LOG_CAPEX_PURCHASE";
 
 export type BackgroundJob = {
   id: number;

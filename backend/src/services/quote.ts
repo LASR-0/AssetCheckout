@@ -64,6 +64,25 @@ function notifyQuoteSent(requestId: number): void {
   );
 }
 
+/**
+ * Lodge the purchase in the CAPEX ledger, if it qualifies.
+ *
+ * Enqueued unconditionally at acceptance — the handler owns the threshold and
+ * every other guard, and skips cleanly when the purchase doesn't qualify.
+ * Deciding here instead would put the same rule in two places and let them
+ * disagree, and a skipped job is visible in the job history where a
+ * never-enqueued one would not be.
+ *
+ * Fire-and-forget for the same reason as the notification above: acceptance
+ * has already committed, and the manager's decision must not fail because a
+ * queue insert did.
+ */
+function logCapexPurchase(requestId: number): void {
+  enqueue("LOG_CAPEX_PURCHASE", { requestId }).catch((err) =>
+    console.error(`[capex-log] enqueue failed for request ${requestId}:`, err)
+  );
+}
+
 export type CreateQuoteInput = {
   amount: number;
   supplier: string;
@@ -257,6 +276,11 @@ export async function acceptQuoteForRequest(
       respondedOnBehalf: actor.onBehalf,
     },
   });
+
+  // Acceptance is the moment the money is committed, so it's the moment the
+  // purchase becomes lodgeable. Over-threshold purchases go to the CAPEX
+  // ledger from here.
+  logCapexPurchase(requestId);
 
   return {
     success: true,

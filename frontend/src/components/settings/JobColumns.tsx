@@ -32,8 +32,10 @@ export const JOB_TYPE_LABELS: Record<JobType, string> = {
   REFRESH_PRICES_CACHE: "Refresh Prices",
   CLEANUP_STALE_REQUESTS: "Cleanup Stale",
   CLEANUP_ORPHAN_SNIPE_MODELS: "Cleanup Orphans",
+  REFRESH_ACCESSORIES_CACHE: "Refresh Accessories",
   PURGE_OLD_JOB_HISTORY: "Purge History",
   REMIND_SHIPPED_REQUESTS: "Shipping Reminder",
+  LOG_CAPEX_PURCHASE: "CAPEX Purchase Log",
 };
 
 function jobTypeLabel(type: string): string {

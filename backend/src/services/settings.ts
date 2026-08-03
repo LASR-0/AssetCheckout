@@ -372,6 +372,18 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "0 1 * * *",
     description: "Cron expression for the nightly SharePoint request-ledger sync (default: daily at 1am). Also gated by sharepoint_sync_enabled + SHAREPOINT_SYNC_TO — this only controls when the scan fires.",
   },
+  { key: "capex_log_enabled",
+    envVar: "CAPEX_LOG_ENABLED",
+    defaultValue: "false",
+    description:
+      "Whether accepted quotes over the purchase threshold are lodged in the CAPEX ledger. Off by default: the payload goes to the SharePoint service mailbox under its own CAPEX marker, so leave this off until the Power Automate flow that reads that marker exists.",
+  },
+  { key: "purchase_log_threshold",
+    envVar: "PURCHASE_LOG_THRESHOLD",
+    defaultValue: "1000",
+    description:
+      "Dollar figure a purchase must EXCEED to be lodged in the CAPEX ledger. Compared strictly greater-than against the accepted quote amount, so a purchase exactly at the threshold is not logged.",
+  },
   { key: ACCESSORY_ASSET_CATEGORY_MAP_KEY,
     envVar: "ACCESSORY_ASSET_CATEGORY_MAP_JSON",
     normalize: normalizeAssetAccessoryMapEnv,

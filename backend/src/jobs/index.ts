@@ -9,6 +9,7 @@ import { sendRequestNotificationHandler } from "./handlers/sendRequestNotificati
 import { remindShippedRequestsHandler } from "./handlers/remindShippedRequests.js";
 import { syncRequestsToSharepointHandler } from "./handlers/syncRequestsToSharepoint.js";
 import { refreshAccessoriesCacheHandler } from "./handlers/refreshAccessoriesCachehandler.js";
+import { logCapexPurchaseHandler } from "./handlers/logCapexPurchase.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    JOB SYSTEM ENTRY POINT                       |
@@ -34,6 +35,8 @@ export async function startJobs(): Promise<void> {
   registerHandler("REMIND_SHIPPED_REQUESTS", remindShippedRequestsHandler);
   registerHandler("SYNC_REQUEST_TO_SHAREPOINT", syncRequestsToSharepointHandler );
   registerHandler("REFRESH_ACCESSORIES_CACHE", refreshAccessoriesCacheHandler);
+  // Event-driven — enqueued at quote acceptance, so it has no scheduler entry.
+  registerHandler("LOG_CAPEX_PURCHASE", logCapexPurchaseHandler);
 
   await startRunner();
   await startScheduler();

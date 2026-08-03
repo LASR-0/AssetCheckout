@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { isAdminEmail, getActorEmail } from "../config/auth.js";
 import { prisma } from "../db/prisma.js";
 import { enqueue } from "../jobs/jobQueue.js";
+import { JobType as JobTypeEnum } from "../../generated/prisma_client/client.js";
 import type { JobType, JobStatus } from "../../generated/prisma_client/client.js";
 import { maxAttemptsFor, DRY_RUN_JOBS } from "../jobs/policy.js";
 import { getSetting, setSetting } from "../services/settings.js";
@@ -22,15 +23,13 @@ function requireAdmin(req: Request, res: Response): boolean {
 // Valid enum values, used to validate query/body params before they reach
 // Prisma (which would otherwise throw an opaque error on a bad value).
 const JOB_STATUSES: JobStatus[] = ["Pending", "Running", "Completed", "Failed"];
-const JOB_TYPES: JobType[] = [
-  "SEND_REQUEST_NOTIFICATION",
-  "SYNC_REQUEST_TO_SHAREPOINT",
-  "REFRESH_CATEGORIES_CACHE",
-  "REFRESH_PRICES_CACHE",
-  "CLEANUP_STALE_REQUESTS",
-  "CLEANUP_ORPHAN_SNIPE_MODELS",
-  "PURGE_OLD_JOB_HISTORY",
-];
+
+// DERIVED from the Prisma enum, not hand-listed. The hand-written version had
+// already drifted — it was missing REMIND_SHIPPED_REQUESTS and
+// REFRESH_ACCESSORIES_CACHE, so filtering the job list by either of those real
+// types came back as "Invalid type". Deriving it means a new JobType is valid
+// here the moment it exists in the schema, and the list cannot go stale again.
+const JOB_TYPES: JobType[] = Object.values(JobTypeEnum);
 
 // Job types an admin is allowed to trigger manually from the UI. Excludes
 // types whose handlers aren't implemented yet, so the "Run now" button can't

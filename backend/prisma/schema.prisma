@@ -48,6 +48,13 @@ model Request {
 
   syncedToSharepointAt DateTime?
 
+  /// Exactly-once marker for the CAPEX purchase log, on the same terms as
+  /// syncedToSharepointAt above: stamped only after a successful send, so a
+  /// failure leaves it null and the job retries. Set only on non-standard
+  /// ACCESSORY requests whose accepted quote exceeded the threshold — every
+  /// other row stays null forever.
+  loggedToCapexAt      DateTime?
+
   reminderStage      Int       @default(0)
 
   approvedBy        String?
@@ -280,6 +287,11 @@ enum JobType {
   PURGE_OLD_JOB_HISTORY
   REMIND_SHIPPED_REQUESTS
   REFRESH_ACCESSORIES_CACHE
+  /// Lodge a purchase over the threshold in the CAPEX ledger. Event-driven,
+  /// not scheduled: enqueued the moment a manager accepts a quote, so it needs
+  /// no cron expression and cannot go the way of a schedule that was never
+  /// registered.
+  LOG_CAPEX_PURCHASE
 }
 
 enum JobStatus {
