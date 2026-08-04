@@ -842,7 +842,7 @@ function QuickLinks() {
       icon: "keyboard",
       title: "Request Accessories",
       desc: "Request Asset Accessories here.",
-      to: "/feedback",
+      to: "/accessories",
     },
   ];
 
