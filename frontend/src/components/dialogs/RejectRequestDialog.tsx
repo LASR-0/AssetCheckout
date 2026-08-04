@@ -112,7 +112,7 @@ export default function RejectionReasonDialog({
               className="
                 w-full
                 border-modal-border/20
-                bg-modal-surface-elevated
+                bg-modal-surface-elevated/50
                 border border-modal-border
                 rounded-lg
                 py-3 px-4

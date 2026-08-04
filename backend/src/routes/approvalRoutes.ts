@@ -840,21 +840,32 @@ router.get("/:requestId/correction/search-assets", async (req, res, next) => {
 //
 //  Non-standard accessories come out of the requester's department budget, so
 //  the manager approves the price as well as the request. Attaching a quote is
-//  IT's job; responding to it is the manager's, with an admin able to stand in
-//  exactly as they can at the first approval.
+//  IT's job; ANSWERING it is the manager's alone.
 //
-//  These are gated properly — admin-only to attach, manager-or-admin to
-//  respond — rather than merely requiring some resolved actor. A quote
-//  acceptance is a financial commitment against a department's budget and is
-//  not something any authenticated user should be able to make.
+//  This is where the quote parts company with the first approval, where an
+//  admin can stand in for a silent manager. Accepting a quote spends a
+//  department's money, and IT is not the department. So the two acts are gated
+//  differently: an admin may VIEW the quote — they chased it, they may need to
+//  re-send or explain it — but only the named approver may respond to it.
+//
+//  Consequence worth knowing: a quote whose manager never answers stays at
+//  this stage. There is no IT override by design. Ending it means rejecting
+//  the request outright, not answering the quote on someone's behalf.
 ///  +-----------------------------------------------------------------+
 
 /**
- * Resolve who is acting on a quote and whether they are standing in.
+ * Resolve who is acting on a quote.
+ *
+ * `mode` is the whole point of this function. "respond" is manager-only —
+ * accepting or rejecting a price commits a budget that isn't IT's. "view" is
+ * manager-or-admin, because reading the document IT itself uploaded commits
+ * nothing.
  *
  * Manager identity is name-matched because that is how the request records it
  * and how /auth/role resolves the MANAGER role — see authRoutes.ts. Admin
- * identity is email-matched, which is stable across display-name changes.
+ * identity is email-matched, which is stable across display-name changes. An
+ * admin who happens to BE the approver on a request matches as the manager
+ * first, and answers as themselves rather than being locked out.
  *
  * Discriminated on a STRING, not a boolean, for the same reason
  * CorrectionOutcome is: this project compiles with `strict: false`, and
@@ -867,7 +878,8 @@ type QuoteActor =
 
 async function resolveQuoteActor(
   req: express.Request,
-  requestId: number
+  requestId: number,
+  mode: "respond" | "view"
 ): Promise<QuoteActor> {
   const actorName = getActorName(req);
   if (!actorName) {
@@ -889,14 +901,30 @@ async function resolveQuoteActor(
   if (isManager) {
     return { outcome: "allowed", name: actorName, onBehalf: false };
   }
-  if (isAdmin) {
+  if (isAdmin && mode === "view") {
     return { outcome: "allowed", name: actorName, onBehalf: true };
+  }
+
+  // Named rather than generic when it's an admin being refused: they can see
+  // the action isn't theirs, so the message should say why rather than read
+  // as a permissions bug.
+  if (isAdmin) {
+    return {
+      outcome: "denied",
+      status: 403,
+      message: `Only ${
+        request.manager || "the approving manager"
+      } can answer this quote — it comes out of their department's budget, not IT's.`,
+    };
   }
 
   return {
     outcome: "denied",
     status: 403,
-    message: "Only the approving manager or an admin can respond to a quote",
+    message:
+      mode === "respond"
+        ? "Only the approving manager can respond to a quote"
+        : "Only the approving manager or an admin can view a quote",
   };
 }
 
@@ -975,7 +1003,7 @@ router.post(
   }
 );
 
-/** The manager accepts the quoted price — or an admin accepts in their place. */
+/** The manager accepts the quoted price. Theirs alone — see resolveQuoteActor. */
 router.post("/:requestId/quote/accept", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
@@ -983,7 +1011,7 @@ router.post("/:requestId/quote/accept", async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid requestId" });
     }
 
-    const actor = await resolveQuoteActor(req, requestId);
+    const actor = await resolveQuoteActor(req, requestId, "respond");
     if (actor.outcome === "denied") {
       return res.status(actor.status).json({ success: false, message: actor.message });
     }
@@ -1013,7 +1041,7 @@ router.post("/:requestId/quote/reject", async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid requestId" });
     }
 
-    const actor = await resolveQuoteActor(req, requestId);
+    const actor = await resolveQuoteActor(req, requestId, "respond");
     if (actor.outcome === "denied") {
       return res.status(actor.status).json({ success: false, message: actor.message });
     }
@@ -1038,9 +1066,11 @@ router.post("/:requestId/quote/reject", async (req, res, next) => {
 });
 
 /**
- * Stream the stored quote document. Manager-or-admin, on the same terms as
- * responding to it — the file is a supplier's pricing, not something every
- * authenticated user should be able to pull by guessing a request id.
+ * Stream the stored quote document. Manager-or-admin — wider than responding
+ * to it, deliberately: IT chased the quote and uploaded it, and reading it
+ * back commits nothing. It is still not public, because the file is a
+ * supplier's pricing and not something every authenticated user should be
+ * able to pull by guessing a request id.
  *
  * Inline rather than an attachment: a PDF or photo opens in the browser,
  * which is what somebody clicking "view the quote" expects.
@@ -1052,7 +1082,7 @@ router.get("/:requestId/quote/document", async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid requestId" });
     }
 
-    const actor = await resolveQuoteActor(req, requestId);
+    const actor = await resolveQuoteActor(req, requestId, "view");
     if (actor.outcome === "denied") {
       return res.status(actor.status).json({ success: false, message: actor.message });
     }

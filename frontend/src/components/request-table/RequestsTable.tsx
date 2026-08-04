@@ -211,32 +211,32 @@ export default function RequestsTable({
               rows.map((row) => (
                 <tr
                   key={row.id}
-                  // Non-standard rows carry a left accent so they are findable
-                  // by scanning the edge of the table rather than by reading
-                  // the reason cell. Driven off requestType, never off the
-                  // presence of reason text.
+                  // Every row carries a left accent naming its KIND, so the
+                  // table can be read by scanning its edge rather than by
+                  // reading the reason cell. Driven off requestType, never off
+                  // the presence of reason text.
                   //
-                  // `primary` (brand) rather than a status-* token on purpose:
-                  // every status token is bound to a lifecycle stage, so an
-                  // amber or green accent would read as "pending"/"completed".
-                  // Non-standard is an attribute of the request, not a stage.
+                  // All three use kind tokens, never the intent aliases, even
+                  // though two of them now share the intent green and red. The
+                  // accent says what a row IS; the badge in the actions column
+                  // says where it has got to. Binding the accent to a phase
+                  // token would make the edge of the table change colour as a
+                  // request progressed, which is the opposite of what it is for.
                   //
-                  // Corrections carry the same accent in status-correction —
-                  // its own token for the same reason `primary` was chosen
-                  // here: a correction is a kind of row, not a stage within
-                  // one. The two are mutually exclusive by construction
-                  // (requestType is CORRECTION, never NON_STANDARD).
+                  // This used to be `primary` (brand purple) for non-standard,
+                  // on the reasoning that any status-* colour would be misread
+                  // as a stage. status-nonstandard replaces it: a dedicated
+                  // token, so the red is a deliberate match to intent-stop
+                  // rather than a coincidence, and repointing one never drags
+                  // the other.
                   //
-                  // Standard rows now carry their own token too, so every row
-                  // states its kind rather than the unmarked ones being defined
-                  // by absence. It is deliberately the quietest of the three:
-                  // standard is the commonest row, and an accent that shouts on
-                  // the majority would drown the two that mean "look at this".
+                  // The three are mutually exclusive by construction —
+                  // requestType is CORRECTION, never NON_STANDARD.
                   className={`hover:bg-surface-container-low/20 transition-colors border-b border-outline group border-l-4 ${
                     row.original.requestKind === "CORRECTION"
                       ? "border-l-status-correction"
                       : row.original.requestType === "NON_STANDARD"
-                      ? "border-l-primary"
+                      ? "border-l-status-nonstandard"
                       : row.original.requestType === "STANDARD"
                       ? "border-l-status-standard"
                       : "border-l-transparent"

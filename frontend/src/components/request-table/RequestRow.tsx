@@ -52,7 +52,7 @@ export default function RequestRow({
       <td className="px-6 py-5 align-center">
         <div className="flex items-center">
           <div className="h-10 w-10 flex-shrink-0 rounded-full bg-primary-container flex items-center justify-center mr-3">
-            <span className="text-requester-text bg-requester-bg/90 rounded-full py-1 px-1.5 font-bold text-sm">
+            <span className="text-requester-text bg-requester-bg/30 rounded-full py-1 px-1.5 font-bold text-sm">
               {userInitials}
             </span>
           </div>

@@ -1523,7 +1523,7 @@ export async function createNewAccessoryForRequest(
  * Waiting-phase submit: ADD the arrived quantity to the selected accessory's
  * current stock, then re-probe. When stock is now available, checkout +
  * complete fire immediately (twin of fillAssetDetailsForRequest's completing
- * submit). A zero submit is a no-op that stays in the waiting phase.
+ * submit).
  *
  * Delta semantics: `arrivedQty` is how many MORE units arrived, not the new
  * total. Snipe's `qty` is the cumulative total (checkouts reduce `remaining`,
@@ -1531,6 +1531,14 @@ export async function createNewAccessoryForRequest(
  * qty directly would wrongly lower the total below what's already checked out.
  * Location is NOT touched here — it's authored at create time for new records
  * and left alone for existing ones.
+ *
+ * ZERO IS A REAL SUBMIT, not a no-op: it means "nothing new arrived, fulfil
+ * from what's already there". Stock reaches an accessory by routes this app
+ * never sees — typed straight into Snipe, or returned by a checkin — and
+ * fulfilment only ever fires from here or from selection, so without this a
+ * request strands at APPROVED beside an accessory that has stock. The PATCH is
+ * skipped in that case: re-writing the same qty is a pointless write against
+ * Snipe, and the re-probe below is the part that matters.
  */
 export async function addAccessoryStockForRequest(
   requestId: number,
@@ -1548,9 +1556,11 @@ export async function addAccessoryStockForRequest(
       404
     );
   }
-  const newQty = before.qty + input.arrivedQty;
-
-  await updateAccessoryStock(snipeAccessoryId, { qty: newQty });
+  if (input.arrivedQty > 0) {
+    await updateAccessoryStock(snipeAccessoryId, {
+      qty: before.qty + input.arrivedQty,
+    });
+  }
 
   // Re-read direct from Snipe — the catalog cache is stale right after a write.
   const accessory = await getAccessoryById(snipeAccessoryId);
@@ -1574,7 +1584,9 @@ export async function addAccessoryStockForRequest(
     request: finalRequest,
     modelRequest: updatedModelRequest,
     message: assetReady
-      ? "Stock added — accessory checked out and request completed."
+      ? input.arrivedQty > 0
+        ? "Stock added — accessory checked out and request completed."
+        : "Accessory checked out from existing stock — request completed."
       : "Stock saved, but the accessory still shows no available quantity.",
   };
 }

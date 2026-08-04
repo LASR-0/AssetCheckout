@@ -408,24 +408,68 @@ export default function ManageCorrectionDialog({
               </span>
             </div>
 
-            <Field label="What they said">
-              <p className="whitespace-pre-wrap break-words">{detail.description}</p>
-            </Field>
+            {/* What they wrote, given its own card. It's prose of unknown
+                length and it's the thing the admin is actually judging, so it
+                gets the width — unlike the facts below, which are short values
+                that read better as a table. Previously both were the same flat
+                stack of label-over-value, which made the whole block one
+                undifferentiated column with nothing leading the eye. */}
+            <div className="rounded-lg bg-modal-surface-elevated/50 border border-modal-border/20 px-4 py-3">
+              <FieldLabel>What they said</FieldLabel>
+              <p className="mt-1.5 text-sm text-modal-text-primary whitespace-pre-wrap break-words leading-relaxed">
+                {detail.description}
+              </p>
+            </div>
 
-            {detail.serial && <Field label="Serial">{detail.serial}</Field>}
-            {detail.correctedModel && (
-              <Field label="Says it's actually">{detail.correctedModel}</Field>
-            )}
-            {detail.wrongField && (
-              <Field label="Wrong field">
-                {WRONG_FIELD_LABEL[detail.wrongField] ?? detail.wrongField}
-              </Field>
-            )}
-            {detail.noLongerHeldReason && (
-              <Field label="Why">
-                {HELD_REASON_LABEL[detail.noLongerHeldReason] ?? detail.noLongerHeldReason}
-              </Field>
-            )}
+            {/* The short facts, as label/value rows — the same divided card
+                ReviewQuoteDialog uses for a quote's supplier and reference, so
+                the two dialogs on this table present their read-only detail
+                identically. Rendered only when there is something to show;
+                NO_LONGER_HELD accessory reports carry none of these. */}
+            {(() => {
+              const facts = [
+                ...(detail.serial ? [{ label: "Serial", value: detail.serial }] : []),
+                ...(detail.correctedModel
+                  ? [{ label: "Says it's actually", value: detail.correctedModel }]
+                  : []),
+                ...(detail.wrongField
+                  ? [
+                      {
+                        label: "Wrong field",
+                        value: WRONG_FIELD_LABEL[detail.wrongField] ?? detail.wrongField,
+                      },
+                    ]
+                  : []),
+                ...(detail.noLongerHeldReason
+                  ? [
+                      {
+                        label: "Why",
+                        value:
+                          HELD_REASON_LABEL[detail.noLongerHeldReason] ??
+                          detail.noLongerHeldReason,
+                      },
+                    ]
+                  : []),
+              ];
+              if (!facts.length) return null;
+              return (
+                <div className="rounded-lg bg-modal-surface-elevated/50 border border-modal-border/20 divide-y divide-modal-border/10">
+                  {facts.map((f) => (
+                    <div
+                      key={f.label}
+                      className="flex items-baseline justify-between gap-4 px-4 py-2.5"
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wide text-info-light shrink-0">
+                        {f.label}
+                      </span>
+                      <span className="text-sm text-modal-text-primary text-right break-words">
+                        {f.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </section>
 
           {/* PREVIOUSLY BLOCKED — carried on the record, so it survives a
@@ -826,7 +870,10 @@ export default function ManageCorrectionDialog({
         </div>
 
         {/* FOOTER */}
-        <ResponsiveDialogFooter className="px-8 pb-8 pt-2 flex border-modal-border/20 flex-col sm:flex-row-reverse gap-3">
+        {/* mx-auto, like every other dialog on this table. Without it the
+            buttons sit hard right and this one modal reads as belonging to a
+            different app. */}
+        <ResponsiveDialogFooter className="px-8 pb-8 pt-2 flex mx-auto border-modal-border/20 flex-col sm:flex-row-reverse gap-3">
           {state.phase === "applied" ? (
             <button type="button" onClick={() => onOpenChange(false)} className={PRIMARY_BTN}>
               Done
@@ -899,13 +946,19 @@ const INPUT =
 const PRIMARY_BTN =
   "w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
 
-// bg-modal-error, NOT bg-status-error. The status token goes pastel on the
-// dark theme (rose-400) because it's tuned for small badge text on a tinted
-// pill — as a solid fill under white label text it washed out into an
-// unreadable pink. modal-error is the modal-scoped token and stays dark enough
-// to carry white text in both themes.
+// Outline red with a soft fill on hover — the same destructive treatment
+// ReviewQuoteDialog uses, and now the single one across the request table.
+//
+// This replaced a solid bg-modal-error fill under white text. The solid fill
+// had to reach for the modal-scoped token because status-error goes pastel on
+// the dark theme (rose-400, tuned for small badge text on a tinted pill) and
+// washed out into unreadable pink as a background. Outlining sidesteps that
+// entirely: status-error is being used here as text and border, which is what
+// it was tuned for, so it reads correctly in both themes without a special
+// token — and a destructive action reads as destructive by its colour rather
+// than by shouting.
 const DANGER_BTN =
-  "w-full sm:w-auto px-8 py-3.5 rounded-lg bg-modal-error text-white font-bold text-sm hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
+  "w-full sm:w-auto px-8 py-3.5 rounded-lg border border-status-error/40 text-status-error font-bold text-sm hover:bg-status-error/10 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
 
 const GHOST_BTN =
   "w-full sm:w-auto px-8 py-3.5 rounded-lg text-modal-text-secondary font-bold text-sm hover:bg-modal-error/10 hover:cursor-pointer hover:text-modal-error transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
@@ -983,15 +1036,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
     <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-info-light">
       {children}
     </span>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <FieldLabel>{label}</FieldLabel>
-      <div className="text-sm text-modal-text-primary">{children}</div>
-    </div>
   );
 }
 

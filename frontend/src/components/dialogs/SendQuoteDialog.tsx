@@ -205,7 +205,7 @@ export default function SendQuoteDialog({
     return (
       <div className="p-8 space-y-6">
         {/* Read-only context — what this quote is for. */}
-        <div className="bg-modal-surface-elevated border border-modal-border/20 rounded-lg p-4 space-y-2">
+        <div className="bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg p-4 space-y-2">
           <div className="text-xs font-bold uppercase tracking-widest text-modal-text-secondary">
             Quoting for
           </div>
@@ -231,7 +231,7 @@ export default function SendQuoteDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
             />
             <p className="text-[11px] text-info-light mt-1 ml-1">
               The total the department will be charged.
@@ -247,7 +247,7 @@ export default function SendQuoteDialog({
               value={supplier}
               onChange={(e) => setSupplier(e.target.value)}
               placeholder="e.g. Officeworks"
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
             />
             <p className="text-[11px] text-info-light mt-1 ml-1">
               Named in the manager's email.
@@ -267,7 +267,7 @@ export default function SendQuoteDialog({
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             placeholder="The supplier's own quote number, if it has one"
-            className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+            className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
           />
         </div>
 
@@ -290,7 +290,7 @@ export default function SendQuoteDialog({
             className={`w-full flex items-center gap-3 rounded-lg border border-dashed px-4 py-3.5 text-sm transition-colors hover:cursor-pointer ${
               file
                 ? "border-status-success/50 bg-status-success/5 text-modal-text-primary"
-                : "border-modal-border/40 bg-modal-surface-elevated text-modal-text-secondary hover:border-modal-brand/40"
+                : "border-modal-border/40 bg-modal-surface-elevated/50 text-modal-text-secondary hover:border-modal-brand/40"
             }`}
           >
             <span className="material-symbols-outlined !text-[20px] shrink-0">
@@ -322,7 +322,7 @@ export default function SendQuoteDialog({
   function renderConfirmBody() {
     return (
       <div className="p-8 space-y-4">
-        <div className="bg-modal-surface-elevated border border-modal-border/20 rounded-lg divide-y divide-modal-border/10">
+        <div className="bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg divide-y divide-modal-border/10">
           {[
             { label: "Amount", value: formatQuoteAmount(parsedAmount) },
             { label: "Supplier", value: supplier.trim() },

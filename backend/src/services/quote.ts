@@ -255,7 +255,9 @@ export async function createQuoteForRequest(
 }
 
 /**
- * The manager accepts the quote — or an admin does so in their place.
+ * The manager accepts the quote. Only they can — the route gates it (see
+ * resolveQuoteActor); `actor.onBehalf` remains on the signature because the
+ * quote row records who answered and how.
  *
  * Acceptance is what unblocks accessory selection. It does not move the
  * Request's own status: it was APPROVED before and stays APPROVED, with the
@@ -290,7 +292,8 @@ export async function acceptQuoteForRequest(
 }
 
 /**
- * The manager rejects the quote — or an admin does so in their place. Terminal.
+ * The manager rejects the quote. Terminal, and theirs alone — same gate as
+ * acceptance above.
  *
  * Delegates the request transition to the ordinary rejectRequest path rather
  * than writing REJECTED here, so the requester gets the existing

@@ -18,8 +18,14 @@
     --surface-container-low: 240 232 240;
     --surface-container-lowest: 255 255 255;
 
-    --approver-bg: 255 170 0;
-    --requester-bg: 249 230 249;
+    /* Avatar pills. Neutral by decision: a person's initials are an identity,
+       not a status, and colouring them competed with the status badge and the
+       row accent for the same glance.
+       Both pills render at /30 (they used to carry /90 and /30, which made a
+       shared value impossible), so one token value serves both. This light
+       value composites to #f6f5f8. */
+    --approver-bg: 225 223 230;
+    --requester-bg: 225 223 230;
 
     /* Brand */
     --twilight-purple: 173 70 255;
@@ -34,8 +40,8 @@
     --nav-tab: 173, 164, 172;
     --error: 193 0 7;
     --shadcn-text: 89 22 139;
-    --approver-text: 173 114 0;
-    --requester-text: 94 26 117;
+    --approver-text: 74 69 82;
+    --requester-text: 74 69 82;
     --not-found-text: 196 160 233;
 
     /* Borders */
@@ -54,8 +60,18 @@
 
     --status-success:     #16a34a; /* green-600  — completed/collected/received/approve */
     --status-error:       #dc2626; /* red-600    — rejected/reject */
-    --status-pending:     #ca8a04; /* yellow-600 — pending */
-    --status-approved:    #60a5fa; /* blue-400   — approved badge, asset details */
+    /* The notice/info colour — "read this before you click" boxes, the live
+       serial-duplicate warning, the home page's info badge. No longer a request
+       phase (phases run through the intent aliases), so it is free to be the
+       same orange as intent-progress: an info box and an in-progress row are
+       both "your attention, nothing is wrong". */
+    --status-pending:     #d97706; /* was #ca8a04 yellow-600 */
+    /* The Settings job UI's own accent — schedule badges and the Running
+       status. No longer a request phase (APPROVED runs through intent-done),
+       so it belongs to Settings alone now. Purple rather than the old blue:
+       blue was the last cool colour left after the request table went
+       green/orange/red, and it read as a leftover rather than a choice. */
+    --status-approved:    #ad46ff; /* was #60a5fa blue-400 */
     --status-awaiting-it: #c084fc; /* purple-400 — awaiting IT */
     --status-collect:     #6d2dd4; /* teal-400   — ready to collect / mark ready */
     --status-ship:        #fbbf24; /* amber-400  — ready to ship / mark shipped */
@@ -67,13 +83,24 @@
        a KIND of row, not a stage within one — the same reasoning that put the
        non-standard indicator on the unbound brand colour. */
     --status-correction:  #d97706; /* amber-600  — record correction */
-    /* Standard requests. Same reasoning as the two above — a KIND of row, not
-       a stage — so it gets its own unbound token rather than borrowing a
-       lifecycle colour. Teal because every other hue here is already spoken
-       for, and deliberately the calmest of the three: standard is the ordinary
-       case, and if the commonest row shouted loudest the accents on the rows
-       that actually need attention would stop meaning anything. */
-    --status-standard:    #0d9488; /* teal-600   — standard request */
+    /* Standard / non-standard request badges. A KIND of row, not a stage, so
+       each keeps its own token rather than borrowing a lifecycle colour — but
+       they now MATCH the intent green and red on purpose: standard is the
+       ordinary, already-agreed case, non-standard is the one that costs money
+       and needs a decision. Separate tokens so the pairing stays a choice; if
+       the intent hues are ever retuned for a phase reason, these don't have to
+       follow.
+       --status-nonstandard exists because that badge used to borrow --primary,
+       the brand purple, which is spoken for across the whole app. */
+    --status-standard:    #16a34a; /* was #0d9488 teal-600 — matches intent-done */
+    --status-nonstandard: #dc2626; /* was --primary purple — matches intent-stop */
+    /* Asset / Accessory indicators. Neutral, and one token for both: the pair
+       is labelled and icon-bearing, so the words do the telling-apart and the
+       colour doesn't need to. Its own token rather than the borrowed
+       status-model / status-collect it used to sit on — those are lifecycle
+       stages, and neutralising them there would have drained the colour out of
+       Create model, Send quote, Add stock and Ready to collect as well. */
+    --kind-indicator:     #5c5668;
 
     /* modals */
     --modal-text-primary: 52 50 52;
@@ -113,7 +140,21 @@
     --shadcn-background: 20 4 55;
     --success-form: 10 2 25;
     --filter: 10 2 25;
-    --requester-bg: 64 17 80;
+    /* Initials pill: creamy brown, initials in --nav-tab-selected cream.
+       The value is NOT what the pill looks like — it renders at /50 over the
+       card, and the card (#1b1430) is blue-heavy, so anything warm gets pulled
+       toward mauve on the way through. --info-light was tried here and
+       composited to #5d4d56: red 93, blue 86, near enough equal to read grey.
+       So the token is solved backwards from the wanted result instead —
+       #d1a45c at /30 over the card lands on #523f3d, a dark warm brown (red 82
+       against blue 61), and carries the cream initials at 8.82:1.
+       The alpha is the ceiling on how creamy this can get, not the token: at
+       /30 a lighter pill would need values past 255, so the way to a creamier
+       brown is a higher alpha or a lighter card, not a different hex here.
+       (--approver-bg had no dark override at all before, so the light theme's
+       orange was leaking onto the dark ground.) */
+    --requester-bg: 209 164 92;
+    --approver-bg: 209 164 92;
 
     --surface: 18 8 30;
     --surface-container: 20 20 49;
@@ -131,8 +172,8 @@
     --nav-tab: 255 228 189 ;
     --error: 220 1 80;
     --shadcn-text: 250 245 255;
-    --approver-text: 255 221 158;
-    --requester-text: 249 230 249;
+    --approver-text: 255 241 219;
+    --requester-text: 255 241 219;
     --not-found-text: 230 0 38;
 
     --outline: 64 58 34;
@@ -147,18 +188,29 @@
 
     --shadow-md: 0 0 0 2px rgba(161, 138, 222, 0.14), 0 4px 18px rgba(238, 181, 255, 0.231);
 
-    --status-success:     #34d399; /* emerald-400 */
-    --status-error:       #fb7185; /* rose-400 */
-    --status-pending:     #fcd34d; /* amber-300 */
-    --status-approved:    #38bdf8; /* sky-400 */
+    /* The three intent hues are Miramare's (the VS Code theme), kept after
+       trying its full palette: sage / orange / red instead of emerald / amber /
+       rose. Chosen for EVENNESS, not contrast — the bright set ranged 5.22 to
+       7.72 against the card, so amber shouted and rose murmured even though the
+       three are meant to be peers. These sit at 5.62 / 5.82 / 5.25, so the only
+       thing separating them is hue. That costs about a third of the contrast on
+       the two scanned most, which is the deliberate trade.
+       Dark theme only: these are tuned for a dark ground and would be far too
+       light on the white card the light theme uses. */
+    --status-success:     #87af87; /* Miramare sage  — intent-done */
+    --status-error:       #e68183; /* Miramare red   — intent-stop */
+    --status-pending:     #e29870; /* was #fcd34d — info boxes, matches intent-progress */
+    --status-approved:    #a78bfa; /* was #38bdf8 — matches status-awaiting-it */
     --status-awaiting-it: #a78bfa; /* violet-400 */
     --status-collect:     #7f51fd; /* teal-300 */
     --status-ship:        #fdba74; /* orange-300 */
     --status-shipped:     #22d3ee; /* cyan-400 */
     --status-assigned:    #a5b4fc; /* indigo-300 */
     --status-model:       #fcd34d; /* amber-300 */
-    --status-correction:  #fbbf24; /* amber-400 */
-    --status-standard:    #5eead4; /* teal-300 */
+    --status-correction:  #e29870; /* Miramare orange — intent-progress */
+    --status-standard:    #87af87; /* was #5eead4 — matches intent-done */
+    --status-nonstandard: #e68183; /* was --primary purple — matches intent-stop */
+    --kind-indicator:     #9e867c; /* --info-light, same warm neutral as the pills */
 
     --modal-text-primary: 255 228 189;
     --modal-text-secondary: 255 241 219;
@@ -271,6 +323,25 @@
   --color-status-model:       var(--status-model);
   --color-status-correction:  var(--status-correction);
   --color-status-standard:    var(--status-standard);
+  --color-status-nonstandard: var(--status-nonstandard);
+  --color-kind-indicator:     var(--kind-indicator);
+
+  /* ── Request phase intent ──────────────────────────────────────────────
+     The request table and the home page speak in three colours, not twelve.
+     A row is finished (done), waiting on somebody (progress), or dead (stop) —
+     and that is the only distinction a person scanning the list is making.
+     The per-stage tokens above still exist and still carry their own hues;
+     they are simply no longer what a request's PHASE is painted with, so a
+     colour can't be read as meaning two different things on one row.
+
+     Aliases rather than new hues on purpose: change the green here and every
+     finished state moves together, which is the property the old scheme
+     lacked. `progress` is the correction orange — it was already the "someone
+     has to deal with this" colour, so the rest of the flow joined it rather
+     than the other way round. */
+  --color-intent-done:     var(--status-success);
+  --color-intent-progress: var(--status-correction);
+  --color-intent-stop:     var(--status-error);
 
    --color-tooltip-bg: rgb(var(--tooltip-bg));
    --color-tooltip-text: rgb(var(--tooltip-text));

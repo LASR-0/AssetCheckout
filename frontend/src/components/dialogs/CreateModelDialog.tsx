@@ -324,7 +324,7 @@ export default function CreateModelDialog({
           </label>
           <input
             disabled={disabled}
-            className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+            className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
             value={form.modelName}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, modelName: e.target.value }))
@@ -339,7 +339,7 @@ export default function CreateModelDialog({
             </label>
             <input
               disabled={disabled}
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
               value={form.manufacturer}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, manufacturer: e.target.value }))
@@ -353,7 +353,7 @@ export default function CreateModelDialog({
             </label>
             <input
               disabled={disabled}
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm transition-all focus:outline-none focus:ring-2 focus:ring-modal-brand/20 disabled:opacity-60"
               value={form.modelNumber}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, modelNumber: e.target.value }))
@@ -367,7 +367,7 @@ export default function CreateModelDialog({
 
   function renderFormSummary() {
     return (
-      <div className="bg-modal-surface-elevated border border-modal-border/20 rounded-lg p-4 space-y-2">
+      <div className="bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg p-4 space-y-2">
         <div className="text-xs font-bold uppercase tracking-widest text-modal-text-secondary">
           Searched for
         </div>
@@ -394,7 +394,7 @@ export default function CreateModelDialog({
 function renderMatchesTable(candidates: SnipeMatch[]) {
     return (
       <div className="border border-modal-border/20 rounded-lg overflow-hidden">
-        <div className="bg-modal-surface-elevated px-4 py-2 text-xs font-bold uppercase tracking-widest text-modal-text-secondary border-b border-modal-border/20">
+        <div className="bg-modal-surface-elevated/50 px-4 py-2 text-xs font-bold uppercase tracking-widest text-modal-text-secondary border-b border-modal-border/20">
           {candidates.length} match{candidates.length === 1 ? "" : "es"}
         </div>
         <div className="divide-y divide-modal-border/10">

@@ -395,7 +395,7 @@ export default function AssetDetailsDialog({
             <input
               value={form.serial}
               onChange={(e) => setForm((p) => ({ ...p, serial: e.target.value }))}
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
               placeholder="Leave empty to clear in Snipe"
             />
           </div>
@@ -444,7 +444,7 @@ export default function AssetDetailsDialog({
               min="0"
               value={form.price}
               onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
-              className={`w-full bg-modal-surface-elevated border ${priceBorderClass} rounded-lg py-3 px-4 ${priceTextClass} text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20 transition-colors`}
+              className={`w-full bg-modal-surface-elevated/50 border ${priceBorderClass} rounded-lg py-3 px-4 ${priceTextClass} text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20 transition-colors`}
               placeholder="0.00"
             />
           </div>

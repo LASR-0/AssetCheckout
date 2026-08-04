@@ -525,10 +525,17 @@ export default function RequestTablePage() {
             request={selectedRequest}
             open={reviewQuoteOpen}
             onOpenChange={setReviewQuoteOpen}
-            // An admin opening this is always standing in — the row only
-            // offers it to them while the quote is still unanswered, and the
-            // manager's own row uses the same dialog without the notice.
-            onBehalf={role === "ADMIN"}
+            // Nobody answers a quote on someone else's behalf any more — it
+            // spends the manager's budget, so only the named approver is
+            // offered it (columns.tsx) and only they are allowed it
+            // (resolveQuoteActor). This stays computed rather than hardcoded
+            // false so the dialog's copy is derived from who is actually
+            // acting, not from an assumption about it.
+            onBehalf={
+              !!selectedRequest &&
+              (selectedRequest.manager ?? "").trim().toLowerCase() !==
+                (currentUserName ?? "").trim().toLowerCase()
+            }
             onSuccess={loadRequests}
           />
 

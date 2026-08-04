@@ -23,15 +23,25 @@ type Props = {
 };
 
 /**
- * The quantity-waiting step for a non-standard accessory — the accessory twin
- * of AssetDetailsDialog. Reached via the row's "Add stock" action, which shows
- * whenever the selected accessory has no available stock.
+ * The fulfilment step for a non-standard accessory — the accessory twin of
+ * AssetDetailsDialog. Reached via the row's "Add stock" / "Check out" action,
+ * which shows for any selected accessory whose request hasn't completed.
  *
  * This dialog does NOT move the accessory or pick a location — that's authored
  * once at create time. It shows the target accessory (name, site, current
  * stock) read-only for confirmation, and takes a single number: how many units
  * have arrived. That amount is ADDED to the record's current total (a delta);
  * when stock becomes available the backend checks out + completes.
+ *
+ * TWO MODES, one submit. Usually there is no stock and a quantity is required.
+ * But stock can arrive by routes this app never sees — typed straight into
+ * Snipe, returned by a checkin — and nothing re-triggers fulfilment when that
+ * happens, so the request strands at APPROVED beside an accessory that is
+ * sitting right there. When the row already reports stock, the quantity
+ * becomes optional and the dialog offers to check out what's there: an empty
+ * box submits a zero delta, which the backend treats as "re-probe and fulfil
+ * if ready". Adding MORE at the same time still works — the number is simply
+ * no longer the point of the dialog.
  *
  * The read-only context comes off the request row itself (enriched by the
  * requests-list endpoint): modelRequest.modelName is the accessory name,
@@ -72,8 +82,22 @@ export default function AccessoryStockDialog({
   async function handleSubmit() {
     if (!request) return;
 
-    const parsed = Number(arrived);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
+    const typed = arrived.trim();
+
+    // Empty is only meaningful when there is already stock to check out —
+    // otherwise it's a submit with nothing to do, and the error should say
+    // what's missing rather than let the backend no-op silently.
+    if (!typed && !stockReady) {
+      setDialogState({
+        phase: "error",
+        message: "Enter how many units arrived (a whole number, 1 or more).",
+        retryable: true,
+      });
+      return;
+    }
+
+    const parsed = typed ? Number(typed) : 0;
+    if (!Number.isInteger(parsed) || parsed < 0 || (!stockReady && parsed <= 0)) {
       setDialogState({
         phase: "error",
         message: "Enter how many units arrived (a whole number, 1 or more).",
@@ -92,7 +116,9 @@ export default function AccessoryStockDialog({
         phase: "success",
         ready,
         message: ready
-          ? "Stock added — the accessory has been checked out and the request completed."
+          ? parsed === 0
+            ? "Checked out — the request is complete."
+            : "Stock added — the accessory has been checked out and the request completed."
           : "Stock saved, but the accessory still shows no available quantity. Re-open this dialog to add more once it arrives.",
       });
     } catch (err: any) {
@@ -116,17 +142,26 @@ export default function AccessoryStockDialog({
     typeof request?.accessoryRemaining === "number"
       ? request.accessoryRemaining
       : null;
+  /** Stock is already available — the quantity becomes optional. */
+  const stockReady = remaining !== null && remaining > 0;
 
   function renderHeader() {
     const config = (() => {
       switch (dialogState.phase) {
         case "form":
-          return {
-            icon: "inventory",
-            title: "Add Stock",
-            subtitle:
-              "Enter how many units arrived. This is added to the accessory's current stock; once any is available it's checked out and the request completes.",
-          };
+          return stockReady
+            ? {
+                icon: "inventory_2",
+                title: "Check Out",
+                subtitle:
+                  "This accessory already has stock, so it can be checked out now and the request completed. Add more units first if some have also arrived.",
+              }
+            : {
+                icon: "inventory",
+                title: "Add Stock",
+                subtitle:
+                  "Enter how many units arrived. This is added to the accessory's current stock; once any is available it's checked out and the request completes.",
+              };
         case "submitting":
           return { icon: "save", title: "Saving...", subtitle: "Updating the accessory in Snipe-IT." };
         case "success":
@@ -159,7 +194,7 @@ export default function AccessoryStockDialog({
     return (
       <div className="p-8 space-y-6">
         {/* Read-only target context — which accessory + where, and its stock. */}
-        <div className="bg-modal-surface-elevated border border-modal-border/20 rounded-lg p-4 space-y-2">
+        <div className="bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg p-4 space-y-2">
           <div className="text-xs font-bold uppercase tracking-widest text-modal-text-secondary">
             Adding stock to
           </div>
@@ -180,19 +215,21 @@ export default function AccessoryStockDialog({
 
         <div>
           <label className="block text-xs font-bold uppercase tracking-widest text-modal-text-secondary mb-2 ml-1">
-            Quantity arrived
+            {stockReady ? "Quantity arrived (optional)" : "Quantity arrived"}
           </label>
           <input
             type="number"
-            min="1"
+            min={stockReady ? "0" : "1"}
             step="1"
             value={arrived}
             onChange={(e) => setArrived(e.target.value)}
-            placeholder="e.g. 5"
-            className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+            placeholder={stockReady ? "Leave empty to just check out" : "e.g. 5"}
+            className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
           />
           <p className="text-[11px] text-info-light mt-1 ml-1">
-            Added to the current total — enter only what newly arrived.
+            {stockReady
+              ? "Only fill this in if more units arrived on top of what's already recorded."
+              : "Added to the current total — enter only what newly arrived."}
           </p>
         </div>
       </div>
@@ -242,7 +279,7 @@ export default function AccessoryStockDialog({
               onClick={handleSubmit}
               className="w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all"
             >
-              Add stock
+              {stockReady && !arrived.trim() ? "Check out now" : "Add stock"}
             </button>
             <button
               onClick={close}

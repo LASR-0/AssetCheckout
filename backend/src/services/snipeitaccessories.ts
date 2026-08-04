@@ -42,6 +42,15 @@ import type {
 //      variable and only swap on success, so a failed refresh leaves
 //      the previous (stale) data in place rather than clearing it.
 //    - Process-memory only; resets on restart.
+//
+//  One departure from the asset side: every WRITE in this file drops the
+//  accessories cache (invalidateAccessoriesCache). A read-only cache can
+//  afford to be ten minutes behind; a cache that outlives our own writes
+//  cannot. A newly created accessory is absent from the cached catalog
+//  entirely, and the requests list reads stock from that catalog to decide
+//  whether to offer "Add stock" — so without this, the admin who just created
+//  the record is shown a bare Approved badge and no way forward until the TTL
+//  expires. Dropping is cheaper than patching: the next read refetches once.
 ///  +-----------------------------------------------------------------+
 
 const ACCESSORY_CATEGORIES_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -59,6 +68,18 @@ let accessoriesCache: {
 
 function isFresh(fetchedAt: number, ttlMs: number): boolean {
   return Date.now() - fetchedAt < ttlMs;
+}
+
+/**
+ * Drop the accessories catalog so the next read refetches. Called after every
+ * write that changes what the catalog says — creating a record, changing its
+ * stock, deleting it, checking one in or out.
+ *
+ * Categories are NOT dropped: nothing here creates or removes an accessory
+ * category, so that cache stays valid across all of these.
+ */
+function invalidateAccessoriesCache(): void {
+  accessoriesCache = null;
 }
 
 /**
@@ -447,6 +468,10 @@ export async function checkoutAccessory(
     );
   }
 
+  // A checkout consumes a unit, so `remaining` in the cached catalog is now
+  // one too high — which is exactly the number the "Add stock" decision reads.
+  invalidateAccessoriesCache();
+
   return data;
 }
 
@@ -602,6 +627,10 @@ export async function createAccessory(input: {
     throw new AppError("Snipe accessory creation returned no ID", 500);
   }
 
+  // The new record isn't in the cached catalog at all, and the requests list
+  // reads stock from that catalog to decide whether to offer "Add stock".
+  invalidateAccessoriesCache();
+
   return newId;
 }
 
@@ -638,6 +667,8 @@ export async function updateAccessoryStock(
     );
   }
 
+  invalidateAccessoriesCache();
+
   return data;
 }
 
@@ -670,6 +701,8 @@ export async function deleteAccessory(accessoryId: number): Promise<boolean> {
     );
     return false;
   }
+
+  invalidateAccessoriesCache();
 
   return true;
 }
@@ -767,6 +800,9 @@ export async function checkinAccessory(
       500
     );
   }
+
+  // A checkin returns a unit to the pool — the mirror of checkoutAccessory.
+  invalidateAccessoriesCache();
 
   return data;
 }

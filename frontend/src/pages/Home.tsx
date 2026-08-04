@@ -348,9 +348,9 @@ function Stat({
   to?: string;
 }) {
   const className = `${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px]
-        ${attention ? "!border-status-error/50" : ""}
-        ${complete ? "!border-status-success/50" : ""}
-        ${pending ? "!border-status-model/50" : ""}`;
+        ${attention ? "!border-intent-stop/50" : ""}
+        ${complete ? "!border-intent-done/50" : ""}
+        ${pending ? "!border-intent-progress/50" : ""}`;
 
   // Linked tiles get the same hover lift as the request tiles below, so the
   // affordance reads the same way across the page. Only rendered as a link
@@ -409,9 +409,9 @@ function StatBody({
     <>
       <span
         className={`font-headline font-extrabold text-2xl
-          ${attention ? "text-status-error" : "" }
-          ${complete ? "text-status-success" : ""}
-          ${pending ? "text-status-model" : ""}
+          ${attention ? "text-intent-stop" : "" }
+          ${complete ? "text-intent-done" : ""}
+          ${pending ? "text-intent-progress" : ""}
           `}
       >
         {loading ? "–" : num}

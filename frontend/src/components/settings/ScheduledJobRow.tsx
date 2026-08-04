@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/statusbadge";
 //
 //  Collapsed-row badges render through the shared <Badge> primitive
 //  (StatusBadge.tsx, compact size) with the theme-aware status tokens:
-//  schedule → approved (blue), dry-run → success, live → error.
+//  schedule → approved (the Settings purple), dry-run → success, live → error.
 //
 //  The builder edits a DRAFT ScheduleSpec; nothing persists until Save. The
 //  collapsed badge reflects the SAVED cron (from the parent). If the saved

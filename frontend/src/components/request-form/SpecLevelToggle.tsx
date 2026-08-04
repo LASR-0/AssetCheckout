@@ -8,12 +8,17 @@ type Props = {
   onReasonChange: (val: string) => void;
   onPreferredModelChange: (val: string) => void;
   /**
-   * One-way lock to NON_STANDARD while true (accessory "Something else").
-   * The parent derives the effective value; this component just disables
-   * the choice and explains why. Optional and default-off, so the asset
-   * form is unaffected.
+   * Pin the toggle to one value and disable it. The accessory form drives
+   * this from its option choice: "Something else" pins NON_STANDARD, a named
+   * option pins STANDARD — a catalogued accessory is standard by definition,
+   * so offering the choice would let someone send a contradiction.
+   *
+   * Carries WHICH value rather than a bare boolean, because the two locks pull
+   * in opposite directions. The parent still derives the effective value it
+   * submits; this component only shows and enforces it. Optional, so the asset
+   * form (no options, always a free choice) is unaffected.
    */
-  locked?: boolean;
+  lockedTo?: "STANDARD" | "NON_STANDARD";
   /** Shown under the toggle while locked. */
   lockedHint?: string;
 };
@@ -25,13 +30,14 @@ export default function SpecLevelToggle({
   onChange,
   onReasonChange,
   onPreferredModelChange,
-  locked = false,
+  lockedTo,
   lockedHint,
 }: Props) {
-  // While locked, display NON_STANDARD regardless of the user's own
+  // While locked, display the pinned value regardless of the user's own
   // (preserved) choice — same display-the-derived-state pattern as the
   // call&text → data checkbox on the asset form.
-  const displayValue = locked ? "NON_STANDARD" : value;
+  const locked = lockedTo !== undefined;
+  const displayValue = lockedTo ?? value;
 
   return (
     <section className="space-y-4">
@@ -40,36 +46,38 @@ export default function SpecLevelToggle({
       </label>
 
       <div className="inline-flex p-1 bg-surface-container rounded-lg">
-        <button
-          type="button"
-          disabled={locked}
-          onClick={() => onChange("STANDARD")}
-          className={`px-6 py-2 rounded-md text-sm font-medium transition-all
-            ${locked ? "cursor-not-allowed opacity-40" : "hover:cursor-pointer"}
-            ${displayValue === "STANDARD"
-              ? "bg-surface-container-lowest text-on-background shadow-sm"
-              : "text-on-surface-variant/25"}`}
-        >
-          Standard
-        </button>
-
-        <button
-          type="button"
-          disabled={locked}
-          onClick={() => onChange("NON_STANDARD")}
-          className={`px-6 py-2 rounded-md text-sm font-medium transition-all
-            ${locked ? "cursor-not-allowed" : "hover:cursor-pointer"}
-            ${displayValue === "NON_STANDARD"
-              ? "bg-surface-container-lowest text-on-background shadow-sm"
-              : "text-on-surface-variant/25"}`}
-        >
-          Non-Standard
-        </button>
+        {/* The dim goes on whichever option is NOT the pinned one, so the lock
+            reads the same in both directions. It used to be hard-coded onto
+            Standard, which was right only while the sole lock pinned
+            NON_STANDARD — locking to STANDARD faded the active button. */}
+        {(["STANDARD", "NON_STANDARD"] as const).map((option) => {
+          const active = displayValue === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              disabled={locked}
+              onClick={() => onChange(option)}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-all
+                ${locked
+                  ? `cursor-not-allowed${active ? "" : " opacity-40"}`
+                  : "hover:cursor-pointer"}
+                ${active
+                  ? "bg-surface-container-lowest text-on-background shadow-sm"
+                  : "text-on-surface-variant/25"}`}
+            >
+              {option === "STANDARD" ? "Standard" : "Non-Standard"}
+            </button>
+          );
+        })}
       </div>
 
       {locked && (
         <p className="text-xs text-info-light ml-2">
-          {lockedHint ?? "This selection requires a non-standard request."}
+          {lockedHint ??
+            (lockedTo === "STANDARD"
+              ? "Your selection above sets this."
+              : "This selection requires a non-standard request.")}
         </p>
       )}
 

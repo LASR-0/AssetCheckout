@@ -591,7 +591,19 @@ export default function MyHoldingsDialog({
           )}
         </div>
 
-        <ResponsiveDialogFooter className="px-6 md:px-8 pb-8 pt-2 flex flex-col sm:flex-row-reverse gap-3 border-t border-modal-border/10">
+        {/* Buttons centred, matching every dialog on the request table. This
+            one is reached from the home page rather than from a row, but it's
+            the same correction and it shouldn't sit differently depending on
+            where the user came in from.
+            justify-center rather than the mx-auto those dialogs use, because
+            this footer carries a full-width top divider: mx-auto shrinks the
+            footer to its content and would take the divider down with it.
+            It MUST carry the sm: prefix. DialogFooter bakes in
+            `sm:flex-row sm:justify-end`, and cn() is tailwind-merge, which only
+            replaces a class when the variants match — a bare `justify-center`
+            is a different key from `sm:justify-end`, so it survived and won at
+            every width the dialog is actually shown at. */}
+        <ResponsiveDialogFooter className="px-6 md:px-8 pb-8 pt-2 flex justify-center sm:justify-center flex-col sm:flex-row-reverse gap-3 border-t border-modal-border/10">
           {phase === "wrong-edit" && (
             <Primary
               disabled={!canSubmitWrong || submitting}

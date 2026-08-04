@@ -232,6 +232,38 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     modelRequestStatus === "APPROVED" &&
     !linkedAssetId;
 
+  // Asset DETAILS stage — the step after a model is assigned or created.
+  //
+  // Both model paths land here: useExistingModelForRequest and
+  // createNewModelForRequest each stamp the ModelRequest COMPLETED and set
+  // linkedAssetId, while the Request itself stays APPROVED. That is exactly the
+  // state loadRequestAtRow4 accepts on the backend, and fillAssetDetailsForRequest
+  // is what carries it the rest of the way — it writes the fields to Snipe,
+  // re-probes completeness, and checks out + completes the request the moment
+  // the asset is ready.
+  //
+  // Without this branch the row fell through every condition to the bare
+  // "Approved" badge, so a non-standard asset stopped dead right after the
+  // model step with no way to finish it. The dialog, the page handler and the
+  // meta callback all existed — `onAssetDetails` was simply never called from
+  // anywhere.
+  //
+  // Deliberately NOT gated on assetReady. A linked asset that is already
+  // complete still leaves the request at APPROVED, because nothing checks it
+  // out at link time; the admin has to open this dialog and save to trigger
+  // fulfilment. Hiding the action when assetReady is true would strand exactly
+  // the requests that are closest to done.
+  const isAssetAwaitingDetails =
+    !isAccessory &&
+    requestStatus === "APPROVED" &&
+    modelRequestStatus === "COMPLETED" &&
+    linkedAssetId !== null;
+
+  /** The linked asset already has everything Snipe needs — this is a
+   *  confirm-and-issue, not a fill-in-the-blanks. Wording only. */
+  const assetDetailsReady =
+    isAssetAwaitingDetails && request.modelRequest?.assetReady === true;
+
   // ── Quote stage (non-standard accessories only) ──
   // IT buys assets; departments buy non-standard accessories. So this one
   // combination gets a quote the manager signs off on, and it sits between
@@ -261,17 +293,36 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     snipeAccessoryId === null &&
     (request.requestType !== "NON_STANDARD" || quote?.status === "ACCEPTED");
 
-  // Accessory QUANTITY-WAITING stage: an accessory has been selected (linked)
-  // but has no available stock. Keyed off LIVE remaining (not the stored
-  // assetReady snapshot), so the action re-appears whenever the selected
-  // accessory drains back to 0 — including for a second request against the
-  // same accessory after a prior one consumed the last unit.
+  // Accessory FULFILMENT stage: an accessory has been selected (linked) but
+  // the request hasn't completed. That is the whole condition — the live stock
+  // count no longer gates it, only labels it.
+  //
+  // It used to require `accessoryRemaining === 0`, on the assumption that
+  // stock only ever arrives through this dialog, so a linked accessory WITH
+  // stock must already have been checked out. Neither half holds. Stock can
+  // appear by routes this app never sees — someone types a quantity straight
+  // into Snipe, a checkin returns a unit to the pool, another request's top-up
+  // covers this one — and fulfilment only ever fires from inside the selection
+  // or add-stock calls, so nothing re-triggers it when that happens. The
+  // request then sits at APPROVED with stock sitting next to it and no action
+  // on the row at all: a genuine dead end, and the one Luke hit on the Monitor
+  // request. Unknown stock (null) lands here too, which is what the catalog
+  // read returns when it fails or when the record is too new to be in it.
+  //
+  // Offering the action in all three cases is safe: the backend re-probes live
+  // stock and checks out the moment there is any, so the worst case is a
+  // dialog that completes the request immediately, which is the desired
+  // outcome anyway.
   const isAccessoryAwaitingStock =
     isAccessory &&
     requestStatus === "APPROVED" &&
     modelRequestStatus === "COMPLETED" &&
-    snipeAccessoryId !== null &&
-    accessoryRemaining === 0;
+    snipeAccessoryId !== null;
+
+  // Stock is already there and the request simply needs pushing over the line.
+  // Changes the action's wording, not whether it appears.
+  const accessoryStockReady =
+    isAccessoryAwaitingStock && accessoryRemaining !== null && accessoryRemaining > 0;
 
   const isStandardAwaitingIT =
     requestStatus === "APPROVED" &&
@@ -328,9 +379,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionButton
             icon={blocked ? "pending_actions" : "fact_check"}
             label={blocked ? "Blocked" : "Manage"}
-            color="text-status-correction"
-            hoverBg="hover:bg-status-correction/10"
-            border="border-status-correction/40"
+            color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10"
+            border="border-intent-progress/40"
             title={
               blocked
                 ? "This correction couldn't be applied to Snipe — review and retry"
@@ -380,9 +431,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
           <ActionButton
             icon="inventory_2"
             label={collecting ? "Mark collected" : "Mark received"}
-            color="text-status-success"
-            hoverBg="hover:bg-status-success/10"
-            border="border-status-success/40"
+            color="text-intent-done"
+            hoverBg="hover:bg-intent-done/10"
+            border="border-intent-done/40"
             title={collecting ? "Confirm you've collected this device" : "Confirm you've received this device"}
             onClick={() => meta.onMarkReceived(request)}
           />
@@ -398,9 +449,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             <ActionButton
               icon="local_shipping"
               label="Mark shipped"
-              color="text-status-ship"
-              hoverBg="hover:bg-status-ship/10"
-              border="border-status-ship/40"
+              color="text-intent-done"
+              hoverBg="hover:bg-intent-done/10"
+              border="border-intent-done/40"
               title="Mark this device as shipped to the requester"
               onClick={() => meta.onMarkShipped(request)}
             />
@@ -413,9 +464,9 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
             <ActionButton
               icon="package_2"
               label="Mark ready"
-              color="text-status-collect"
-              hoverBg="hover:bg-status-collect/10"
-              border="border-status-collect/40"
+              color="text-intent-done"
+              hoverBg="hover:bg-intent-done/10"
+              border="border-intent-done/40"
               title="Mark this device as ready for collection"
               onClick={() => meta.onMarkReadyForCollection(request)}
             />
@@ -437,11 +488,11 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isPending) {
       return (
         <ActionRow>
-          <ActionButton icon="check_circle" label="Approve" color="text-status-success" hoverBg="hover:bg-status-success/10"
-            border="border-status-success/40" title="Approve this request"
+          <ActionButton icon="check_circle" label="Approve" color="text-intent-done" hoverBg="hover:bg-intent-done/10"
+            border="border-intent-done/40" title="Approve this request"
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
-            border="border-status-error/40" title="Reject this request"
+          <ActionButton icon="cancel" label="Reject" color="text-intent-stop" hoverBg="hover:bg-intent-stop/10"
+            border="border-intent-stop/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -452,8 +503,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAwaitingQuoteResponse) {
       return (
         <ActionRow>
-          <ActionButton icon="request_quote" label="Review quote" color="text-status-model"
-            hoverBg="hover:bg-status-model/10" border="border-status-model/40"
+          <ActionButton icon="request_quote" label="Review quote" color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
             title="Accept or reject the quoted cost against your department's budget"
             onClick={() => meta.onReviewQuote(request)} />
         </ActionRow>
@@ -485,14 +536,14 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isPending) {
       return (
         <ActionRow>
-          <ActionButton icon="supervisor_account" label="Approve" color="text-status-success"
-            hoverBg="hover:bg-status-success/10" border="border-status-success/40"
+          <ActionButton icon="supervisor_account" label="Approve" color="text-intent-done"
+            hoverBg="hover:bg-intent-done/10" border="border-intent-done/40"
             title={`Record the manager's approval on their behalf${
               request.manager ? ` (${request.manager} hasn't responded yet)` : ""
             }`}
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
-            border="border-status-error/40" title="Reject this request"
+          <ActionButton icon="cancel" label="Reject" color="text-intent-stop" hoverBg="hover:bg-intent-stop/10"
+            border="border-intent-stop/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -504,12 +555,12 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isApprovedAwaitingAdmin || isStandardAwaitingIT) {
       return (
         <ActionRow>
-          <ActionButton icon="shield_person" label="IT sign-off" color="text-status-success"
-            hoverBg="hover:bg-status-success/10" border="border-status-success/40"
+          <ActionButton icon="shield_person" label="IT sign-off" color="text-intent-done"
+            hoverBg="hover:bg-intent-done/10" border="border-intent-done/40"
             title="Approve and assign an asset"
             onClick={() => meta.onApprove(request)} />
-          <ActionButton icon="cancel" label="Reject" color="text-status-error" hoverBg="hover:bg-status-error/10"
-            border="border-status-error/40" title="Reject this request"
+          <ActionButton icon="cancel" label="Reject" color="text-intent-stop" hoverBg="hover:bg-intent-stop/10"
+            border="border-intent-stop/40" title="Reject this request"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
@@ -517,9 +568,31 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAssetAwaitingModel) {
       return (
         <ActionRow>
-          <ActionButton icon="add_circle" label="Create model" color="text-status-model" hoverBg="hover:bg-status-model/10"
-            border="border-status-model/40" title="Create the asset model for this request"
+          <ActionButton icon="add_circle" label="Create model" color="text-intent-progress" hoverBg="hover:bg-intent-progress/10"
+            border="border-intent-progress/40" title="Create the asset model for this request"
             onClick={() => meta.onCreateModel(request)} />
+        </ActionRow>
+      );
+    }
+    // The step straight after the model. Ordered before the accessory branches
+    // below, though it cannot collide with them — every one of those is gated
+    // on isAccessory and this is gated on its negation.
+    if (isAssetAwaitingDetails) {
+      return (
+        <ActionRow>
+          <ActionButton
+            icon={assetDetailsReady ? "assignment_turned_in" : "assignment"}
+            label="Asset details"
+            color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10"
+            border="border-intent-progress/40"
+            title={
+              assetDetailsReady
+                ? "This asset already has everything Snipe needs — open and save to issue it and complete the request"
+                : "Fill in the asset's details so it can be issued to the requester"
+            }
+            onClick={() => meta.onAssetDetails(request)}
+          />
         </ActionRow>
       );
     }
@@ -529,23 +602,40 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAwaitingQuote) {
       return (
         <ActionRow>
-          <ActionButton icon="request_quote" label="Send quote" color="text-status-model"
-            hoverBg="hover:bg-status-model/10" border="border-status-model/40"
+          <ActionButton icon="request_quote" label="Send quote" color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
             title="Record the supplier's quote and send it to the manager to approve"
             onClick={() => meta.onSendQuote(request)} />
         </ActionRow>
       );
     }
-    // Quote stage, waiting on the manager. The badge says why the request is
-    // stalled; the action lets an admin answer for a manager who has gone
-    // quiet, the same standing-in they can do at the first approval.
+    // Quote stage, waiting on the manager. The badge, and ONLY the badge.
+    //
+    // This is the one place an admin deliberately cannot stand in. They can at
+    // the first approval, because that decision is about whether the person
+    // should have the thing. This one is about spending the manager's
+    // department budget, and IT is not that department — so the row reports the
+    // stall and offers nothing. The backend refuses an admin's response too
+    // (resolveQuoteActor), which is what makes it true rather than merely
+    // unoffered.
+    //
+    // Exception: an admin who IS the approver here. Their role resolves to
+    // ADMIN so they never reach the manager branch above, and without this they
+    // could never answer a quote that is genuinely theirs to answer.
     if (isAwaitingQuoteResponse) {
+      const isOwnQuote =
+        !!request.manager &&
+        request.manager.trim().toLowerCase() ===
+          (meta.currentUserName ?? "").trim().toLowerCase();
+
+      if (!isOwnQuote) {
+        return <BadgeWithTooltip status="AWAITING_QUOTE" />;
+      }
       return (
         <ActionRow>
-          <BadgeWithTooltip status="AWAITING_QUOTE" />
-          <ActionButton icon="supervisor_account" label="Answer" color="text-status-model"
-            hoverBg="hover:bg-status-model/10" border="border-status-model/40"
-            title={`Accept or reject the quote on ${request.manager || "the manager"}'s behalf`}
+          <ActionButton icon="request_quote" label="Review quote" color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
+            title="Accept or reject the quoted cost against your department's budget"
             onClick={() => meta.onReviewQuote(request)} />
         </ActionRow>
       );
@@ -553,8 +643,8 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAccessoryAwaitingSelection) {
       return (
         <ActionRow>
-          <ActionButton icon="cable" label="Select accessory" color="text-status-model" hoverBg="hover:bg-status-model/10"
-            border="border-status-model/40" title="Select or create the accessory for this request"
+          <ActionButton icon="cable" label="Select accessory" color="text-intent-progress" hoverBg="hover:bg-intent-progress/10"
+            border="border-intent-progress/40" title="Select or create the accessory for this request"
             onClick={() => meta.onSelectAccessory(request)} />
         </ActionRow>
       );
@@ -562,9 +652,19 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     if (isAccessoryAwaitingStock) {
       return (
         <ActionRow>
-          <ActionButton icon="inventory" label="Add stock" color="text-status-model" hoverBg="hover:bg-status-model/10"
-            border="border-status-model/40" title="Add the arrived quantity so the accessory can be checked out"
-            onClick={() => meta.onAddAccessoryStock(request)} />
+          <ActionButton
+            icon={accessoryStockReady ? "inventory_2" : "inventory"}
+            label={accessoryStockReady ? "Check out" : "Add stock"}
+            color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10"
+            border="border-intent-progress/40"
+            title={
+              accessoryStockReady
+                ? "This accessory has stock — check it out and complete the request"
+                : "Add the arrived quantity so the accessory can be checked out"
+            }
+            onClick={() => meta.onAddAccessoryStock(request)}
+          />
         </ActionRow>
       );
     }
@@ -587,7 +687,7 @@ export const columns: ColumnDef<Request>[] = [
       return (
         <div className="flex items-center">
           <div className="h-10 w-10 flex-shrink-0 rounded-full bg-primary-container flex items-center justify-center mr-3">
-            <span className="text-requester-text bg-requester-bg/90 rounded-full py-1 px-1.5 font-bold text-sm">
+            <span className="text-requester-text bg-requester-bg/30 rounded-full py-1 px-1.5 font-bold text-sm">
               {initials}
             </span>
           </div>
@@ -623,19 +723,24 @@ export const columns: ColumnDef<Request>[] = [
             <span className="text-sm font-medium text-on-surface-variant">
               {r.categoryName}
             </span>
-            {/* Kind badge — distinguishes asset vs accessory rows at a glance.
+            {/* Kind badge — says whether the row is an asset or an accessory.
                 Icon comes from the same category→icon lookup the request
                 forms use, so a "Headphones" accessory badge shows
-                headphones rather than a generic accessory glyph. */}
+                headphones rather than a generic accessory glyph.
+                Both sit on the neutral `kind-indicator` token: the word and the
+                icon already say which, and these used to borrow status-model
+                and status-collect — two lifecycle colours that also mean
+                "Create model" and "Ready to collect" elsewhere on the same
+                row. */}
             {isAccessory ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-model/10 text-status-model border border-status-model/30">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-kind-indicator/10 text-kind-indicator border border-kind-indicator/30">
                 <span className="material-symbols-outlined !text-[11px]">
                   {iconForCategory(r.categoryName)}
                 </span>
                 Accessory
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-collect/10 text-status-collect border border-status-collect/30">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-kind-indicator/10 text-kind-indicator border border-kind-indicator/30">
                 <span className="material-symbols-outlined !text-[11px]">
                   {iconForCategory(r.categoryName)}
                 </span>
@@ -697,7 +802,7 @@ export const columns: ColumnDef<Request>[] = [
             noise rather than emphasis. The reason is also the thing a
             non-standard request exists to explain, so this is its natural home. */}
         {row.original.requestType === "NON_STANDARD" && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary border border-primary/30">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-status-nonstandard/10 text-status-nonstandard border border-status-nonstandard/30">
             <span className="material-symbols-outlined !text-[11px]">
               tune
             </span>

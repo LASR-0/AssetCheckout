@@ -54,9 +54,12 @@ function StaticHeader({ icon, label }: { icon: string; label: string }) {
 
 // --- Status badge — job statuses (Pending/Running/Completed/Failed) ---
 //  Semantic mapping onto the shared status tokens: Completed → success,
-//  Failed → error, Running → approved (the requests-table blue), Pending →
-//  pending. Icons per the handoff (Running = schedule, matching the requests
-//  "Approved" badge — swap to "progress_activity" if you'd prefer a spinner).
+//  Failed → error, Running → approved, Pending → pending.
+//
+//  `status-approved` no longer means anything on the requests table — that
+//  moved to intent-done — so it now belongs to this page alone and carries the
+//  Settings purple. Running and the schedule badges share it deliberately:
+//  they are both "this job, on a timer" chrome.
 const JOB_STATUS_STYLES: Record<string, { bg: string; text: string; icon: string }> = {
   Completed: { bg: "bg-status-success/15", text: "text-status-success", icon: "check_circle" },
   Failed: { bg: "bg-status-error/15", text: "text-status-error", icon: "cancel" },

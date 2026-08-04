@@ -85,9 +85,25 @@ export default function AccessoryRequestFormPage() {
   const [searchParams] = useSearchParams();
   const preselectId = Number(searchParams.get("categoryId")) || null;
 
-  // "Something else" one-way lock — the effective type is what ships.
+  // The option choice decides the spec level; the toggle only shows it.
+  //
+  //   "Something else"  → NON_STANDARD. Nothing in the catalogue matches.
+  //   a named option    → STANDARD. It is in the catalogue by definition, so
+  //                       "non-standard" would be a contradiction.
+  //   neither picked    → the user's own choice stands.
+  //
+  // The two are mutually exclusive by construction (AccessoryOptionSection
+  // emits either (label, false) or (null, true)), so the order here is for
+  // readability rather than precedence.
+  //
+  // This is DERIVED rather than written into formState on selection: the
+  // user's own requestType is preserved untouched underneath, so clearing the
+  // option restores whatever they had chosen instead of silently rewriting it.
+  const hasNamedOption = !!formState.accessoryOption;
   const effectiveRequestType = formState.somethingElse
     ? "NON_STANDARD"
+    : hasNamedOption
+    ? "STANDARD"
     : formState.requestType;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,10 +122,10 @@ export default function AccessoryRequestFormPage() {
       setError("Please select an approver.");
       return;
     }
-    if (formState.userId === formState.managerId) {
-      setError("Requester cannot be the same as the approver.");
-      return;
-    }
+    // if (formState.userId === formState.managerId) {
+    //   setError("Requester cannot be the same as the approver.");
+    //   return;
+    // }
     // Only require a pick when this category actually offers choices.
     if (
       optionLabels.length > 0 &&
@@ -138,8 +154,14 @@ export default function AccessoryRequestFormPage() {
       requestKind: "ACCESSORY",
       requestType: effectiveRequestType,
       accessoryOption: formState.somethingElse ? null : formState.accessoryOption,
-      reason: formState.reason,
-      preferredModel: formState.preferredModel,
+      // Both are non-standard-only fields, and the toggle hides them the moment
+      // the request resolves to STANDARD — so anything still sitting in state
+      // was typed before an option was picked and no longer describes the
+      // request. Sending it would put orphaned prose in the Reason column of a
+      // row whose reason is "it's the standard option".
+      reason: effectiveRequestType === "NON_STANDARD" ? formState.reason : "",
+      preferredModel:
+        effectiveRequestType === "NON_STANDARD" ? formState.preferredModel : "",
       manager: formState.manager,
       managerId: formState.managerId,
     };
@@ -311,8 +333,18 @@ export default function AccessoryRequestFormPage() {
                 value={effectiveRequestType}
                 reason={formState.reason}
                 preferredModel={formState.preferredModel}
-                locked={formState.somethingElse}
-                lockedHint={'"Something else" is always a non-standard request.'}
+                lockedTo={
+                  formState.somethingElse
+                    ? "NON_STANDARD"
+                    : hasNamedOption
+                    ? "STANDARD"
+                    : undefined
+                }
+                lockedHint={
+                  formState.somethingElse
+                    ? '"Something else" is always a non-standard request.'
+                    : `${formState.accessoryOption} is a standard option, so this request is standard.`
+                }
                 onChange={(val) =>
                   setFormState((prev) => ({ ...prev, requestType: val }))
                 }

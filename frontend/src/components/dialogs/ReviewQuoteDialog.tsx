@@ -219,7 +219,7 @@ export default function ReviewQuoteDialog({
           </div>
         </div>
 
-        <div className="bg-modal-surface-elevated border border-modal-border/20 rounded-lg divide-y divide-modal-border/10">
+        <div className="bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg divide-y divide-modal-border/10">
           {[
             { label: "For", value: `${request?.userName}'s ${request?.categoryName}` },
             { label: "Supplier", value: quote.supplier },
@@ -243,7 +243,7 @@ export default function ReviewQuoteDialog({
           <button
             type="button"
             onClick={handleViewDocument}
-            className="w-full flex items-center gap-3 rounded-lg border border-modal-border/30 bg-modal-surface-elevated px-4 py-3 text-sm text-modal-text-primary hover:border-modal-brand/40 hover:cursor-pointer transition-colors"
+            className="w-full flex items-center gap-3 rounded-lg border border-modal-border/30 bg-modal-surface-elevated/50 px-4 py-3 text-sm text-modal-text-primary hover:border-modal-brand/40 hover:cursor-pointer transition-colors"
           >
             <span className="material-symbols-outlined !text-[20px] shrink-0 text-modal-text-accent">
               description
@@ -284,7 +284,7 @@ export default function ReviewQuoteDialog({
             rows={4}
             autoFocus
             placeholder="e.g. Too expensive for this quarter — resubmit next period."
-            className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20 resize-none"
+            className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20 resize-none"
           />
           <p className="text-[11px] text-info-light mt-1 ml-1">
             Shown to {request?.userName} in the email telling them the request

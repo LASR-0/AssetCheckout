@@ -62,7 +62,7 @@ export default function ShipDialog({ request, open, onOpenChange, onConfirm }: P
               value={trackingUrl}
               onChange={(e) => setTrackingUrl(e.target.value)}
               placeholder="e.g. https://auspost.com.au/mypost/track"
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
             />
           </div>
 
@@ -74,7 +74,7 @@ export default function ShipDialog({ request, open, onOpenChange, onConfirm }: P
               value={trackingCode}
               onChange={(e) => setTrackingCode(e.target.value)}
               placeholder="e.g. AP1234567890"
-              className="w-full bg-modal-surface-elevated border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
+              className="w-full bg-modal-surface-elevated/50 border border-modal-border/20 rounded-lg py-3 px-4 text-modal-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-modal-brand/20"
             />
           </div>
         </div>

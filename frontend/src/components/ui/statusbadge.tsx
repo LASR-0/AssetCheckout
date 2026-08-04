@@ -22,6 +22,8 @@ export type FulfilmentInput = {
   shippedAt?: string | null;
   collectionReadyAt?: string | null;
   receivedAt?: string | null;
+  /** CORRECTION rows have no fulfilment chain — see the guard below. */
+  requestKind?: string | null;
 };
 
 export type FulfilmentStage = {
@@ -46,6 +48,30 @@ export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
   const receivedAt = request.receivedAt ?? null;
 
   const isCompleted = request.status === "COMPLETED";
+
+  // CORRECTIONS HAVE NO FULFILMENT CHAIN. Nothing is ever shipped, prepared or
+  // collected for one — it is applied to Snipe and finished. But a resolved
+  // correction is COMPLETED with no shipping stamps, which is byte-for-byte
+  // what "fulfilled, waiting for IT to prepare it" looks like, so the
+  // derivation below reads it as ASSIGNED. That is why the home page showed
+  // Assigned for corrections the request table showed as Completed: the table
+  // returns early for CORRECTION rows before it uses any of this, the home
+  // page had no such guard.
+  //
+  // Fixed HERE rather than at the second call site, because the guard is only
+  // reliable if it can't be forgotten by the next caller. A correction's
+  // status is its own answer, so it is passed straight through.
+  if (request.requestKind === "CORRECTION") {
+    return {
+      isCompleted,
+      isCollectAwaitingPrep: false,
+      isReadyToCollect: false,
+      isShipAwaitingPrep: false,
+      isShipped: false,
+      isReceivedOrCollected: false,
+      badgeKey: request.status,
+    };
+  }
 
   const isCollectAwaitingPrep =
     isCompleted && !needsShipping && !collectionReadyAt && !receivedAt;
@@ -147,21 +173,42 @@ const labelMap: Record<string, string> = {
   ASSIGNED: "Assigned",
 };
 
-// Theme-aware status tokens (see index.css): saturated originals on the
-// light theme, pastels on dark. Hue lives in CSS — only opacity here.
+// ── Three colours, not twelve ──
+//
+//  Every phase resolves to one of three intents (see index.css):
+//
+//    done      the request has cleared IT — approved, dispatched, finished
+//    progress  somebody still owes an action on it
+//    stop      it is dead
+//
+//  This replaced a scheme where each stage carried its own hue. Eleven colours
+//  across a list is not eleven pieces of information; a person scanning the
+//  table is asking one question — does this row need me? — and the colour now
+//  answers exactly that, with the LABEL carrying which stage it is. It also
+//  ends the collision where a stage colour appeared elsewhere on the same row
+//  meaning something unrelated: "Ready to collect" and the "Mark ready" action
+//  shared a violet with nothing to do with each other.
+//
+//  ASSIGNED is the one that looks misplaced and isn't. It means fulfilled but
+//  not yet prepped, so IT still owes the shipping or collection step — hence
+//  progress, while everything after it is done.
+const DONE = { bg: "bg-intent-done/15", text: "text-intent-done" };
+const PROGRESS = { bg: "bg-intent-progress/15", text: "text-intent-progress" };
+const STOP = { bg: "bg-intent-stop/15", text: "text-intent-stop" };
+
 const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
-  APPROVED: { bg: "bg-status-approved/15", text: "text-status-approved", icon: "schedule" },
-  COMPLETED: { bg: "bg-status-success/15", text: "text-status-success", icon: "check_circle" },
-  REJECTED: { bg: "bg-status-error/15", text: "text-status-error", icon: "cancel" },
-  PENDING: { bg: "bg-status-pending/15", text: "text-status-pending", icon: "schedule" },
-  AWAITING_IT: { bg: "bg-status-awaiting-it/15", text: "text-status-awaiting-it", icon: "shield_person" },
-  AWAITING_QUOTE: { bg: "bg-status-pending/15", text: "text-status-pending", icon: "request_quote" },
-  READY_TO_COLLECT: { bg: "bg-status-collect/15", text: "text-status-collect", icon: "package_2" },
-  READY_TO_SHIP: { bg: "bg-status-ship/15", text: "text-status-ship", icon: "local_shipping" },
-  SHIPPED: { bg: "bg-status-shipped/15", text: "text-status-shipped", icon: "local_shipping" },
-  COLLECTED: { bg: "bg-status-success/15", text: "text-status-success", icon: "check_circle" },
-  RECEIVED: { bg: "bg-status-success/15", text: "text-status-success", icon: "check_circle" },
-  ASSIGNED: { bg: "bg-status-assigned/15", text: "text-status-assigned", icon: "assignment_ind" },
+  APPROVED: { ...DONE, icon: "schedule" },
+  COMPLETED: { ...DONE, icon: "check_circle" },
+  REJECTED: { ...STOP, icon: "cancel" },
+  PENDING: { ...PROGRESS, icon: "schedule" },
+  AWAITING_IT: { ...PROGRESS, icon: "shield_person" },
+  AWAITING_QUOTE: { ...PROGRESS, icon: "request_quote" },
+  READY_TO_COLLECT: { ...DONE, icon: "package_2" },
+  READY_TO_SHIP: { ...DONE, icon: "local_shipping" },
+  SHIPPED: { ...DONE, icon: "local_shipping" },
+  COLLECTED: { ...DONE, icon: "check_circle" },
+  RECEIVED: { ...DONE, icon: "check_circle" },
+  ASSIGNED: { ...PROGRESS, icon: "assignment_ind" },
 };
 
 export function StatusBadge({ status }: { status: string }) {
