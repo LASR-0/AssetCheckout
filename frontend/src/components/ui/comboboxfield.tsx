@@ -38,15 +38,20 @@ import {
 //  context; `size="normal"` matches the dialog form input.
 ///  +-----------------------------------------------------------------+
 
+// No ring classes on either half. The field used to carry `!ring-purple-900`,
+// which did nothing on its own — it set --tw-ring-color while ComboboxChips
+// supplied the width via `focus-within:ring-3`. Together they were the purple
+// focus ring. The width is gone from the primitive now, so the content
+// classes' `!outline-0 !ring-0` overrides have nothing left to suppress.
 const INPUT_CLASS_NORMAL =
-  "text-on-surface-variant bg-surface-container-low/30 !ring-purple-900 p-2 h-12 border-1 !border-outline w-full";
+  "text-on-surface-variant bg-surface-container-low/30 p-2 h-12 border-1 !border-outline w-full";
 const INPUT_CLASS_COMPACT =
-  "text-on-surface-variant bg-surface-container-low/30 border border-outline !ring-purple-900 px-2 py-1.5 text-sm w-full";
+  "text-on-surface-variant bg-surface-container-low/30 border border-outline px-2 py-1.5 text-sm w-full";
 
 const CONTENT_CLASS_NORMAL =
-  "bg-surface !outline-0 !ring-0 !border-1 !border-gray-200 !text-gray-400 mt-3 hover:cursor-pointer";
+  "bg-surface !border-1 !border-gray-200 !text-gray-400 mt-3 hover:cursor-pointer";
 const CONTENT_CLASS_COMPACT =
-  "bg-surface !outline-0 !ring-0 !border-1 !border-gray-200 mt-2 hover:cursor-pointer";
+  "bg-surface !border-1 !border-gray-200 mt-2 hover:cursor-pointer";
 
 const ITEM_CLASS_NORMAL =
   "hover:cursor-pointer hover:text-shadcn-text hover:bg-shadcn-background";
