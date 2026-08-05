@@ -32,16 +32,28 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
 
   const [openRequest, setOpenRequest] = useState(false);
   const [openPage, setOpenPage] = useState(false);
-  // IN_PROGRESS is a synthetic option: it spans PENDING + APPROVED, which the
-  // backend's single-status filter can't express, so the page resolves it
-  // client-side. It exists so the home page's "In progress" tile has a
-  // destination that shows exactly what it counted.
+  // One entry per badge the table can show, in lifecycle order, because the
+  // four raw RequestStatus values couldn't distinguish the stages people
+  // actually chase — RequestStatus.COMPLETED covers "checked out but still on a
+  // desk in IT", "in the post" and "in the requester's hands" alike. Every
+  // value here is a stage key from deriveStage (statusbadge.tsx) and the labels
+  // match the badges exactly, so a filter reads as "show me the rows with this
+  // badge". Filtering is entirely client-side now — see RequestsTablePage.
+  //
+  // Two synthetic groups, marked so they read as spans rather than stages:
+  //   IN_PROGRESS  everything still in flight (the home page's tile links here)
+  //   DONE         the terminal stages, i.e. the requester actually has it
   const statusOptions = [
     { label: "All", value: "ALL", icon: "list" },
     { label: "In progress", value: "IN_PROGRESS", icon: "pending" },
     { label: "Pending", value: "PENDING", icon: "schedule" },
-    { label: "Approved", value: "APPROVED", icon: "check_circle" },
-    { label: "Completed", value: "COMPLETED", icon: "task_alt" },
+    { label: "Awaiting IT", value: "AWAITING_IT", icon: "shield_person" },
+    { label: "Approved", value: "APPROVED", icon: "schedule" },
+    { label: "Quote with manager", value: "AWAITING_QUOTE", icon: "request_quote" },
+    { label: "Assigned", value: "ASSIGNED", icon: "assignment_ind" },
+    { label: "Ready to collect", value: "READY_TO_COLLECT", icon: "package_2" },
+    { label: "Shipped", value: "SHIPPED", icon: "local_shipping" },
+    { label: "Completed", value: "DONE", icon: "task_alt" },
     { label: "Rejected", value: "REJECTED", icon: "cancel" },
   ];
   const pageSizeOptions = [
@@ -137,7 +149,9 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                       </TooltipContent>
                     </Tooltip>
 
-                    <PopoverContent className="w-40 bg-surface p-1">
+                    {/* Wider and capped: the list is eleven stages now, and
+                        "Quote with manager" doesn't fit w-40. */}
+                    <PopoverContent className="w-56 max-h-80 overflow-y-auto bg-surface p-1">
                       {statusOptions.map((s) => (
                         <button
                           key={s.value}

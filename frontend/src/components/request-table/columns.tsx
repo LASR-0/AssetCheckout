@@ -4,7 +4,7 @@ import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
-import { StatusBadge, deriveFulfilment } from "@/components/ui/statusbadge";
+import { StatusBadge, deriveFulfilment, deriveStage } from "@/components/ui/statusbadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Role } from "@/types/authType";
 
@@ -510,10 +510,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         </ActionRow>
       );
     }
-    if (isStandardAwaitingIT) {
-      return <BadgeWithTooltip status="AWAITING_IT" />;
-    }
-    return <BadgeWithTooltip status={requestStatus} />;
+    return <BadgeWithTooltip status={deriveStage(request)} />;
   }
 
   // ──────────────────────────────────────────────────
@@ -668,11 +665,11 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         </ActionRow>
       );
     }
-    return <BadgeWithTooltip status={requestStatus} />;
+    return <BadgeWithTooltip status={deriveStage(request)} />;
   }
 
   // REQUESTER and others on non-completed states: badge only.
-  return <BadgeWithTooltip status={requestStatus} />;
+  return <BadgeWithTooltip status={deriveStage(request)} />;
 }
 
 // --- Column definitions ---

@@ -9,6 +9,7 @@ import ShipDialog from "@/components/dialogs/ShipDialog";
 import { getRequests } from "@/api/requests";
 import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
+import { deriveStage, isDoneStage } from "@/components/ui/statusbadge";
 import { getColumnVisibility } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
@@ -23,24 +24,39 @@ import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 
 /**
- * Filter values the status dropdown can hold. IN_PROGRESS is synthetic — it
- * means PENDING + APPROVED, which the backend's single-status query param
- * can't express, so it is resolved client-side (see serverStatus /
- * visibleRequests below). Anything not in this list is ignored when it
- * arrives via the URL, so a stale or hand-edited link falls back to ALL
- * rather than filtering to nothing.
+ * Filter values the status dropdown can hold — one per badge the table shows,
+ * plus two synthetic spans. These are STAGE keys from deriveStage, not raw
+ * RequestStatus values, so the whole filter is resolved client-side (see
+ * visibleRequests below) rather than being handed to the backend's
+ * single-status query param.
+ *
+ * That's deliberate. RequestStatus.COMPLETED is stamped when IT checks the
+ * asset out of Snipe, which is several steps short of the requester having it,
+ * so a server-side status filter can't distinguish the stages people actually
+ * chase. Safe to do here because the requests endpoint isn't paginated — we
+ * already hold every row the actor can see, and the table paginates locally.
+ *
+ * Anything not in this list is ignored when it arrives via the URL, so a stale
+ * or hand-edited link falls back to ALL rather than filtering to nothing.
  */
 const SELECTABLE_STATUSES = [
   "ALL",
   "IN_PROGRESS",
   "PENDING",
+  "AWAITING_IT",
   "APPROVED",
-  "COMPLETED",
+  "AWAITING_QUOTE",
+  "ASSIGNED",
+  "READY_TO_COLLECT",
+  "SHIPPED",
+  "DONE",
   "REJECTED",
+  // Accepted for backwards compatibility only: links minted before the stage
+  // filter existed carry ?status=COMPLETED, and they meant "finished", which
+  // is what DONE now means. Normalised on read below so it never reaches the
+  // dropdown as an unmatched value.
+  "COMPLETED",
 ];
-
-/** The two statuses the home page's "In progress" tile counts. */
-const IN_PROGRESS_STATUSES = ["PENDING", "APPROVED"];
 
 export default function RequestTablePage() {
   const [requests, setRequests] = useState<Request[]>([]);
@@ -52,9 +68,9 @@ export default function RequestTablePage() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState(() => {
     const requested = searchParams.get("status");
-    return requested && SELECTABLE_STATUSES.includes(requested)
-      ? requested
-      : "ALL";
+    if (!requested || !SELECTABLE_STATUSES.includes(requested)) return "ALL";
+    // Legacy ?status=COMPLETED means "finished", which is DONE's job now.
+    return requested === "COMPLETED" ? "DONE" : requested;
   });
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [page, setPage] = useState(1);
@@ -99,7 +115,9 @@ export default function RequestTablePage() {
   useEffect(() => {
     loadRequests();
     loadTiers();
-  }, [status, page]);
+    // No longer keyed on `status` — the fetch is unfiltered and narrowing is
+    // a pure client-side derivation, so changing the filter shouldn't refetch.
+  }, [page]);
 
   useEffect(() => {
   let cancelled = false;
@@ -139,14 +157,12 @@ export default function RequestTablePage() {
 
   async function loadRequests() {
     try {
-      // IN_PROGRESS spans two statuses, so it can't go to the server — fetch
-      // unfiltered and narrow client-side. Safe because this endpoint is not
+      // Always unfiltered. The dropdown now selects a derived STAGE, which the
+      // backend's single-status param can't express at all, so narrowing
+      // happens in visibleRequests below. Safe because this endpoint is not
       // paginated (findMany with no take), so we already hold every row the
       // actor can see and the table paginates locally.
-      const serverStatus =
-        status === "ALL" || status === "IN_PROGRESS" ? undefined : status;
-
-      const data = await getRequests({ status: serverStatus });
+      const data = await getRequests({});
 
       setRequests(data.requests);
     } catch (err) {
@@ -155,18 +171,26 @@ export default function RequestTablePage() {
   }
 
   /**
-   * Rows handed to the table. Only IN_PROGRESS narrows here — every other
-   * value was already applied by the server, so this is a pass-through and
-   * doesn't double-filter. Narrowing before the table means TanStack's
-   * pagination and the filtered-count readout both reflect it for free.
+   * Rows handed to the table, narrowed to the selected stage. Narrowing before
+   * the table means TanStack's pagination and the filtered-count readout both
+   * reflect it for free.
+   *
+   * deriveStage is the same function the badge uses, so "filter to Shipped"
+   * and "rows showing the Shipped badge" cannot disagree — which is the whole
+   * reason the stage is derived in one place rather than stored per row.
    */
-  const visibleRequests = useMemo(
-    () =>
-      status === "IN_PROGRESS"
-        ? requests.filter((r) => IN_PROGRESS_STATUSES.includes(r.status))
-        : requests,
-    [requests, status]
-  );
+  const visibleRequests = useMemo(() => {
+    if (status === "ALL") return requests;
+
+    return requests.filter((r) => {
+      const stage = deriveStage(r);
+      if (status === "DONE") return isDoneStage(stage);
+      // In flight: anything that hasn't landed and wasn't turned down.
+      if (status === "IN_PROGRESS")
+        return !isDoneStage(stage) && stage !== "REJECTED";
+      return stage === status;
+    });
+  }, [requests, status]);
 
   // -----------------------------
   // ACTIONS
@@ -433,7 +457,7 @@ export default function RequestTablePage() {
         <div className="text-center mb-15 pt-28">
           <div className="flex items-center justify-center">
             <span className="material-symbols-outlined mx-5 !text-4xl"> pending_actions </span>
-            <h1 className="text-4xl font-bold">Request Log</h1>
+            <h1 className="text-4xl text-nav-tab-selected font-bold">Request Log</h1>
           </div>
           <p className="text-info-light mt-2">
             Approvals, quotes and record corrections for devices and accessories.

@@ -108,6 +108,80 @@ export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
   };
 }
 
+// ── Full lifecycle stage derivation ──
+//
+//  deriveFulfilment above only splits the tail of the lifecycle (what happens
+//  after IT checks the thing out). deriveStage covers the WHOLE of it, and is
+//  the single answer to "what stage is this request at" for both the badge and
+//  the requests-table filter.
+//
+//  Why derived rather than stored: every stage below is already a deterministic
+//  read of data we hold — timestamps, the quote's own status, the ModelRequest's
+//  own status. Promoting them to RequestStatus enum values would mean the same
+//  fact written in two places, and ~25 `status === "COMPLETED"` guards in
+//  backend/src/services/request.ts each becoming a place where a missed write
+//  silently strands a request. The timestamps stay authoritative; this reads
+//  them.
+//
+//  Note what this fixes: RequestStatus.COMPLETED does NOT mean the request is
+//  complete. It's stamped the moment IT checks the asset out of Snipe, with the
+//  whole ship/collect chain still ahead of it. So a raw status filter put
+//  "assigned but sitting on a desk in IT", "shipped, in transit" and "in the
+//  requester's hands" into one bucket. Only COLLECTED/RECEIVED are terminal —
+//  see isDoneStage.
+
+export type StageInput = FulfilmentInput & {
+  requestType?: string | null;
+  adminApprovedAt?: string | null;
+  quoteDetail?: { status?: string | null } | null;
+  modelRequest?: { status?: string | null } | null;
+};
+
+export function deriveStage(request: StageInput): string {
+  if (request.status === "REJECTED") return "REJECTED";
+
+  // Corrections have no provisioning or fulfilment chain — they're applied to
+  // Snipe and finished — so their status IS their stage. Same reasoning as the
+  // guard inside deriveFulfilment, and it has to come before the APPROVED
+  // branch below: a correction's requestType is CORRECTION and its
+  // adminApprovedAt is never set, which would otherwise read as AWAITING_IT.
+  if (request.requestKind === "CORRECTION") return request.status;
+
+  if (request.status === "COMPLETED") return deriveFulfilment(request).badgeKey;
+
+  if (request.status === "APPROVED") {
+    // Stalled on the manager's answer to a cost — outside IT's hands, and the
+    // one stage nobody in IT can advance. Checked first because a request
+    // sitting here also satisfies the ModelRequest test below.
+    if (request.quoteDetail?.status === "SENT") return "AWAITING_QUOTE";
+
+    // Manager has approved; IT hasn't signed off yet. Standard requests record
+    // that sign-off on adminApprovedAt, non-standard ones by advancing the
+    // ModelRequest off PENDING — different mechanics, same stage.
+    if (request.requestType === "STANDARD" && !request.adminApprovedAt)
+      return "AWAITING_IT";
+    if (request.modelRequest?.status === "PENDING") return "AWAITING_IT";
+
+    // Past IT sign-off, still being provisioned: creating the model, filling in
+    // asset details, selecting the accessory, waiting on stock. Deliberately
+    // one stage rather than four — those are steps in IT's own queue and the
+    // row's action already names which one, so splitting them would add filter
+    // entries nobody outside IT can act on.
+    return "APPROVED";
+  }
+
+  return request.status;
+}
+
+/** Terminal stages: the requester actually has the thing (or the correction was
+ *  applied). Everything else is still in flight — which is the whole point of
+ *  the split, since RequestStatus.COMPLETED spans both. */
+const DONE_STAGES = new Set(["COLLECTED", "RECEIVED", "COMPLETED"]);
+
+export function isDoneStage(stage: string): boolean {
+  return DONE_STAGES.has(stage);
+}
+
 // ── Badge primitive ──
 //
 //  The single badge shell. `default` matches the requests-table badge

@@ -397,7 +397,14 @@ function renderMatchesTable(candidates: SnipeMatch[]) {
         <div className="bg-modal-surface-elevated/50 px-4 py-2 text-xs font-bold uppercase tracking-widest text-modal-text-secondary border-b border-modal-border/20">
           {candidates.length} match{candidates.length === 1 ? "" : "es"}
         </div>
-        <div className="divide-y divide-modal-border/10">
+        {/* Capped and scrolled, matching CreateAccessoryDialog. The dialog
+            primitive centres on -translate-y-1/2 with no max-height, so an
+            uncapped list doesn't scroll the modal — it grows it off both
+            edges of the viewport and the desktop path's overflow-hidden
+            clips the footer away. A broad manufacturer/model search
+            ("Dell" + "Latitude") returns dozens of matches and hits this
+            every time. */}
+        <div className="divide-y divide-modal-border/10 max-h-72 overflow-y-auto">
           {candidates.map((c) => {
             const noStock = c.hasAvailable === false;
             return (

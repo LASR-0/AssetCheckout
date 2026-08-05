@@ -273,7 +273,7 @@ export default function AccessoryRequestFormPage() {
           <div className="mb-10">
             <div className="flex flex-row">
               <span className="material-symbols-outlined mx-3 !text-4xl"> keyboard </span>
-              <h1 className="text-4xl font-bold flex tracking-tight mb-2">Checkout Accessory</h1>
+              <h1 className="text-4xl font-bold text-nav-selected flex tracking-tight mb-2">Checkout Accessory</h1>
             </div>
             <p className="text-info-light ml-5">
               Submit a request for a workplace accessory. Pick who it's for and

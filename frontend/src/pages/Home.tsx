@@ -4,7 +4,7 @@ import { getRequests } from "@/api/requests";
 import { getAssetCategories } from "@/api/categories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { useAuth } from "@/hooks/useAuth";
-import { StatusBadge, Badge, deriveFulfilment } from "@/components/ui/statusbadge";
+import { StatusBadge, Badge, deriveStage, isDoneStage } from "@/components/ui/statusbadge";
 import type { AssetCategory } from "@/types/categoriesType";
 import { getAccessoryCategoriesForMe } from "@/api/accessories";
 import type { AccessoryCategory } from "@/types/accessoriesType";
@@ -238,15 +238,15 @@ function formattedDate(): string {
  *
  * Returns undefined for an empty count, which leaves the tile unlinked.
  *
- * IN_PROGRESS is resolved client-side by the table (it means PENDING +
- * APPROVED, which the backend's single-status param can't express); the rest
- * are real statuses and filter server-side. Note the name is seeded into the
- * free-text filter, which matches any field — so it also catches rows where
- * this person is the MANAGER rather than the requester, and the table can show
- * more rows than the tile counted.
+ * All three values are stage filters resolved client-side by the table against
+ * deriveStage — the same function that counts the tiles here, so a tile and its
+ * destination can't disagree. Note the name is seeded into the free-text
+ * filter, which matches any field — so it also catches rows where this person
+ * is the MANAGER rather than the requester, and the table can show more rows
+ * than the tile counted.
  */
 function requestsLink(
-  status: "IN_PROGRESS" | "COMPLETED" | "REJECTED",
+  status: "IN_PROGRESS" | "DONE" | "REJECTED",
   count: number,
   name: string | null
 ): string | undefined {
@@ -267,14 +267,16 @@ function HomeHead({
   const { name } = useAuth();
   const firstName = name ? name.split(" ")[0] : null;
 
-  // No "needs input" state exists in the status model, so the snapshot is:
-  // in progress (PENDING + APPROVED — approved but not yet fulfilled is
-  // still in flight), completed, and rejected (attention-styled when > 0).
-  const inProgress = requests.filter(
-    (r) => r.status === "PENDING" || r.status === "APPROVED"
-  ).length;
-  const completed = requests.filter((r) => r.status === "COMPLETED").length;
-  const rejected = requests.filter((r) => r.status === "REJECTED").length;
+  // Counted on the derived STAGE, not the raw status. RequestStatus.COMPLETED
+  // is stamped when IT checks the thing out of Snipe — with the ship/collect
+  // chain still ahead of it — so counting it as "Completed" told people their
+  // request was done while the device was still sitting in IT. Only the
+  // terminal stages (collected/received, or an applied correction) count as
+  // done; assigned, ready-to-collect and shipped are still in flight.
+  const stages = requests.map(deriveStage);
+  const completed = stages.filter(isDoneStage).length;
+  const rejected = stages.filter((s) => s === "REJECTED").length;
+  const inProgress = stages.length - completed - rejected;
 
   return (
     <section className="pt-14 md:pt-20 pb-10 flex flex-col md:flex-row md:items-end gap-8 md:gap-12">
@@ -315,7 +317,7 @@ function HomeHead({
           label="Completed"
           loading={loading}
           complete={completed > 0}
-          to={requestsLink("COMPLETED", completed, name)}
+          to={requestsLink("DONE", completed, name)}
         />
         <Stat
           num={rejected}
@@ -797,7 +799,7 @@ function RecentRequests({
                   {r.userName === name ? "Yourself" : r.userName}
                 </span>
                 <span>
-                  <StatusBadge status={deriveFulfilment(r).badgeKey} />
+                  <StatusBadge status={deriveStage(r)} />
                 </span>
               </Link>
             ))}
