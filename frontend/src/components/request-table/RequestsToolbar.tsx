@@ -26,9 +26,14 @@ type Props = {
   selectedTier: string;
   tiers: string[];
   role: Role;
+  /** Set when the table is pinned to one request via ?requestId — see
+   *  RequestsTablePage. Renders a dismissible chip so the narrowing is visible
+   *  and reversible; without it a single-row table looks like a broken filter. */
+  pinnedId?: number | null;
+  onClearPin?: () => void;
 };
 
-export default function RequestsToolbar({ search, setSearch, status, setStatus, pageSize, setPageSize, setPage, }: Props) {
+export default function RequestsToolbar({ search, setSearch, status, setStatus, pageSize, setPageSize, setPage, pinnedId, onClearPin }: Props) {
 
   const [openRequest, setOpenRequest] = useState(false);
   const [openPage, setOpenPage] = useState(false);
@@ -82,6 +87,27 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
             className="block w-full pl-10 pr-3 py-2 border-transparent bg-surface-container-lowest rounded-full shadow-sm focus:ring-primary focus:border-primary text-sm font-body outline-none transition-all"
           />
         </div>
+
+        {/* PINNED-REQUEST CHIP — only while ?requestId is narrowing the table */}
+        {pinnedId != null && (
+          <div className="flex w-full sm:w-auto items-center gap-2 rounded-full border border-outline bg-surface-container-lowest px-3 py-1.5 text-sm">
+            <span className="material-symbols-outlined !text-[16px] text-info-light">
+              filter_alt
+            </span>
+            <span className="text-on-surface-variant whitespace-nowrap">
+              Showing request{" "}
+              <span className="font-mono font-semibold">#{pinnedId}</span>
+            </span>
+            <button
+              type="button"
+              onClick={onClearPin}
+              title="Show all requests"
+              className="ml-auto sm:ml-1 inline-flex items-center text-info-light hover:text-on-background hover:cursor-pointer transition-colors"
+            >
+              <span className="material-symbols-outlined !text-[16px]">close</span>
+            </button>
+          </div>
+        )}
 
           <div className="flex gap-3 w-full sm:w-auto">
 

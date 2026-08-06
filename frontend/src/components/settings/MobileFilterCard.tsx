@@ -105,7 +105,14 @@ export default function MobileFilterCard() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-2">
+          {/* Truncates instead of wrapping: at narrow widths this label is the
+              only one long enough to run onto a second line, which pushed its
+              input out of alignment with the country code input beside it.
+              `title` keeps the full text reachable once it's clipped. */}
+          <label
+            title="Mobile leading digit"
+            className="block truncate text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-2"
+          >
             Mobile leading digit
           </label>
           <input

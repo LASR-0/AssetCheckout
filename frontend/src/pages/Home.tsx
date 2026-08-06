@@ -747,8 +747,12 @@ function RecentRequests({
         title="Your recent requests"
         subtitle="The last few things you've asked for."
         actions={
+          // Seeds the table's free-text search with the person's name, the
+          // same mechanism the status tiles above use — so "View all" lands on
+          // their own rows rather than the whole org's log. Falls back to the
+          // unscoped table when auth hasn't resolved a name.
           <Link
-            to="/requests"
+            to={name ? `/requests?q=${encodeURIComponent(name)}` : "/requests"}
             className="text-sm font-semibold text-info-light hover:text-on-background transition-colors"
           >
             View all →
@@ -781,9 +785,15 @@ function RecentRequests({
 
           {!loading &&
             recent.map((r) => (
+              // Deep-links to just this row. NOT `?q=${r.id}` — the table's
+              // free-text filter deliberately skips `id` and every `*Id` key
+              // (see isNoiseKey in RequestsTable), so a numeric search would
+              // match on prices and quantities instead. ?requestId is an exact
+              // match resolved separately, with its own clear affordance in the
+              // toolbar.
               <Link
                 key={r.id}
-                to="/requests"
+                to={`/requests?requestId=${r.id}`}
                 className={`${RECENT_GRID} items-center px-3 py-3 border-t border-outline text-sm hover:bg-surface-container-low/40 transition-colors`}
               >
                 <span className="flex items-center gap-2.5 font-semibold">

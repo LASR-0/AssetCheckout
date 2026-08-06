@@ -65,7 +65,7 @@ export default function RequestTablePage() {
   // ?status=IN_PROGRESS&q=<name> is what the home page's "In progress" tile
   // links to. Lazy initialisers, so this happens once on mount and never
   // fights the user's own filter changes afterwards.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState(() => {
     const requested = searchParams.get("status");
     if (!requested || !SELECTABLE_STATUSES.includes(requested)) return "ALL";
@@ -73,6 +73,20 @@ export default function RequestTablePage() {
     return requested === "COMPLETED" ? "DONE" : requested;
   });
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+
+  // ?requestId=<n> pins the table to one row — what the home page's recent
+  // requests list links to. Kept separate from `search` because the free-text
+  // filter deliberately ignores `id` and every `*Id` key (isNoiseKey in
+  // RequestsTable), so searching a bare number matches prices and quantities
+  // instead of the request you clicked. Anything unparseable is ignored, so a
+  // hand-edited link falls back to the full table rather than an empty one.
+  const [pinnedId, setPinnedId] = useState<number | null>(() => {
+    const raw = searchParams.get("requestId");
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) ? parsed : null;
+  });
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
@@ -171,18 +185,26 @@ export default function RequestTablePage() {
   }
 
   /**
-   * Rows handed to the table, narrowed to the selected stage. Narrowing before
-   * the table means TanStack's pagination and the filtered-count readout both
-   * reflect it for free.
+   * Rows handed to the table, narrowed to the pinned request (if any) and then
+   * the selected stage. Narrowing before the table means TanStack's pagination
+   * and the filtered-count readout both reflect it for free.
+   *
+   * The pin narrows FIRST and the stage filter still applies on top, rather
+   * than short-circuiting it. That keeps the dropdown behaving the same whether
+   * or not a request is pinned — picking a stage the pinned row isn't in shows
+   * an empty table with the pin chip still visible above it, which says why.
    *
    * deriveStage is the same function the badge uses, so "filter to Shipped"
    * and "rows showing the Shipped badge" cannot disagree — which is the whole
    * reason the stage is derived in one place rather than stored per row.
    */
   const visibleRequests = useMemo(() => {
-    if (status === "ALL") return requests;
+    const scoped =
+      pinnedId === null ? requests : requests.filter((r) => r.id === pinnedId);
 
-    return requests.filter((r) => {
+    if (status === "ALL") return scoped;
+
+    return scoped.filter((r) => {
       const stage = deriveStage(r);
       if (status === "DONE") return isDoneStage(stage);
       // In flight: anything that hasn't landed and wasn't turned down.
@@ -190,7 +212,17 @@ export default function RequestTablePage() {
         return !isDoneStage(stage) && stage !== "REJECTED";
       return stage === status;
     });
-  }, [requests, status]);
+  }, [requests, status, pinnedId]);
+
+  /** Drop the pin and strip it from the URL, so a refresh doesn't reinstate a
+   *  filter the user just dismissed. Other params (status, q) are preserved. */
+  function clearPin() {
+    setPinnedId(null);
+    setPage(1);
+    const next = new URLSearchParams(searchParams);
+    next.delete("requestId");
+    setSearchParams(next, { replace: true });
+  }
 
   // -----------------------------
   // ACTIONS
@@ -478,6 +510,8 @@ export default function RequestTablePage() {
             selectedTier={selectedTier}
             tiers={tiers}
             role={role}
+            pinnedId={pinnedId}
+            onClearPin={clearPin}
           />
 
           {/* TABLE */}
