@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import ComboboxField from "@/components/ui/comboboxfield";
 import {
   Tooltip,
   TooltipContent,
@@ -33,6 +34,12 @@ import { Badge } from "@/components/ui/statusbadge";
 //
 //  Feedback is structurally anonymous — there's no submitter column because
 //  the data simply doesn't carry one.
+//
+//  Filtering and pagination mirror the job history table (filters above the
+//  table, pager below, 20 rows a page) but run CLIENT-side: /api/feedback/all
+//  returns the whole set in one request and the distribution bar needs all of
+//  it anyway, so there's nothing to gain from paging the API. The bar and the
+//  CSV export stay unfiltered — they describe the whole data set, not the view.
 ///  +-----------------------------------------------------------------+
 
 // Response pills render through the shared <Badge> primitive with the
@@ -202,6 +209,35 @@ function FeedbackDistributionBar({
   );
 }
 
+///  +-----------------------------------------------------------------+
+///  |                     FILTERS & PAGINATION                        |
+///  +-----------------------------------------------------------------+
+//
+//  Same page size as the job history table so the two tables in Settings
+//  scroll identically. Filter labels map back to the enum values stored on
+//  the row; the sentiment options are derived from RESPONSE_DISPLAY (in
+//  BAR_ORDER) so the dropdown labels can't drift from the pills.
+
+const PAGE_SIZE = 20;
+
+const RESPONSE_ALL = "All responses";
+const RESPONSE_LABEL_TO_ENUM: Record<string, FeedbackResponse | undefined> = {
+  [RESPONSE_ALL]: undefined,
+  ...Object.fromEntries(BAR_ORDER.map((key) => [RESPONSE_DISPLAY[key].label, key])),
+};
+const RESPONSE_ITEMS = Object.keys(RESPONSE_LABEL_TO_ENUM);
+
+// Comments are optional on a submission, so "did they write anything" is its
+// own dimension rather than a value of one of the response columns.
+type CommentsFilter = "with" | "without" | undefined;
+const COMMENTS_ALL = "All comments";
+const COMMENTS_LABEL_TO_ENUM: Record<string, CommentsFilter> = {
+  [COMMENTS_ALL]: undefined,
+  "With comments": "with",
+  "Without comments": "without",
+};
+const COMMENTS_ITEMS = Object.keys(COMMENTS_LABEL_TO_ENUM);
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -216,11 +252,41 @@ export default function FeedbackSettingsCard() {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  // View state for the table — filters + page. Purely client-side over `rows`.
+  const [page, setPage] = useState(1);
+  const [requestingFilter, setRequestingFilter] = useState<FeedbackResponse | undefined>();
+  const [overallFilter, setOverallFilter] = useState<FeedbackResponse | undefined>();
+  const [commentsFilter, setCommentsFilter] = useState<CommentsFilter>(undefined);
+
   // Both response dimensions feed the one bar. To visualise a single
-  // question instead, map just that field here.
+  // question instead, map just that field here. Deliberately built from the
+  // unfiltered rows — the bar summarises everything collected, not the page.
   const distributionValues = useMemo(
     () => rows.flatMap((r) => [r.improvedRequesting, r.improvesItOverall]),
     [rows]
+  );
+
+  const filteredRows = useMemo(
+    () =>
+      rows.filter((r) => {
+        if (requestingFilter && r.improvedRequesting !== requestingFilter) return false;
+        if (overallFilter && r.improvesItOverall !== overallFilter) return false;
+        // Treat a whitespace-only comment as no comment.
+        const hasComments = Boolean(r.comments?.trim());
+        if (commentsFilter === "with" && !hasComments) return false;
+        if (commentsFilter === "without" && hasComments) return false;
+        return true;
+      }),
+    [rows, requestingFilter, overallFilter, commentsFilter]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  // Clamp rather than reset: filters already send us back to page 1, but a
+  // refetch can shrink the set underneath a page that's still selected.
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
 
   // Load the enabled state on mount.
@@ -239,6 +305,7 @@ export default function FeedbackSettingsCard() {
     let cancelled = false;
     setLoadingRows(true);
     setError(null);
+    setPage(1);
     getAllFeedback()
       .then((r) => {
         if (!cancelled) setRows(r.feedback);
@@ -352,6 +419,61 @@ export default function FeedbackSettingsCard() {
           </div>
 
           <CollapsibleTableSection title="Feedback Table">
+            {/* Filters — same layout as the job history table: a wrapping row
+                above the table, each change resetting back to page 1. */}
+            <div className="flex items-end gap-3 flex-wrap mb-4">
+              <div className="w-44">
+                <label className="block text-xs font-semibold text-info-light uppercase tracking-wider mb-1">
+                  Requesting
+                </label>
+                <ComboboxField
+                  items={RESPONSE_ITEMS}
+                  defaultValue={RESPONSE_ALL}
+                  keyHint="feedback-requesting-filter"
+                  size="compact"
+                  placeholder="Requesting"
+                  onSelect={(label) => {
+                    setRequestingFilter(RESPONSE_LABEL_TO_ENUM[label]);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              <div className="w-44">
+                <label className="block text-xs font-semibold text-info-light uppercase tracking-wider mb-1">
+                  IT Overall
+                </label>
+                <ComboboxField
+                  items={RESPONSE_ITEMS}
+                  defaultValue={RESPONSE_ALL}
+                  keyHint="feedback-overall-filter"
+                  size="compact"
+                  placeholder="IT Overall"
+                  onSelect={(label) => {
+                    setOverallFilter(RESPONSE_LABEL_TO_ENUM[label]);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              <div className="w-52">
+                <label className="block text-xs font-semibold text-info-light uppercase tracking-wider mb-1">
+                  Comments
+                </label>
+                <ComboboxField
+                  items={COMMENTS_ITEMS}
+                  defaultValue={COMMENTS_ALL}
+                  keyHint="feedback-comments-filter"
+                  size="compact"
+                  placeholder="Comments"
+                  onSelect={(label) => {
+                    setCommentsFilter(COMMENTS_LABEL_TO_ENUM[label]);
+                    setPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
             {/* The wrapper owns the border, radius, and clipping. Keeping them
                 off the <table> is what fixes the corner artifacts (square cell
                 backgrounds no longer poke through the rounded border) and the
@@ -378,17 +500,21 @@ export default function FeedbackSettingsCard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline">
-                    {rows.length === 0 ? (
+                    {pageRows.length === 0 ? (
                       <tr>
                         <td
                           colSpan={4}
                           className="px-4 py-10 text-center text-sm text-info-light"
                         >
-                          {loadingRows ? "Loading…" : "No feedback submitted yet"}
+                          {loadingRows
+                            ? "Loading…"
+                            : rows.length === 0
+                              ? "No feedback submitted yet"
+                              : "No feedback matches these filters"}
                         </td>
                       </tr>
                     ) : (
-                      rows.map((row) => (
+                      pageRows.map((row) => (
                         <tr
                           key={row.id}
                           className="hover:bg-surface-container-low/20 transition-colors"
@@ -416,6 +542,35 @@ export default function FeedbackSettingsCard() {
                 </table>
               </div>
             </div>
+
+            {/* Pagination — only once there's more than one page, matching the
+                job history table. */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between text-sm mt-4">
+                <span className="text-info-light">
+                  {filteredRows.length} response{filteredRows.length !== 1 ? "s" : ""}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-xs text-nav-tab-selected rounded-md bg-surface border border-outline/30 hover:brightness-95 hover:cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-info-light">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-xs rounded-md text-nav-tab-selected bg-surface border border-outline/30 hover:brightness-95 hover:cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </CollapsibleTableSection>
         </>
       )}
