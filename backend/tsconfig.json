@@ -12,5 +12,8 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["node_modules"]
+  // Tests are excluded from the emit, not just ignored: the Dockerfile
+  // compiles with plain `tsc` and then `--prod deploy`s, so a test file left
+  // in dist/ would be shipped alongside a vitest import that isn't installed.
+  "exclude": ["node_modules", "src/**/*.test.ts"]
 }

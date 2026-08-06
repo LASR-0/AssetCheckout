@@ -104,3 +104,11 @@ backend/cert/
 # SCRIPTS - scripts excluded / dev only no use in production
 #-----------------------------------------------------------------------------
 backend/src/scripts
+
+#-----------------------------------------------------------------------------
+# PROTOTYPE - Phase 5 troubleshooting design mockup, reference only
+#-----------------------------------------------------------------------------
+# Structural reference for the troubleshooting page, not shipped code. Delete
+# the folder and this rule together once the page is built.
+prototype/
+miramare-dark-theme.css
