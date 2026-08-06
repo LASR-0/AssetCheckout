@@ -72,42 +72,57 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
     <TooltipProvider delayDuration={200}>
       <div className="p-6 bg-surface-container-low flex flex-col sm:flex-row justify-between items-center gap-4 rounded-tl-xl rounded-tr-xl">
 
-        {/* SEARCH INPUT */}
-        <div className="relative w-full sm:max-w-xs">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <span className="material-symbols-outlined font-body !text-[16px]">
-              search
-            </span>
-          </span>
+        {/* LEFT GROUP — search, with the pinned-request chip beside it. Grouped
+            rather than left as siblings of the toolbar's own justify-between,
+            which parked the chip in the middle of the bar away from the filter
+            controls it belongs with. */}
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-3">
 
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search Requests"
-            className="block w-full pl-10 pr-3 py-2 border-transparent bg-surface-container-lowest rounded-full shadow-sm focus:ring-primary focus:border-primary text-sm font-body outline-none transition-all"
-          />
-        </div>
+          {/* SEARCH INPUT
+              sm:w-80 (an explicit 20rem), not the sm:max-w-xs it used to carry.
+              As a direct child of the toolbar, `w-full` resolved against the
+              full bar and the max-width capped it at 20rem. Inside this
+              shrink-to-fit group there's no percentage to resolve against, so
+              the same classes collapsed it to the placeholder's width. Stating
+              the width outright reproduces the original size and no longer
+              depends on what the parent happens to be. shrink-0 keeps the chip
+              from squeezing it. */}
+          <div className="relative w-full sm:w-80 sm:shrink-0">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="material-symbols-outlined font-body !text-[16px]">
+                search
+              </span>
+            </span>
 
-        {/* PINNED-REQUEST CHIP — only while ?requestId is narrowing the table */}
-        {pinnedId != null && (
-          <div className="flex w-full sm:w-auto items-center gap-2 rounded-full border border-outline bg-surface-container-lowest px-3 py-1.5 text-sm">
-            <span className="material-symbols-outlined !text-[16px] text-info-light">
-              filter_alt
-            </span>
-            <span className="text-on-surface-variant whitespace-nowrap">
-              Showing request{" "}
-              <span className="font-mono font-semibold">#{pinnedId}</span>
-            </span>
-            <button
-              type="button"
-              onClick={onClearPin}
-              title="Show all requests"
-              className="ml-auto sm:ml-1 inline-flex items-center text-info-light hover:text-on-background hover:cursor-pointer transition-colors"
-            >
-              <span className="material-symbols-outlined !text-[16px]">close</span>
-            </button>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search Requests"
+              className="block w-full pl-10 pr-3 py-2 border-transparent bg-surface-container-lowest rounded-full shadow-sm focus:ring-primary focus:border-primary text-sm font-body outline-none transition-all"
+            />
           </div>
-        )}
+
+          {/* PINNED-REQUEST CHIP — only while ?requestId is narrowing the table */}
+          {pinnedId != null && (
+            <div className="flex w-full sm:w-auto shrink-0 items-center gap-2 rounded-full border border-outline bg-surface-container-lowest px-3 py-1.5 text-sm">
+              <span className="material-symbols-outlined !text-[16px] text-info-light">
+                filter_alt
+              </span>
+              <span className="text-on-surface-variant whitespace-nowrap">
+                Showing request{" "}
+                <span className="font-mono font-semibold">#{pinnedId}</span>
+              </span>
+              <button
+                type="button"
+                onClick={onClearPin}
+                title="Show all requests"
+                className="ml-auto sm:ml-1 inline-flex items-center text-info-light hover:text-status-error hover:cursor-pointer transition-colors"
+              >
+                <span className="material-symbols-outlined !text-[16px]">close</span>
+              </button>
+            </div>
+          )}
+        </div>
 
           <div className="flex gap-3 w-full sm:w-auto">
 
