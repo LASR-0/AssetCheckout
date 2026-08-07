@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseContent, createDiskRepository } from "./repository.js";
+import { deviceKeyForCategoryName, deviceKeysForCategories } from "./deviceKeys.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |               TROUBLESHOOTING CONTENT VALIDATION                |
@@ -180,5 +181,104 @@ describe("repository queries", () => {
 
   it("returns no siblings for an unknown symptom", () => {
     expect(repo.getSiblingSymptoms("phone", "does-not-exist")).toEqual([]);
+  });
+});
+
+describe("snipe category names resolve to device keys", () => {
+  ///  The trap this guards. "Headphones" contains "phone", so a naive
+  ///  substring pass files every headset in the catalogue under mobiles —
+  ///  and it does it silently, producing a plausible-looking picker.
+  it("does not read headphone-family categories as phones", () => {
+    for (const name of ["Headphones", "Headsets", "Earphones", "USB Earbuds"]) {
+      expect(deviceKeyForCategoryName(name)).toBe("headphones");
+    }
+  });
+
+  it("maps the category names a Snipe instance actually uses", () => {
+    const cases: [string, string][] = [
+      ["Mobile Phones", "phone"],
+      ["iPhone", "phone"],
+      ["Smartphones", "phone"],
+      ["Laptops", "laptop"],
+      ["MacBook Pro", "laptop"],
+      ["Notebooks", "laptop"],
+      ["Desktops", "desktop"],
+      ["Workstations", "desktop"],
+      ["Tablets", "tablet"],
+      ["iPads", "tablet"],
+      ["Monitors", "monitor"],
+      ["Displays", "monitor"],
+      ["Keyboards", "keyboard"],
+      ["Mice", "mouse"],
+      ["Wireless Mouse", "mouse"],
+      ["Webcams", "webcam"],
+    ];
+
+    for (const [name, expected] of cases) {
+      expect(deviceKeyForCategoryName(name)).toBe(expected);
+    }
+  });
+
+  it("is case-insensitive", () => {
+    expect(deviceKeyForCategoryName("MOBILE PHONES")).toBe("phone");
+    expect(deviceKeyForCategoryName("laptops")).toBe("laptop");
+  });
+
+  it("returns null for categories that aren't troubleshootable devices", () => {
+    for (const name of ["Printers", "Docking Stations", "Licences", "Cables", "Servers"]) {
+      expect(deviceKeyForCategoryName(name)).toBeNull();
+    }
+  });
+
+  ///  Short tokens are matched as whole words. Without that, "pc" hits the
+  ///  middle of unrelated names and quietly turns them into desktops.
+  it("does not match short tokens inside longer words", () => {
+    expect(deviceKeyForCategoryName("PCB Test Rigs")).toBeNull();
+    expect(deviceKeyForCategoryName("Office PCs")).toBe("desktop");
+  });
+
+  it("collapses several categories onto one key and orders them consistently", () => {
+    const keys = deviceKeysForCategories([
+      { name: "Monitors" },
+      { name: "Android Phones" },
+      { name: "iPhones" },
+      { name: "Printers" },
+    ]);
+
+    // One phone entry despite two phone categories, printers dropped, and
+    // DEVICE_KEYS order rather than input order.
+    expect(keys).toEqual(["phone", "monitor"]);
+  });
+});
+
+describe("device picker derivation", () => {
+  it("marks devices with articles available and requestable-only ones disabled", () => {
+    const tiles = repo.buildPicker(["phone", "laptop", "monitor"]);
+
+    expect(tiles.map((t) => t.key)).toEqual(["laptop", "phone", "monitor"]);
+    expect(tiles.find((t) => t.key === "phone")!.available).toBe(true);
+    expect(tiles.find((t) => t.key === "laptop")!.available).toBe(false);
+  });
+
+  ///  The whole point of unioning content in rather than filtering by
+  ///  requestable: a device that stops being orderable must not take its
+  ///  articles out of reach with it.
+  it("keeps a covered device even when it is no longer requestable", () => {
+    const tiles = repo.buildPicker(["laptop"]);
+
+    expect(tiles.map((t) => t.key)).toContain("phone");
+    expect(tiles.find((t) => t.key === "phone")!.available).toBe(true);
+  });
+
+  it("names devices the content library has never heard of", () => {
+    const laptop = repo.buildPicker(["laptop"]).find((t) => t.key === "laptop")!;
+
+    expect(laptop.label).toBe("Laptops");
+    expect(laptop.labelSingular).toBe("laptop");
+    expect(laptop.symptomCount).toBe(0);
+  });
+
+  it("still offers covered devices when nothing is requestable", () => {
+    expect(repo.buildPicker([]).map((t) => t.key)).toEqual(["phone"]);
   });
 });

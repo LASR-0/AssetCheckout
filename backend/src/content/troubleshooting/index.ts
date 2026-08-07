@@ -16,7 +16,14 @@ export type {
   SymptomCategoryListing,
   SymptomSearchResult,
   DeviceSummary,
+  DevicePickerTile,
 } from "./repository.js";
+
+export {
+  DEVICE_LABELS,
+  deviceKeyForCategoryName,
+  deviceKeysForCategories,
+} from "./deviceKeys.js";
 
 export { DEVICE_KEYS } from "./schema.js";
 

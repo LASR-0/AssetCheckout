@@ -9,7 +9,7 @@ import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
 import JobHistoryTable from "@/components/settings/JobsHistoryTable";
 import JobStatusBar from "@/components/settings/JobStatusBar";
 import FeedbackSettingsCard from "@/components/settings/FeedbackSettingsCard";
-import CollapsibleTableSection from "@/components/settings/CollapsibleTable";
+import CollapsibleSection from "@/components/ui/collapsible-section";
 import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
 import MobileFilterCard from "@/components/settings/MobileFilterCard";
 import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
@@ -161,9 +161,9 @@ export default function SettingsPage() {
             <div className="mb-4">
               <JobStatusBar refreshKey={jobsRefreshKey} />
             </div>
-            <CollapsibleTableSection title="Jobs History Table">
+            <CollapsibleSection title="Jobs History Table">
               <JobHistoryTable refreshKey={jobsRefreshKey} />
-            </CollapsibleTableSection>
+            </CollapsibleSection>
           </div>
         </div>
       </SettingsSection>

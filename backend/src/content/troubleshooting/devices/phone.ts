@@ -19,8 +19,6 @@ import type { Device } from "../schema.js";
 
 const phone: Device = {
   key: "phone",
-  label: "Phones",
-  labelSingular: "phone",
   categories: [
     {
       id: "power",

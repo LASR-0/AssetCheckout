@@ -14,7 +14,7 @@ import {
   type FeedbackRow,
   type FeedbackResponse,
 } from "@/api/feedback";
-import CollapsibleTableSection from "./CollapsibleTable";
+import CollapsibleSection from "@/components/ui/collapsible-section";
 import { getDevHeaders } from "@/api/client";
 import { Badge } from "@/components/ui/statusbadge";
 
@@ -418,7 +418,7 @@ export default function FeedbackSettingsCard() {
             </button>
           </div>
 
-          <CollapsibleTableSection title="Feedback Table">
+          <CollapsibleSection title="Feedback Table">
             {/* Filters — same layout as the job history table: a wrapping row
                 above the table, each change resetting back to page 1. */}
             <div className="flex items-end gap-3 flex-wrap mb-4">
@@ -571,7 +571,7 @@ export default function FeedbackSettingsCard() {
                 </div>
               </div>
             )}
-          </CollapsibleTableSection>
+          </CollapsibleSection>
         </>
       )}
     </div>

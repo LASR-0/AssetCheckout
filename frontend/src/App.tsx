@@ -10,6 +10,8 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import LandingPage from "./pages/Home";
 import FeedbackPage from "./pages/FeedbackPage";
+import TroubleshootingPage from "./pages/TroubleshootingPage";
+import TroubleshootingArticlePage from "./pages/TroubleshootingArticlePage";
 import Footer from "./components/footer/Footer";
 
 function App() {
@@ -37,6 +39,20 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/feedback" element={
             <ProtectedRoute requireRole={false}><FeedbackPage /></ProtectedRoute>
+          } />
+          {/* Troubleshooting. Three real routes, deliberately: the article
+              carries its symptom in the URL so IT can send somebody a direct
+              link to it. The bare /troubleshooting path redirects to the
+              first device with content rather than rendering a deviceless
+              state. */}
+          <Route path="/troubleshooting" element={
+            <ProtectedRoute requireRole={false}><TroubleshootingPage /></ProtectedRoute>
+          } />
+          <Route path="/troubleshooting/:deviceKey" element={
+            <ProtectedRoute requireRole={false}><TroubleshootingPage /></ProtectedRoute>
+          } />
+          <Route path="/troubleshooting/:deviceKey/:symptomId" element={
+            <ProtectedRoute requireRole={false}><TroubleshootingArticlePage /></ProtectedRoute>
           } />
           <Route path="/no-access" element={<NoAccessPage />} />
           <Route path="*" element={<NotFoundPage />} />

@@ -16,6 +16,33 @@ const ICON_RULES: { icon: string; keywords: string[] }[] = [
 
 const FALLBACK_ICON = "category";
 
+/**
+ * Icons for the troubleshooting device keys.
+ *
+ * Here rather than beside the troubleshooting components so the two icon
+ * vocabularies stay one vocabulary — a category that shows `laptop_mac` in
+ * the request form must not show something else on the device picker. The
+ * glyphs below are lifted straight from the rules above for that reason.
+ *
+ * Keyed on the device key rather than matched on a name, because by this
+ * point the backend has already done the name resolution.
+ */
+const DEVICE_KEY_ICONS: Record<string, string> = {
+  laptop: "laptop_mac",
+  desktop: "desktop_windows",
+  phone: "smartphone",
+  tablet: "tablet",
+  monitor: "monitor",
+  headphones: "headphones",
+  mouse: "mouse",
+  keyboard: "keyboard",
+  webcam: "videocam",
+};
+
+export function iconForDeviceKey(key: string): string {
+  return DEVICE_KEY_ICONS[key] ?? FALLBACK_ICON;
+}
+
 export function iconForCategory(name: string): string {
   const lower = name.toLowerCase();
   for (const rule of ICON_RULES) {

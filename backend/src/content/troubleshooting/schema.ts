@@ -130,12 +130,11 @@ export const symptomCategorySchema = z.object({
   symptoms: z.array(symptomSchema).min(1),
 });
 
+//  Labels are deliberately NOT here — see DEVICE_LABELS in deviceKeys.ts. The
+//  picker has to name devices this file has never heard of, so the names live
+//  with the key enum rather than with the taxonomy.
 export const deviceSchema = z.object({
   key: deviceKeySchema,
-  /** Plural, for the picker tile: "Phones". */
-  label: z.string().min(1),
-  /** Singular, for the page heading: "Troubleshoot your phone". */
-  labelSingular: z.string().min(1),
   categories: z.array(symptomCategorySchema),
 });
 

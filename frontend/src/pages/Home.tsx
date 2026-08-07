@@ -37,7 +37,7 @@ import {
 //
 //  TABLE-FEEL PASS: the three content cards (Start a request, Accessories,
 //  Your recent requests) now wear the same chrome as the settings tables
-//  (see components/settings/CollapsibleTableSection.tsx) — a tinted header
+//  (see components/ui/collapsible-section.tsx) — a tinted header
 //  bar in surface-container-low/30 with a hairline divider, then the body.
 //  CARD gained overflow-hidden so the tint clips to the rounded corners.
 
@@ -49,7 +49,7 @@ const RAISED = "bg-landing-raised border border-landing-border rounded-lg";
 ///  |                 SHARED: TINTED SECTION HEADER                   |
 ///  +-----------------------------------------------------------------+
 //
-//  Mirrors CollapsibleTableSection's trigger row: tinted bar, hairline
+//  Mirrors CollapsibleSection's trigger row: tinted bar, hairline
 //  divider, optional right-aligned actions slot. Not collapsible — the
 //  home page sections are always open — so no trigger/chevron.
 //

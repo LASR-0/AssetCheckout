@@ -1,0 +1,116 @@
+import { Link } from "react-router-dom";
+import { SupportEscapeCard } from "./SupportEscape";
+import type { TroubleshootingConfig } from "@/types/troubleshootingType";
+
+///  +-----------------------------------------------------------------+
+///  |                  TROUBLESHOOTING PAGE SHELL                     |
+///  +-----------------------------------------------------------------+
+//
+//  Breadcrumb, page heading, escape card and the sticky sidebar column —
+//  everything the index and an article have in common. The heading stays the
+//  same inside an article ("Troubleshoot your phone"); the article's own
+//  title lives in the content column and in the breadcrumb tail.
+//
+//  No nav bar and no footer here. The app has its own chrome in App.tsx, and
+//  the design mockup's header, brand mark, theme toggle and footer were
+//  scaffolding for a standalone prototype.
+//
+//  The mockup set its eyebrow labels in JetBrains Mono. --font-mono is
+//  commented out in index.css, so rather than reviving a font for decoration
+//  they are uppercase and letter-spaced in the app's own stack — the same
+//  treatment the feedback form already uses for its question labels.
+///  +-----------------------------------------------------------------+
+
+export function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant">
+      {children}
+    </p>
+  );
+}
+
+type Props = {
+  deviceKey: string | null;
+  deviceLabel: string;
+  deviceLabelSingular: string;
+  /** The article title, when inside one. Becomes the last breadcrumb crumb. */
+  breadcrumbTail?: string;
+  config: TroubleshootingConfig | null;
+  sidebar: React.ReactNode;
+  children: React.ReactNode;
+};
+
+export default function TroubleshootingLayout({
+  deviceKey,
+  deviceLabel,
+  deviceLabelSingular,
+  breadcrumbTail,
+  config,
+  sidebar,
+  children,
+}: Props) {
+  return (
+    <main className="min-h-screen bg-landing-bg text-on-background">
+      <div className="mx-auto max-w-6xl px-4 pb-20 pt-8 md:px-8">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-info-light"
+        >
+          <Link to="/" className="hover:text-on-background transition-colors">
+            Home
+          </Link>
+          <span aria-hidden>/</span>
+          <Link to="/troubleshooting" className="hover:text-on-background transition-colors">
+            Troubleshooting
+          </Link>
+          {deviceKey && (
+            <>
+              <span aria-hidden>/</span>
+              <Link
+                to={`/troubleshooting/${deviceKey}`}
+                className="hover:text-on-background transition-colors"
+              >
+                {deviceLabel}
+              </Link>
+            </>
+          )}
+          {breadcrumbTail && (
+            <>
+              <span aria-hidden>/</span>
+              {/* aria-current marks the crumb for the page you're already on,
+                  which is otherwise only signalled by it not being a link. */}
+              <span aria-current="page" className="text-on-background">
+                {breadcrumbTail}
+              </span>
+            </>
+          )}
+        </nav>
+
+        <header className="flex flex-col gap-6 py-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-2">
+            <Eyebrow>Device support{deviceLabel && ` · ${deviceLabel}`}</Eyebrow>
+            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+              Troubleshoot your {deviceLabelSingular}
+            </h1>
+            <p className="max-w-[62ch] text-base text-info-light">
+              Work through the checks below before raising a ticket. Pick the symptom
+              that matches what you&apos;re seeing and follow the steps in order — most
+              issues are resolved in the first three.
+            </p>
+          </div>
+          {config && <SupportEscapeCard config={config} />}
+        </header>
+
+        <div className="grid items-start gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+          {/* Sticky under the fixed navbar. Hidden on small screens, where a
+              sticky rail would eat most of the viewport — the page is short
+              enough there to scroll. */}
+          <aside className="hidden lg:sticky lg:top-24 lg:flex lg:flex-col lg:gap-4">
+            {sidebar}
+          </aside>
+          <div className="flex min-w-0 flex-col gap-6">{children}</div>
+        </div>
+      </div>
+    </main>
+  );
+}

@@ -1,12 +1,14 @@
 import {
   articleSchema,
   deviceSchema,
+  DEVICE_KEYS,
   type Article,
   type Device,
   type DeviceKey,
   type Symptom,
   type SymptomCategory,
 } from "./schema.js";
+import { DEVICE_LABELS } from "./deviceKeys.js";
 import phone from "./devices/phone.js";
 import phoneWifi from "./articles/phone/wifi.js";
 
@@ -43,10 +45,26 @@ export type SymptomSearchResult = SymptomListing & {
   categoryName: string;
 };
 
-export type DeviceSummary = Pick<Device, "key" | "label" | "labelSingular"> & {
+export type DeviceSummary = {
+  key: DeviceKey;
+  /** Plural, for the picker tile: "Phones". */
+  label: string;
+  /** Singular, for the page heading: "Troubleshoot your phone". */
+  labelSingular: string;
   /** How many symptoms have an article. Drives "3 of 19 covered" style copy. */
   articleCount: number;
   symptomCount: number;
+};
+
+/**
+ * A tile in the device picker.
+ *
+ * `available` is what makes a tile clickable. A device earns a tile either
+ * because its category is requestable or because we have written articles
+ * for it, but only the second makes it worth opening — see buildPicker.
+ */
+export type DevicePickerTile = DeviceSummary & {
+  available: boolean;
 };
 
 export interface TroubleshootingRepository {
@@ -64,6 +82,16 @@ export interface TroubleshootingRepository {
   searchSymptoms(query: string, deviceKey?: string): SymptomSearchResult[];
   /** Sibling symptoms in the same category, for the chips under an article. */
   getSiblingSymptoms(deviceKey: string, symptomId: string): SymptomListing[];
+  /**
+   * The device picker, given the device keys the deployment can request.
+   *
+   * The union of those keys and the keys we have articles for. Requestable
+   * decides who gets a tile; content decides whether the tile opens. Content
+   * is unioned in rather than filtered by requestable so an article can never
+   * become unreachable — people keep holding a device long after it stops
+   * being orderable, and that is exactly when they need troubleshooting.
+   */
+  buildPicker(requestableKeys: DeviceKey[]): DevicePickerTile[];
 }
 
 /// ── Load and validate ────────────────────────────────────────────────────
@@ -152,18 +180,20 @@ export function createDiskRepository(): TroubleshootingRepository {
     }));
   };
 
+  /** Counts for a device key, whether or not the library has heard of it. */
+  const summarise = (key: DeviceKey): DeviceSummary => {
+    const symptoms = devicesByKey.get(key)?.categories.flatMap((c) => c.symptoms) ?? [];
+    return {
+      key,
+      ...DEVICE_LABELS[key],
+      symptomCount: symptoms.length,
+      articleCount: symptoms.filter((s) => hasArticle(key, s.id)).length,
+    };
+  };
+
   return {
     listDevices() {
-      return devices.map((device) => {
-        const symptoms = device.categories.flatMap((c) => c.symptoms);
-        return {
-          key: device.key,
-          label: device.label,
-          labelSingular: device.labelSingular,
-          symptomCount: symptoms.length,
-          articleCount: symptoms.filter((s) => hasArticle(device.key, s.id)).length,
-        };
-      });
+      return devices.map((device) => summarise(device.key));
     },
 
     getDeviceCategories: listCategories,
@@ -202,6 +232,22 @@ export function createDiskRepository(): TroubleshootingRepository {
       );
       if (!category) return [];
       return category.symptoms.filter((s) => s.id !== symptomId);
+    },
+
+    buildPicker(requestableKeys) {
+      // A device with a taxonomy but no articles is a page of Drafts, which
+      // is not something to send anyone to — so coverage, not mere presence
+      // in the library, is what counts as content here.
+      const covered = new Set(
+        devices.map((d) => d.key).filter((key) => summarise(key).articleCount > 0)
+      );
+      const requestable = new Set(requestableKeys);
+
+      // DEVICE_KEYS order, not the order either input arrived in, so the
+      // grid doesn't reshuffle when an admin edits the requestable list.
+      return DEVICE_KEYS.filter((key) => covered.has(key) || requestable.has(key)).map(
+        (key) => ({ ...summarise(key), available: covered.has(key) })
+      );
     },
   };
 }
