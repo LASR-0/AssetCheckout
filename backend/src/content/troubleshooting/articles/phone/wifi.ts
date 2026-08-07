@@ -19,7 +19,7 @@ import type { Article } from "../../schema.js";
 
 const wifi: Article = {
   symptomId: "wifi",
-  deviceKey: "phone",
+  subjectKeys: ["phone"],
   summary:
     "KSB Wi-Fi is certificate-based, so a phone that has fallen out of compliance will fail to join even with the right password. Work through these in order.",
   timeEstimate: "About 10 minutes",

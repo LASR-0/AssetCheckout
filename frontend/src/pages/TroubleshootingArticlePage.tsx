@@ -9,7 +9,7 @@ import { getSymptom, getTroubleshootingConfig } from "@/api/troubleshooting";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import {
   stepAnchorId,
-  troubleshootingDevicePath,
+  troubleshootingSubjectPath,
   troubleshootingIndexPath,
 } from "@/lib/troubleshootingRoutes";
 import type {
@@ -62,12 +62,12 @@ function DraftNotice() {
 function StepBlock({
   step,
   index,
-  deviceKey,
+  subjectKey,
   symptomId,
 }: {
   step: Step;
   index: number;
-  deviceKey: string;
+  subjectKey: string;
   symptomId: string;
 }) {
   const ref = useRef<HTMLElement | null>(null);
@@ -87,7 +87,7 @@ function StepBlock({
         if (!entries.some((e) => e.isIntersecting)) return;
         trackTroubleshooting({
           type: "STEP_REACHED",
-          deviceKey,
+          subjectKey,
           symptomId,
           stepNumber: index + 1,
         });
@@ -100,7 +100,7 @@ function StepBlock({
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [deviceKey, symptomId, index]);
+  }, [subjectKey, symptomId, index]);
 
   return (
     // scroll-mt clears the fixed navbar, so a step linked from the sidebar
@@ -139,7 +139,7 @@ function StepBlock({
         {step.branch && (
           <SymptomLink
             variant="branch"
-            deviceKey={step.branch.targetDeviceKey ?? deviceKey}
+            subjectKey={step.branch.targetSubjectKey ?? subjectKey}
             symptomId={step.branch.targetSymptomId}
             label={step.branch.label}
           />
@@ -150,7 +150,7 @@ function StepBlock({
 }
 
 export default function TroubleshootingArticlePage() {
-  const { deviceKey, symptomId } = useParams<{ deviceKey: string; symptomId: string }>();
+  const { subjectKey, symptomId } = useParams<{ subjectKey: string; symptomId: string }>();
 
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
   const [data, setData] = useState<SymptomResponse | null>(null);
@@ -164,13 +164,13 @@ export default function TroubleshootingArticlePage() {
   }, []);
 
   useEffect(() => {
-    if (!deviceKey || !symptomId) return;
+    if (!subjectKey || !symptomId) return;
 
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getSymptom(deviceKey, symptomId)
+    getSymptom(subjectKey, symptomId)
       .then((res) => {
         if (!cancelled) setData(res);
       })
@@ -184,7 +184,7 @@ export default function TroubleshootingArticlePage() {
     return () => {
       cancelled = true;
     };
-  }, [deviceKey, symptomId]);
+  }, [subjectKey, symptomId]);
 
   const article = data?.article ?? null;
 
@@ -194,9 +194,9 @@ export default function TroubleshootingArticlePage() {
   // Draft that gets opened repeatedly is the strongest signal there is that
   // it's the next one worth writing.
   useEffect(() => {
-    if (!deviceKey || !symptomId) return;
-    trackTroubleshooting({ type: "ARTICLE_OPENED", deviceKey, symptomId });
-  }, [deviceKey, symptomId]);
+    if (!subjectKey || !symptomId) return;
+    trackTroubleshooting({ type: "ARTICLE_OPENED", subjectKey, symptomId });
+  }, [subjectKey, symptomId]);
 
   // Inside an article the sidebar is step navigation rather than page
   // navigation — the index's "Your device / Symptoms" anchors point at
@@ -232,7 +232,7 @@ export default function TroubleshootingArticlePage() {
       </a>
 
       <Link
-        to={troubleshootingDevicePath(deviceKey ?? "")}
+        to={troubleshootingSubjectPath(subjectKey ?? "")}
         className="rounded-lg border border-outline px-2.5 py-2 text-center text-[13px] font-semibold text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
       >
         ← All symptoms
@@ -242,9 +242,9 @@ export default function TroubleshootingArticlePage() {
 
   return (
     <TroubleshootingLayout
-      deviceKey={deviceKey ?? null}
-      deviceLabel={data?.device.label ?? ""}
-      deviceLabelSingular={data?.device.labelSingular ?? "device"}
+      subjectKey={subjectKey ?? null}
+      subjectLabel={data?.subject.label ?? ""}
+      subjectLabelSingular={data?.subject.labelSingular ?? "device"}
       breadcrumbTail={data?.symptom.label}
       config={config}
       sidebar={sidebar}
@@ -276,7 +276,7 @@ export default function TroubleshootingArticlePage() {
           <div className="flex flex-col gap-3 border-b border-outline/40 pb-5">
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                to={troubleshootingDevicePath(deviceKey ?? "")}
+                to={troubleshootingSubjectPath(subjectKey ?? "")}
                 className="rounded-lg border border-outline px-2.5 py-1 text-xs font-semibold text-info-light hover:bg-surface-container-low/30 transition-colors"
               >
                 ← All symptoms
@@ -349,7 +349,7 @@ export default function TroubleshootingArticlePage() {
                   key={stepAnchorId(i)}
                   step={step}
                   index={i}
-                  deviceKey={deviceKey!}
+                  subjectKey={subjectKey!}
                   symptomId={symptomId!}
                 />
               ))}
@@ -369,7 +369,7 @@ export default function TroubleshootingArticlePage() {
                   <SymptomLink
                     key={sibling.id}
                     variant="chip"
-                    deviceKey={deviceKey!}
+                    subjectKey={subjectKey!}
                     symptomId={sibling.id}
                     label={sibling.label}
                   />
@@ -383,7 +383,7 @@ export default function TroubleshootingArticlePage() {
       {config && (
         <SupportEscapeSection
           config={config}
-          context={{ deviceKey, symptomId }}
+          context={{ subjectKey, symptomId }}
         />
       )}
     </TroubleshootingLayout>

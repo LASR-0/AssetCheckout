@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { SupportEscapeCard } from "./SupportEscape";
 import {
-  troubleshootingDevicePath,
+  troubleshootingSubjectPath,
   troubleshootingIndexPath,
 } from "@/lib/troubleshootingRoutes";
 import type { TroubleshootingConfig } from "@/types/troubleshootingType";
@@ -34,9 +34,9 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 type Props = {
-  deviceKey: string | null;
-  deviceLabel: string;
-  deviceLabelSingular: string;
+  subjectKey: string | null;
+  subjectLabel: string;
+  subjectLabelSingular: string;
   /** The article title, when inside one. Becomes the last breadcrumb crumb. */
   breadcrumbTail?: string;
   config: TroubleshootingConfig | null;
@@ -45,9 +45,9 @@ type Props = {
 };
 
 export default function TroubleshootingLayout({
-  deviceKey,
-  deviceLabel,
-  deviceLabelSingular,
+  subjectKey,
+  subjectLabel,
+  subjectLabelSingular,
   breadcrumbTail,
   config,
   sidebar,
@@ -67,14 +67,14 @@ export default function TroubleshootingLayout({
           <Link to={troubleshootingIndexPath()} className="hover:text-on-background transition-colors">
             Troubleshooting
           </Link>
-          {deviceKey && (
+          {subjectKey && (
             <>
               <span aria-hidden>/</span>
               <Link
-                to={troubleshootingDevicePath(deviceKey)}
+                to={troubleshootingSubjectPath(subjectKey)}
                 className="hover:text-on-background transition-colors"
               >
-                {deviceLabel}
+                {subjectLabel}
               </Link>
             </>
           )}
@@ -92,9 +92,9 @@ export default function TroubleshootingLayout({
 
         <header className="flex flex-col gap-6 py-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-2">
-            <Eyebrow>Device support{deviceLabel && ` · ${deviceLabel}`}</Eyebrow>
+            <Eyebrow>Support{subjectLabel && ` · ${subjectLabel}`}</Eyebrow>
             <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Troubleshoot your {deviceLabelSingular}
+              Troubleshoot your {subjectLabelSingular}
             </h1>
             <p className="max-w-[62ch] text-base text-info-light">
               Work through the checks below before raising a ticket. Pick the symptom

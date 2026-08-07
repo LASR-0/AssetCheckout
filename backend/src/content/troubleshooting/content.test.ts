@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseContent, createDiskRepository } from "./repository.js";
-import { deviceKeyForCategoryName, deviceKeysForCategories } from "./deviceKeys.js";
+import { deviceKeyForCategoryName, deviceKeysForCategories } from "./subjects.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |               TROUBLESHOOTING CONTENT VALIDATION                |
@@ -17,14 +17,14 @@ import { deviceKeyForCategoryName, deviceKeysForCategories } from "./deviceKeys.
 //  the exact moment they were already having a bad day with their phone.
 ///  +-----------------------------------------------------------------+
 
-const { devices, articles } = parseContent();
+const { subjects, articles } = parseContent();
 const repo = createDiskRepository();
 
 /** Every symptom in the library, flattened, with its device and category. */
-const allSymptoms = devices.flatMap((device) =>
-  device.categories.flatMap((category) =>
+const allSymptoms = subjects.flatMap((subject) =>
+  subject.categories.flatMap((category) =>
     category.symptoms.map((symptom) => ({
-      deviceKey: device.key,
+      subjectKey: subject.key,
       categoryId: category.id,
       symptomId: symptom.id,
       label: symptom.label,
@@ -32,15 +32,15 @@ const allSymptoms = devices.flatMap((device) =>
   )
 );
 
-const symptomExists = (deviceKey: string, symptomId: string) =>
-  allSymptoms.some((s) => s.deviceKey === deviceKey && s.symptomId === symptomId);
+const symptomExists = (subjectKey: string, symptomId: string) =>
+  allSymptoms.some((s) => s.subjectKey === subjectKey && s.symptomId === symptomId);
 
 describe("content loads", () => {
-  it("parses every registered device and article against the schema", () => {
+  it("parses every registered subject and article against the schema", () => {
     // parseContent throws on the first failure, so reaching here is the
     // assertion. The counts guard against a module being silently dropped
     // from the registry.
-    expect(devices.length).toBeGreaterThan(0);
+    expect(subjects.length).toBeGreaterThan(0);
     expect(articles.length).toBeGreaterThan(0);
   });
 });
@@ -57,12 +57,20 @@ describe("cross-references resolve", () => {
     for (const article of articles) {
       article.steps.forEach((step, index) => {
         if (!step.branch) return;
-        const targetDevice = step.branch.targetDeviceKey ?? article.deviceKey;
-        if (!symptomExists(targetDevice, step.branch.targetSymptomId)) {
-          dangling.push(
-            `${article.deviceKey}/${article.symptomId} step ${index + 1} → ` +
-              `${targetDevice}/${step.branch.targetSymptomId}`
-          );
+        // A branch with no explicit target resolves inside the article's own
+        // subject — and an article can now list several, so it must resolve
+        // from every one of them or it dead-ends for some readers.
+        const targets = step.branch.targetSubjectKey
+          ? [step.branch.targetSubjectKey]
+          : article.subjectKeys;
+
+        for (const target of targets) {
+          if (!symptomExists(target, step.branch.targetSymptomId)) {
+            dangling.push(
+              `${article.symptomId} step ${index + 1} → ` +
+                `${target}/${step.branch.targetSymptomId}`
+            );
+          }
         }
       });
     }
@@ -70,17 +78,23 @@ describe("cross-references resolve", () => {
     expect(dangling).toEqual([]);
   });
 
-  it("every article belongs to a symptom that exists in its device taxonomy", () => {
-    const orphaned = articles
-      .filter((a) => !symptomExists(a.deviceKey, a.symptomId))
-      .map((a) => `${a.deviceKey}/${a.symptomId}`);
+  it("every article's symptom exists in every subject it is listed under", () => {
+    // Every subject an article claims must actually list its symptom —
+    // otherwise the article is unreachable from one of its own homes.
+    const orphaned = articles.flatMap((a) =>
+      a.subjectKeys
+        .filter((key) => !symptomExists(key, a.symptomId))
+        .map((key) => `${key}/${a.symptomId}`)
+    );
 
     expect(orphaned).toEqual([]);
   });
 
-  it("every article's device key names a device that exists", () => {
-    const keys = new Set(devices.map((d) => d.key));
-    const unknown = articles.filter((a) => !keys.has(a.deviceKey)).map((a) => a.symptomId);
+  it("every article's subject keys name subjects that exist", () => {
+    const keys = new Set(subjects.map((d) => d.key));
+    const unknown = articles
+      .filter((a) => a.subjectKeys.some((k) => !keys.has(k)))
+      .map((a) => a.symptomId);
 
     expect(unknown).toEqual([]);
   });
@@ -91,14 +105,14 @@ describe("identifiers are unique", () => {
   ///  two symptoms competing for one route and one of them being
   ///  unreachable. Across devices a repeat is fine and expected — "wifi" on
   ///  a phone and "wifi" on a laptop are different articles.
-  it("symptom ids are unique within each device", () => {
+  it("symptom ids are unique within each subject", () => {
     const duplicates: string[] = [];
 
-    for (const device of devices) {
+    for (const subject of subjects) {
       const seen = new Set<string>();
-      for (const category of device.categories) {
+      for (const category of subject.categories) {
         for (const symptom of category.symptoms) {
-          if (seen.has(symptom.id)) duplicates.push(`${device.key}/${symptom.id}`);
+          if (seen.has(symptom.id)) duplicates.push(`${subject.key}/${symptom.id}`);
           seen.add(symptom.id);
         }
       }
@@ -107,37 +121,39 @@ describe("identifiers are unique", () => {
     expect(duplicates).toEqual([]);
   });
 
-  it("category ids are unique within each device", () => {
-    for (const device of devices) {
-      const ids = device.categories.map((c) => c.id);
+  it("category ids are unique within each subject", () => {
+    for (const subject of subjects) {
+      const ids = subject.categories.map((c) => c.id);
       expect(new Set(ids).size).toBe(ids.length);
     }
   });
 
-  it("device keys are unique", () => {
-    const keys = devices.map((d) => d.key);
+  it("subject keys are unique", () => {
+    const keys = subjects.map((d) => d.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("has at most one article per device and symptom", () => {
-    const keys = articles.map((a) => `${a.deviceKey}/${a.symptomId}`);
+  it("has at most one article per subject and symptom", () => {
+    // Flattened across subjects: two articles must never claim the same
+    // symptom under the same subject, or one silently shadows the other.
+    const keys = articles.flatMap((a) => a.subjectKeys.map((k) => `${k}/${a.symptomId}`));
     expect(new Set(keys).size).toBe(keys.length);
   });
 });
 
 describe("repository queries", () => {
-  it("lists devices with honest article coverage", () => {
-    const phone = repo.listDevices().find((d) => d.key === "phone");
+  it("lists subjects with honest article coverage", () => {
+    const phone = repo.listSubjects().find((d) => d.key === "phone");
 
     expect(phone).toBeDefined();
     expect(phone!.symptomCount).toBeGreaterThan(phone!.articleCount);
     expect(phone!.articleCount).toBe(
-      articles.filter((a) => a.deviceKey === "phone").length
+      articles.filter((a) => a.subjectKeys.includes("phone")).length
     );
   });
 
   it("marks symptoms without an article as drafts rather than hiding them", () => {
-    const categories = repo.getDeviceCategories("phone");
+    const categories = repo.getSubjectCategories("phone");
     const network = categories.find((c) => c.id === "network");
 
     expect(network).toBeDefined();
@@ -151,17 +167,17 @@ describe("repository queries", () => {
     expect(repo.getArticle("phone", "bluetooth")).toBeNull();
   });
 
-  it("returns null for an unknown device or symptom", () => {
+  it("returns null for an unknown subject or symptom", () => {
     expect(repo.getArticle("phone", "does-not-exist")).toBeNull();
     expect(repo.getArticle("toaster", "wifi")).toBeNull();
-    expect(repo.getDeviceCategories("toaster")).toEqual([]);
+    expect(repo.getSubjectCategories("toaster")).toEqual([]);
   });
 
   it("searches symptom labels case-insensitively", () => {
     const hits = repo.searchSymptoms("WI-FI", "phone");
 
     expect(hits.map((h) => h.id)).toContain("wifi");
-    expect(hits.every((h) => h.deviceKey === "phone")).toBe(true);
+    expect(hits.every((h) => h.subjectKey === "phone")).toBe(true);
   });
 
   it("returns nothing for an empty search rather than everything", () => {
@@ -225,7 +241,7 @@ describe("snipe category names resolve to device keys", () => {
   });
 
   it("returns null for categories that aren't troubleshootable devices", () => {
-    for (const name of ["Printers", "Docking Stations", "Licences", "Cables", "Servers"]) {
+    for (const name of ["Software Licences", "Cables", "Servers", "Consumables"]) {
       expect(deviceKeyForCategoryName(name)).toBeNull();
     }
   });
@@ -242,17 +258,17 @@ describe("snipe category names resolve to device keys", () => {
       { name: "Monitors" },
       { name: "Android Phones" },
       { name: "iPhones" },
-      { name: "Printers" },
+      { name: "Software Licences" },
     ]);
 
-    // One phone entry despite two phone categories, printers dropped, and
+    // One phone entry despite two phone categories, licences dropped, and
     // DEVICE_KEYS order rather than input order.
     expect(keys).toEqual(["phone", "monitor"]);
   });
 });
 
-describe("device picker derivation", () => {
-  it("marks devices with articles available and requestable-only ones disabled", () => {
+describe("subject picker derivation", () => {
+  it("marks subjects with articles available and requestable-only ones disabled", () => {
     const tiles = repo.buildPicker(["phone", "laptop", "monitor"]);
 
     expect(tiles.map((t) => t.key)).toEqual(["laptop", "phone", "monitor"]);
@@ -263,14 +279,14 @@ describe("device picker derivation", () => {
   ///  The whole point of unioning content in rather than filtering by
   ///  requestable: a device that stops being orderable must not take its
   ///  articles out of reach with it.
-  it("keeps a covered device even when it is no longer requestable", () => {
+  it("keeps a covered subject even when it is no longer requestable", () => {
     const tiles = repo.buildPicker(["laptop"]);
 
     expect(tiles.map((t) => t.key)).toContain("phone");
     expect(tiles.find((t) => t.key === "phone")!.available).toBe(true);
   });
 
-  it("names devices the content library has never heard of", () => {
+  it("names subjects the content library has never heard of", () => {
     const laptop = repo.buildPicker(["laptop"]).find((t) => t.key === "laptop")!;
 
     expect(laptop.label).toBe("Laptops");
@@ -278,7 +294,7 @@ describe("device picker derivation", () => {
     expect(laptop.symptomCount).toBe(0);
   });
 
-  it("still offers covered devices when nothing is requestable", () => {
+  it("still offers covered subjects when nothing is requestable", () => {
     expect(repo.buildPicker([]).map((t) => t.key)).toEqual(["phone"]);
   });
 });

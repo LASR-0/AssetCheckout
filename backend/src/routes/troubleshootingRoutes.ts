@@ -4,6 +4,7 @@ import {
   deviceKeyForCategoryName,
   deviceKeysForCategories,
   type DeviceKey,
+  type SubjectKey,
 } from "../content/troubleshooting/index.js";
 import { getSupportPhone, isSupportPhoneConfigured } from "../config/support.js";
 import { getRequestableAssetCategories } from "../services/snipeitassets.js";
@@ -50,9 +51,9 @@ router.get("/config", (_req: Request, res: Response) => {
   });
 });
 
-/// ── Device picker ────────────────────────────────────────────────────────
+/// ── Subject picker ────────────────────────────────────────────────────────
 //
-//  Which devices get a tile is a question about this deployment, not about
+//  Which subjects get a tile is a question about this deployment, not about
 //  the content — it depends on what admins have made requestable. So the
 //  Snipe lookup happens here and the repository is handed the resolved keys.
 //
@@ -78,23 +79,23 @@ async function requestableCategories(): Promise<{ id: number; name: string }[]> 
   }
 }
 
-router.get("/devices", async (_req: Request, res: Response, next: NextFunction) => {
+router.get("/subjects", async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const categories = await requestableCategories();
     const tiles = troubleshootingRepository.buildPicker(
-      deviceKeysForCategories(categories)
+      deviceKeysForCategories(categories) as SubjectKey[]
     );
 
     // Which Snipe categories landed on each tile, so a caller holding a
     // category id can find its device without repeating the name-matching
     // rules on the client. The "what's wrong with it?" dialog uses this to
-    // send somebody straight to the right device's symptoms.
+    // send somebody straight to the right subject's symptoms.
     //
     // Attached here rather than inside the repository on purpose: a Snipe
     // category id is a fact about this deployment, not about the content, and
     // the repository is the seam that a database implementation would have to
     // satisfy.
-    const categoryIds = new Map<DeviceKey, number[]>();
+    const categoryIds = new Map<SubjectKey, number[]>();
     for (const category of categories) {
       const key = deviceKeyForCategoryName(category.name);
       if (!key) continue;
@@ -104,7 +105,7 @@ router.get("/devices", async (_req: Request, res: Response, next: NextFunction) 
     }
 
     res.json({
-      devices: tiles.map((tile) => ({
+      subjects: tiles.map((tile) => ({
         ...tile,
         categoryIds: categoryIds.get(tile.key) ?? [],
       })),
@@ -114,25 +115,25 @@ router.get("/devices", async (_req: Request, res: Response, next: NextFunction) 
   }
 });
 
-/// ── One device's symptom taxonomy ────────────────────────────────────────
+/// ── One subject's symptom taxonomy ────────────────────────────────────────
 
-router.get("/devices/:deviceKey", (req: Request, res: Response, next: NextFunction) => {
+router.get("/subjects/:subjectKey", (req: Request, res: Response, next: NextFunction) => {
   try {
-    const deviceKey = param(req.params.deviceKey);
-    const categories = troubleshootingRepository.getDeviceCategories(deviceKey);
+    const subjectKey = param(req.params.subjectKey);
+    const categories = troubleshootingRepository.getSubjectCategories(subjectKey);
 
     // No taxonomy means no such device in the library. 404 rather than an
-    // empty 200, so a mistyped URL is distinguishable from a device whose
+    // empty 200, so a mistyped URL is distinguishable from a subject whose
     // articles are all still to be written.
     if (categories.length === 0) {
-      return res.status(404).json({ error: "Unknown device" });
+      return res.status(404).json({ error: "Unknown subject" });
     }
 
-    const device = troubleshootingRepository
-      .listDevices()
-      .find((d) => d.key === deviceKey);
+    const subject = troubleshootingRepository
+      .listSubjects()
+      .find((s) => s.key === subjectKey);
 
-    res.json({ device, categories });
+    res.json({ subject, categories });
   } catch (err) {
     next(err);
   }
@@ -146,14 +147,14 @@ router.get("/devices/:deviceKey", (req: Request, res: Response, next: NextFuncti
 //  is known and gives them the escape hatch. Only an unknown SYMPTOM is a 404.
 
 router.get(
-  "/devices/:deviceKey/symptoms/:symptomId",
+  "/subjects/:subjectKey/symptoms/:symptomId",
   (req: Request, res: Response, next: NextFunction) => {
     try {
-      const deviceKey = param(req.params.deviceKey);
+      const subjectKey = param(req.params.subjectKey);
       const symptomId = param(req.params.symptomId);
 
       const category = troubleshootingRepository
-        .getDeviceCategories(deviceKey)
+        .getSubjectCategories(subjectKey)
         .find((c) => c.symptoms.some((s) => s.id === symptomId));
 
       if (!category) {
@@ -161,16 +162,16 @@ router.get(
       }
 
       const symptom = category.symptoms.find((s) => s.id === symptomId)!;
-      const device = troubleshootingRepository
-        .listDevices()
-        .find((d) => d.key === deviceKey);
+      const subject = troubleshootingRepository
+        .listSubjects()
+        .find((s) => s.key === subjectKey);
 
       res.json({
-        device,
+        subject,
         symptom,
         category: { id: category.id, name: category.name, glyph: category.glyph },
-        article: troubleshootingRepository.getArticle(deviceKey, symptomId),
-        siblings: troubleshootingRepository.getSiblingSymptoms(deviceKey, symptomId),
+        article: troubleshootingRepository.getArticle(subjectKey, symptomId),
+        siblings: troubleshootingRepository.getSiblingSymptoms(subjectKey, symptomId),
       });
     } catch (err) {
       next(err);
@@ -196,7 +197,7 @@ router.post("/events", async (req: Request, res: Response) => {
   try {
     if (!(await analyticsEnabled())) return;
 
-    const { type, sessionId, deviceKey, symptomId, stepNumber, query, detail } =
+    const { type, sessionId, subjectKey, symptomId, stepNumber, query, detail } =
       req.body ?? {};
 
     // A bad payload is dropped rather than reported: this endpoint is only
@@ -207,7 +208,7 @@ router.post("/events", async (req: Request, res: Response) => {
       return;
     }
 
-    await recordEvent({ type, sessionId, deviceKey, symptomId, stepNumber, query, detail });
+    await recordEvent({ type, sessionId, subjectKey, symptomId, stepNumber, query, detail });
   } catch (err) {
     console.error("[troubleshooting] failed to record event:", err);
   }

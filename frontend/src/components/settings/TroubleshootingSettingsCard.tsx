@@ -249,7 +249,7 @@ export default function TroubleshootingSettingsCard() {
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wider text-on-surface-variant">
                       <th className="py-2 pr-3 font-medium">Symptom</th>
-                      <th className="py-2 pr-3 font-medium">Device</th>
+                      <th className="py-2 pr-3 font-medium">Subject</th>
                       <th className="py-2 pr-3 font-medium">Opens</th>
                       <th className="py-2 pr-3 font-medium">Escapes</th>
                       <th className="py-2 font-medium">Avg. step reached</th>
@@ -257,9 +257,9 @@ export default function TroubleshootingSettingsCard() {
                   </thead>
                   <tbody className="divide-y divide-outline/20">
                     {data.articles.map((a) => (
-                      <tr key={`${a.deviceKey}/${a.symptomId}`}>
+                      <tr key={`${a.subjectKey}/${a.symptomId}`}>
                         <td className="py-2 pr-3 text-on-background">{a.label}</td>
-                        <td className="py-2 pr-3 text-info-light">{a.deviceKey}</td>
+                        <td className="py-2 pr-3 text-info-light">{a.subjectKey}</td>
                         <td className="py-2 pr-3 text-on-background">{a.opens}</td>
                         <td className="py-2 pr-3 text-on-background">{a.escapes}</td>
                         <td className="py-2 text-info-light">

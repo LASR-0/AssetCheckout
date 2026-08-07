@@ -1,7 +1,7 @@
 import { apiFetch } from "@/api/client";
 import type {
-  DeviceCategoriesResponse,
-  DevicePickerTile,
+  SubjectCategoriesResponse,
+  SubjectPickerTile,
   SymptomResponse,
   TroubleshootingConfig,
 } from "@/types/troubleshootingType";
@@ -24,27 +24,27 @@ export async function getTroubleshootingConfig(): Promise<TroubleshootingConfig>
   return apiFetch<TroubleshootingConfig>("/api/troubleshooting/config");
 }
 
-export async function getTroubleshootingDevices(): Promise<DevicePickerTile[]> {
-  const res = await apiFetch<{ devices: DevicePickerTile[] }>(
-    "/api/troubleshooting/devices"
+export async function getTroubleshootingSubjects(): Promise<SubjectPickerTile[]> {
+  const res = await apiFetch<{ subjects: SubjectPickerTile[] }>(
+    "/api/troubleshooting/subjects"
   );
-  return res.devices;
+  return res.subjects;
 }
 
-export async function getDeviceCategories(
-  deviceKey: string
-): Promise<DeviceCategoriesResponse> {
-  return apiFetch<DeviceCategoriesResponse>(
-    `/api/troubleshooting/devices/${encodeURIComponent(deviceKey)}`
+export async function getSubjectCategories(
+  subjectKey: string
+): Promise<SubjectCategoriesResponse> {
+  return apiFetch<SubjectCategoriesResponse>(
+    `/api/troubleshooting/subjects/${encodeURIComponent(subjectKey)}`
   );
 }
 
 export async function getSymptom(
-  deviceKey: string,
+  subjectKey: string,
   symptomId: string
 ): Promise<SymptomResponse> {
   return apiFetch<SymptomResponse>(
-    `/api/troubleshooting/devices/${encodeURIComponent(deviceKey)}` +
+    `/api/troubleshooting/subjects/${encodeURIComponent(subjectKey)}` +
       `/symptoms/${encodeURIComponent(symptomId)}`
   );
 }
@@ -59,7 +59,7 @@ export async function getSymptom(
 //  apiFetch is built to do.
 
 export type ArticleStat = {
-  deviceKey: string;
+  subjectKey: string;
   symptomId: string;
   label: string;
   opens: number;

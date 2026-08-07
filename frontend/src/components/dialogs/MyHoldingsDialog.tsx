@@ -12,9 +12,9 @@ import { submitCorrection, type NoLongerHeldReason } from "@/api/corrections";
 import { getAssetCategories } from "@/api/categories";
 import { getAccessoryCategories } from "@/api/accessories";
 import { iconForCategory } from "@/lib/categoryIcon";
-import { getTroubleshootingDevices } from "@/api/troubleshooting";
+import { getTroubleshootingSubjects } from "@/api/troubleshooting";
 import { troubleshootingPathForCategory } from "@/lib/troubleshootingRoutes";
-import type { DevicePickerTile } from "@/types/troubleshootingType";
+import type { SubjectPickerTile } from "@/types/troubleshootingType";
 import { whereToFind } from "@/lib/whereToFind";
 import type { AssetHolding, AccessoryHolding } from "@/types/holdingsType";
 
@@ -156,7 +156,7 @@ export default function MyHoldingsDialog({
   // resolve a category to a device the moment it's clicked. A failure leaves
   // this empty, which sends the user to the plain troubleshooting index —
   // the same place an uncovered category goes, so nothing looks broken.
-  const [tsDevices, setTsDevices] = useState<DevicePickerTile[]>([]);
+  const [tsSubjects, setTsSubjects] = useState<SubjectPickerTile[]>([]);
 
   const navigate = useNavigate();
 
@@ -165,9 +165,9 @@ export default function MyHoldingsDialog({
   // open or what fails it.
   useEffect(() => {
     if (!open) return;
-    getTroubleshootingDevices()
-      .then(setTsDevices)
-      .catch(() => setTsDevices([]));
+    getTroubleshootingSubjects()
+      .then(setTsSubjects)
+      .catch(() => setTsSubjects([]));
   }, [open]);
 
   useEffect(() => {
@@ -448,7 +448,7 @@ export default function MyHoldingsDialog({
                 onClick={() => {
                   onOpenChange(false);
                   navigate(
-                    troubleshootingPathForCategory(tsDevices, selected?.categoryId ?? null)
+                    troubleshootingPathForCategory(tsSubjects, selected?.categoryId ?? null)
                   );
                 }}
               />

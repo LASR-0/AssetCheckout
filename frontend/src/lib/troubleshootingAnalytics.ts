@@ -55,16 +55,16 @@ function sessionId(): string {
 }
 
 export type TroubleshootingEvent =
-  | { type: "ARTICLE_OPENED"; deviceKey: string; symptomId: string }
-  | { type: "STEP_REACHED"; deviceKey: string; symptomId: string; stepNumber: number }
+  | { type: "ARTICLE_OPENED"; subjectKey: string; symptomId: string }
+  | { type: "STEP_REACHED"; subjectKey: string; symptomId: string; stepNumber: number }
   | {
       type: "ESCAPE_TAKEN";
-      deviceKey?: string | null;
+      subjectKey?: string | null;
       symptomId?: string | null;
       /** Which control was used — "nothing_worked" or "teams_call". */
       detail: string;
     }
-  | { type: "SEARCH_NO_MATCH"; query: string; deviceKey?: string | null };
+  | { type: "SEARCH_NO_MATCH"; query: string; subjectKey?: string | null };
 
 /**
  * Record an event. Never awaited by callers, never throws, never blocks.

@@ -377,8 +377,9 @@ model TroubleshootingEvent {
   /// Random per-visit value. Not a user id and not stable across visits.
   sessionId  String
 
-  /// Which device's library. Null for a search made before a device resolved.
-  deviceKey  String?
+  /// Which subject's library — a device key or an application key. Null for
+  /// a search made before a subject resolved.
+  subjectKey String?
   /// The symptom an article belongs to. Null for SEARCH_NO_MATCH.
   symptomId  String?
   /// 1-based. STEP_REACHED only.
@@ -402,10 +403,10 @@ model TroubleshootingEvent {
   @@index([createdAt])
 }
 
-/// ARTICLE_OPENED   an article page was reached (deviceKey + symptomId)
-/// STEP_REACHED     a step scrolled into view (deviceKey + symptomId + stepNumber)
-/// ESCAPE_TAKEN     an escape control was used (deviceKey + symptomId? + detail)
-/// SEARCH_NO_MATCH  a symptom search returned nothing (query + deviceKey?)
+/// ARTICLE_OPENED   an article page was reached (subjectKey + symptomId)
+/// STEP_REACHED     a step scrolled into view (subjectKey + symptomId + stepNumber)
+/// ESCAPE_TAKEN     an escape control was used (subjectKey + symptomId? + detail)
+/// SEARCH_NO_MATCH  a symptom search returned nothing (query + subjectKey?)
 enum TroubleshootingEventType {
   ARTICLE_OPENED
   STEP_REACHED

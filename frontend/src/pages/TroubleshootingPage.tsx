@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
-import DevicePicker from "@/components/troubleshooting/DevicePicker";
+import SubjectPicker from "@/components/troubleshooting/SubjectPicker";
 import SymptomCategories from "@/components/troubleshooting/SymptomCategories";
 import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape";
 import {
-  getDeviceCategories,
+  getSubjectCategories,
   getTroubleshootingConfig,
-  getTroubleshootingDevices,
+  getTroubleshootingSubjects,
 } from "@/api/troubleshooting";
-import { troubleshootingDevicePath } from "@/lib/troubleshootingRoutes";
+import { troubleshootingSubjectPath } from "@/lib/troubleshootingRoutes";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import type {
-  DeviceCategoriesResponse,
-  DevicePickerTile,
+  SubjectCategoriesResponse,
+  SubjectPickerTile,
   TroubleshootingConfig,
 } from "@/types/troubleshootingType";
 
@@ -35,12 +35,12 @@ import type {
 ///  +-----------------------------------------------------------------+
 
 export default function TroubleshootingPage() {
-  const { deviceKey } = useParams<{ deviceKey?: string }>();
+  const { subjectKey } = useParams<{ subjectKey?: string }>();
   const navigate = useNavigate();
 
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
-  const [devices, setDevices] = useState<DevicePickerTile[]>([]);
-  const [data, setData] = useState<DeviceCategoriesResponse | null>(null);
+  const [subjects, setSubjects] = useState<SubjectPickerTile[]>([]);
+  const [data, setData] = useState<SubjectCategoriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,27 +57,27 @@ export default function TroubleshootingPage() {
   }, []);
 
   useEffect(() => {
-    getTroubleshootingDevices()
-      .then(setDevices)
-      .catch(() => setDevices([]));
+    getTroubleshootingSubjects()
+      .then(setSubjects)
+      .catch(() => setSubjects([]));
   }, []);
 
   // No device in the URL: pick the first one with content and put it there,
   // replacing rather than pushing so Back doesn't bounce through the redirect.
   useEffect(() => {
-    if (deviceKey || devices.length === 0) return;
-    const first = devices.find((d) => d.available);
-    if (first) navigate(troubleshootingDevicePath(first.key), { replace: true });
-  }, [deviceKey, devices, navigate]);
+    if (subjectKey || subjects.length === 0) return;
+    const first = subjects.find((s) => s.available);
+    if (first) navigate(troubleshootingSubjectPath(first.key), { replace: true });
+  }, [subjectKey, subjects, navigate]);
 
   useEffect(() => {
-    if (!deviceKey) return;
+    if (!subjectKey) return;
 
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getDeviceCategories(deviceKey)
+    getSubjectCategories(subjectKey)
       .then((res) => {
         if (cancelled) return;
         setData(res);
@@ -95,7 +95,7 @@ export default function TroubleshootingPage() {
     return () => {
       cancelled = true;
     };
-  }, [deviceKey]);
+  }, [subjectKey]);
 
   const needle = query.trim().toLowerCase();
 
@@ -135,12 +135,12 @@ export default function TroubleshootingPage() {
       trackTroubleshooting({
         type: "SEARCH_NO_MATCH",
         query: query.trim(),
-        deviceKey: deviceKey ?? null,
+        subjectKey: subjectKey ?? null,
       });
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [needle, matchCount, query, deviceKey]);
+  }, [needle, matchCount, query, subjectKey]);
 
   function handleOpenChange(categoryId: string, open: boolean) {
     if (needle) return; // Search owns the open state while it's active.
@@ -154,7 +154,7 @@ export default function TroubleshootingPage() {
       <Eyebrow>On this page</Eyebrow>
       <nav className="flex flex-col gap-1">
         {[
-          { href: "#device", label: "Your device" },
+          { href: "#subject", label: "What\u2019s affected" },
           { href: "#symptoms", label: "Symptoms" },
         ].map((item, i) => (
           <a
@@ -180,23 +180,23 @@ export default function TroubleshootingPage() {
 
   return (
     <TroubleshootingLayout
-      deviceKey={deviceKey ?? null}
-      deviceLabel={data?.device.label ?? ""}
-      deviceLabelSingular={data?.device.labelSingular ?? "device"}
+      subjectKey={subjectKey ?? null}
+      subjectLabel={data?.subject.label ?? ""}
+      subjectLabelSingular={data?.subject.labelSingular ?? "device"}
       config={config}
       sidebar={sidebar}
     >
-      <section id="device" className="scroll-mt-24 rounded-lg border border-outline bg-surface p-5">
-        <h2 className="mb-4 text-lg font-bold">What device are we diagnosing?</h2>
-        {devices.length > 0 ? (
-          <DevicePicker
-            devices={devices}
-            selectedKey={deviceKey ?? null}
-            onSelect={(key) => navigate(troubleshootingDevicePath(key))}
+      <section id="subject" className="scroll-mt-24 rounded-lg border border-outline bg-surface p-5">
+        <h2 className="mb-4 text-lg font-bold">What are you having trouble with?</h2>
+        {subjects.length > 0 ? (
+          <SubjectPicker
+            subjects={subjects}
+            selectedKey={subjectKey ?? null}
+            onSelect={(key) => navigate(troubleshootingSubjectPath(key))}
           />
         ) : (
           <p className="text-sm text-info-light">
-            No devices are available to troubleshoot yet.
+            Nothing is available to troubleshoot yet.
           </p>
         )}
       </section>
@@ -262,7 +262,7 @@ export default function TroubleshootingPage() {
         {!loading && !error && data && (
           <>
             <SymptomCategories
-              deviceKey={deviceKey!}
+              subjectKey={subjectKey!}
               categories={filtered}
               openIds={effectiveOpenIds}
               onOpenChange={handleOpenChange}

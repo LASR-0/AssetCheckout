@@ -19,23 +19,23 @@
 /** Route patterns — these are what App.tsx registers. */
 export const TROUBLESHOOTING_ROUTES = {
   index: "/troubleshooting",
-  device: "/troubleshooting/:deviceKey",
-  article: "/troubleshooting/:deviceKey/:symptomId",
+  subject: "/troubleshooting/:subjectKey",
+  article: "/troubleshooting/:subjectKey/:symptomId",
 } as const;
 
 export function troubleshootingIndexPath(): string {
   return TROUBLESHOOTING_ROUTES.index;
 }
 
-export function troubleshootingDevicePath(deviceKey: string): string {
-  return `/troubleshooting/${encodeURIComponent(deviceKey)}`;
+export function troubleshootingSubjectPath(subjectKey: string): string {
+  return `/troubleshooting/${encodeURIComponent(subjectKey)}`;
 }
 
 export function troubleshootingArticlePath(
-  deviceKey: string,
+  subjectKey: string,
   symptomId: string
 ): string {
-  return `/troubleshooting/${encodeURIComponent(deviceKey)}/${encodeURIComponent(symptomId)}`;
+  return `/troubleshooting/${encodeURIComponent(subjectKey)}/${encodeURIComponent(symptomId)}`;
 }
 
 /** The id given to a step section, and the anchor the sidebar links to. */
@@ -53,14 +53,14 @@ export function stepAnchorId(index: number): string {
  * index at least shows them the picker and the support number.
  */
 export function troubleshootingPathForCategory(
-  devices: { key: string; available: boolean; categoryIds: number[] }[],
+  subjects: { key: string; available: boolean; categoryIds: number[] }[],
   categoryId: number | null
 ): string {
   if (categoryId === null) return troubleshootingIndexPath();
 
-  const match = devices.find(
-    (d) => d.available && d.categoryIds.includes(categoryId)
+  const match = subjects.find(
+    (s) => s.available && s.categoryIds.includes(categoryId)
   );
 
-  return match ? troubleshootingDevicePath(match.key) : troubleshootingIndexPath();
+  return match ? troubleshootingSubjectPath(match.key) : troubleshootingIndexPath();
 }

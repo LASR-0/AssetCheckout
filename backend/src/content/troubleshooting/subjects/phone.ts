@@ -1,4 +1,4 @@
-import type { Device } from "../schema.js";
+import type { Subject } from "../schema.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    PHONE SYMPTOM TAXONOMY                       |
@@ -17,8 +17,9 @@ import type { Device } from "../schema.js";
 //  compliance, and exists nowhere else.
 ///  +-----------------------------------------------------------------+
 
-const phone: Device = {
+const phone: Subject = {
   key: "phone",
+  kind: "device",
   categories: [
     {
       id: "power",

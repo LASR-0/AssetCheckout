@@ -37,7 +37,7 @@ export async function analyticsEnabled(): Promise<boolean> {
 export type RecordEventInput = {
   type: TroubleshootingEventType;
   sessionId: string;
-  deviceKey?: string | null;
+  subjectKey?: string | null;
   symptomId?: string | null;
   stepNumber?: number | null;
   query?: string | null;
@@ -61,7 +61,7 @@ export async function recordEvent(input: RecordEventInput): Promise<void> {
     data: {
       type: input.type,
       sessionId: input.sessionId.slice(0, MAX_FIELD),
-      deviceKey: clamp(input.deviceKey, MAX_FIELD),
+      subjectKey: clamp(input.subjectKey, MAX_FIELD),
       symptomId: clamp(input.symptomId, MAX_FIELD),
       stepNumber:
         typeof input.stepNumber === "number" && Number.isFinite(input.stepNumber)
@@ -76,7 +76,7 @@ export async function recordEvent(input: RecordEventInput): Promise<void> {
 /// ── Reading ──────────────────────────────────────────────────────────────
 
 export type ArticleStat = {
-  deviceKey: string;
+  subjectKey: string;
   symptomId: string;
   /** The symptom's human label, resolved from the content library. */
   label: string;
@@ -139,7 +139,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
   const articles = new Map<
     string,
     {
-      deviceKey: string;
+      subjectKey: string;
       symptomId: string;
       opens: number;
       sessions: Set<string>;
@@ -156,13 +156,13 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
 
   for (const event of events) {
     const articleKey =
-      event.deviceKey && event.symptomId ? `${event.deviceKey}/${event.symptomId}` : null;
+      event.subjectKey && event.symptomId ? `${event.subjectKey}/${event.symptomId}` : null;
 
     const article = articleKey
       ? articles.get(articleKey) ??
         (articles
           .set(articleKey, {
-            deviceKey: event.deviceKey!,
+            subjectKey: event.subjectKey!,
             symptomId: event.symptomId!,
             opens: 0,
             sessions: new Set(),
@@ -234,9 +234,9 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
       .map((a) => {
         const depths = [...a.deepestBySession.values()];
         return {
-          deviceKey: a.deviceKey,
+          subjectKey: a.subjectKey,
           symptomId: a.symptomId,
-          label: labelFor(a.deviceKey, a.symptomId),
+          label: labelFor(a.subjectKey, a.symptomId),
           opens: a.opens,
           escapes: [...a.sessions].filter((s) => sessionsWithEscape.has(s)).length,
           deepestStep: depths.length
@@ -258,9 +258,9 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
 /** The symptom's label from the content library, falling back to its id —
  *  an article can be renamed or removed after its events were recorded, and
  *  the history shouldn't vanish because the content moved on. */
-function labelFor(deviceKey: string, symptomId: string): string {
+function labelFor(subjectKey: string, symptomId: string): string {
   const category = troubleshootingRepository
-    .getDeviceCategories(deviceKey)
+    .getSubjectCategories(subjectKey)
     .find((c) => c.symptoms.some((s) => s.id === symptomId));
 
   return category?.symptoms.find((s) => s.id === symptomId)?.label ?? symptomId;

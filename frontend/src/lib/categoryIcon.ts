@@ -17,7 +17,7 @@ const ICON_RULES: { icon: string; keywords: string[] }[] = [
 const FALLBACK_ICON = "category";
 
 /**
- * Icons for the troubleshooting device keys.
+ * Icons for the troubleshooting subject keys — devices and applications.
  *
  * Here rather than beside the troubleshooting components so the two icon
  * vocabularies stay one vocabulary — a category that shows `laptop_mac` in
@@ -27,7 +27,7 @@ const FALLBACK_ICON = "category";
  * Keyed on the device key rather than matched on a name, because by this
  * point the backend has already done the name resolution.
  */
-const DEVICE_KEY_ICONS: Record<string, string> = {
+const SUBJECT_KEY_ICONS: Record<string, string> = {
   laptop: "laptop_mac",
   desktop: "desktop_windows",
   phone: "smartphone",
@@ -37,10 +37,20 @@ const DEVICE_KEY_ICONS: Record<string, string> = {
   mouse: "mouse",
   keyboard: "keyboard",
   webcam: "videocam",
+  dock: "dock",
+  printer: "print",
+
+  // Applications. Material Symbols has no brand glyphs, so these say what
+  // the thing DOES rather than pretending to be a logo.
+  outlook: "mail",
+  onedrive: "cloud",
+  sharepoint: "folder_shared",
+  sap: "account_balance",
+  ess: "badge",
 };
 
-export function iconForDeviceKey(key: string): string {
-  return DEVICE_KEY_ICONS[key] ?? FALLBACK_ICON;
+export function iconForSubjectKey(key: string): string {
+  return SUBJECT_KEY_ICONS[key] ?? FALLBACK_ICON;
 }
 
 export function iconForCategory(name: string): string {

@@ -54,7 +54,7 @@ function callHref(phone: string): string {
 }
 
 type EscapeContext = {
-  deviceKey?: string | null;
+  subjectKey?: string | null;
   symptomId?: string | null;
 };
 
@@ -113,7 +113,7 @@ export function SupportEscapeSection({
   function escape(detail: string) {
     trackTroubleshooting({
       type: "ESCAPE_TAKEN",
-      deviceKey: context?.deviceKey ?? null,
+      subjectKey: context?.subjectKey ?? null,
       symptomId: context?.symptomId ?? null,
       detail,
     });

@@ -53,7 +53,7 @@ function App() {
           <Route path={TROUBLESHOOTING_ROUTES.index} element={
             <ProtectedRoute requireRole={false}><TroubleshootingPage /></ProtectedRoute>
           } />
-          <Route path={TROUBLESHOOTING_ROUTES.device} element={
+          <Route path={TROUBLESHOOTING_ROUTES.subject} element={
             <ProtectedRoute requireRole={false}><TroubleshootingPage /></ProtectedRoute>
           } />
           <Route path={TROUBLESHOOTING_ROUTES.article} element={

@@ -91,31 +91,30 @@ describe("GET /config", () => {
   });
 });
 
-describe("GET /devices", () => {
-  it("unions requestable categories with devices that have content", async () => {
+describe("GET /subjects", () => {
+  it("unions requestable categories with subjects that have content", async () => {
     getRequestableAssetCategories.mockResolvedValue([
       { id: 1, name: "Laptops" },
-      { id: 2, name: "Printers" },
+      { id: 2, name: "Software Licences" },
     ]);
     getRequestableAccessoryCategories.mockResolvedValue([{ id: 3, name: "Headphones" }]);
 
-    const { status, body } = await get("/devices");
-    const keys = body.devices.map((d: { key: string }) => d.key);
+    const { status, body } = await get("/subjects");
+    const keys = body.subjects.map((d: { key: string }) => d.key);
 
     expect(status).toBe(200);
     // Laptops and headphones are requestable; phones are not, but we have an
-    // article for them, so they stay reachable. Printers map to no device.
+    // article for them, so they stay reachable. Licences map to no subject.
     expect(keys).toEqual(["laptop", "phone", "headphones"]);
-    expect(keys).not.toContain("printer");
   });
 
-  it("only marks devices with articles as available", async () => {
+  it("only marks subjects with articles as available", async () => {
     getRequestableAssetCategories.mockResolvedValue([{ id: 1, name: "Laptops" }]);
     getRequestableAccessoryCategories.mockResolvedValue([]);
 
-    const { body } = await get("/devices");
+    const { body } = await get("/subjects");
     const byKey = Object.fromEntries(
-      body.devices.map((d: { key: string; available: boolean }) => [d.key, d.available])
+      body.subjects.map((d: { key: string; available: boolean }) => [d.key, d.available])
     );
 
     expect(byKey.phone).toBe(true);
@@ -125,55 +124,55 @@ describe("GET /devices", () => {
   ///  The dialog deep link depends on this: it holds a Snipe category id and
   ///  needs the device that owns it, without reimplementing the name-matching
   ///  rules on the client.
-  it("reports which snipe categories landed on each device", async () => {
+  it("reports which snipe categories landed on each subject", async () => {
     getRequestableAssetCategories.mockResolvedValue([
       { id: 11, name: "Mobile Phones" },
       { id: 12, name: "Android Phones" },
-      { id: 13, name: "Printers" },
+      { id: 13, name: "Software Licences" },
     ]);
     getRequestableAccessoryCategories.mockResolvedValue([{ id: 21, name: "Headsets" }]);
 
-    const { body } = await get("/devices");
+    const { body } = await get("/subjects");
     const byKey = Object.fromEntries(
-      body.devices.map((d: { key: string; categoryIds: number[] }) => [d.key, d.categoryIds])
+      body.subjects.map((d: { key: string; categoryIds: number[] }) => [d.key, d.categoryIds])
     );
 
-    // Two phone categories collapse onto the one tile; printers map nowhere.
+    // Two phone categories collapse onto the one tile; licences map nowhere.
     expect(byKey.phone.sort()).toEqual([11, 12]);
     expect(byKey.headphones).toEqual([21]);
     expect(Object.values(byKey).flat()).not.toContain(13);
   });
 
-  it("falls back to covered devices when Snipe is unreachable", async () => {
+  it("falls back to covered subjects when Snipe is unreachable", async () => {
     getRequestableAssetCategories.mockRejectedValue(new Error("snipe is down"));
     getRequestableAccessoryCategories.mockRejectedValue(new Error("snipe is down"));
 
-    const { status, body } = await get("/devices");
+    const { status, body } = await get("/subjects");
 
     // A page somebody reached because something is already broken must not
     // break again over a catalogue call.
     expect(status).toBe(200);
-    expect(body.devices.map((d: { key: string }) => d.key)).toEqual(["phone"]);
+    expect(body.subjects.map((d: { key: string }) => d.key)).toEqual(["phone"]);
   });
 });
 
-describe("GET /devices/:deviceKey", () => {
+describe("GET /subjects/:subjectKey", () => {
   it("returns the taxonomy for a known device", async () => {
-    const { status, body } = await get("/devices/phone");
+    const { status, body } = await get("/subjects/phone");
 
     expect(status).toBe(200);
-    expect(body.device.label).toBe("Phones");
+    expect(body.subject.label).toBe("Phones");
     expect(body.categories.length).toBeGreaterThan(0);
   });
 
-  it("404s an unknown device", async () => {
-    expect((await get("/devices/toaster")).status).toBe(404);
+  it("404s an unknown subject", async () => {
+    expect((await get("/subjects/toaster")).status).toBe(404);
   });
 });
 
-describe("GET /devices/:deviceKey/symptoms/:symptomId", () => {
+describe("GET /subjects/:subjectKey/symptoms/:symptomId", () => {
   it("returns the article, its category and its siblings", async () => {
-    const { status, body } = await get("/devices/phone/symptoms/wifi");
+    const { status, body } = await get("/subjects/phone/symptoms/wifi");
 
     expect(status).toBe(200);
     expect(body.article.symptomId).toBe("wifi");
@@ -183,7 +182,7 @@ describe("GET /devices/:deviceKey/symptoms/:symptomId", () => {
   });
 
   it("returns 200 with a null article for a symptom nobody has written yet", async () => {
-    const { status, body } = await get("/devices/phone/symptoms/bluetooth");
+    const { status, body } = await get("/subjects/phone/symptoms/bluetooth");
 
     expect(status).toBe(200);
     expect(body.article).toBeNull();
@@ -193,7 +192,7 @@ describe("GET /devices/:deviceKey/symptoms/:symptomId", () => {
   });
 
   it("404s a symptom that doesn't exist", async () => {
-    expect((await get("/devices/phone/symptoms/nonsense")).status).toBe(404);
+    expect((await get("/subjects/phone/symptoms/nonsense")).status).toBe(404);
   });
 });
 
@@ -216,7 +215,7 @@ describe("POST /events", () => {
     const { status, body } = await post({
       type: "ARTICLE_OPENED",
       sessionId: "abc",
-      deviceKey: "phone",
+      subjectKey: "phone",
       symptomId: "wifi",
     });
 

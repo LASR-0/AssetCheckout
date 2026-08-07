@@ -42,7 +42,7 @@ function CategoryGlyph({ glyph }: { glyph: string }) {
 }
 
 type Props = {
-  deviceKey: string;
+  subjectKey: string;
   categories: SymptomCategoryListing[];
   /** Category ids currently expanded. Controlled so search can reveal matches. */
   openIds: string[];
@@ -50,7 +50,7 @@ type Props = {
 };
 
 export default function SymptomCategories({
-  deviceKey,
+  subjectKey,
   categories,
   openIds,
   onOpenChange,
@@ -73,7 +73,7 @@ export default function SymptomCategories({
             {category.symptoms.map((symptom) => (
               <li key={symptom.id}>
                 <Link
-                  to={troubleshootingArticlePath(deviceKey, symptom.id)}
+                  to={troubleshootingArticlePath(subjectKey, symptom.id)}
                   className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-on-background hover:bg-surface-container-low/30 transition-colors"
                 >
                   <span className="size-1.5 shrink-0 rounded-full bg-info-light" />

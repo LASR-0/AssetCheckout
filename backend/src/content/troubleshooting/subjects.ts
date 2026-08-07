@@ -1,7 +1,7 @@
-import { DEVICE_KEYS, type DeviceKey } from "./schema.js";
+import { DEVICE_KEYS, type DeviceKey, type SubjectKey } from "./schema.js";
 
 ///  +-----------------------------------------------------------------+
-///  |            SNIPE CATEGORY  ->  STABLE DEVICE KEY                |
+///  |          SUBJECT NAMES  +  SNIPE CATEGORY RESOLUTION            |
 ///  +-----------------------------------------------------------------+
 //
 //  Content is keyed on a stable device key, but everything the app knows
@@ -30,9 +30,10 @@ import { DEVICE_KEYS, type DeviceKey } from "./schema.js";
 //  had no name to render, and adding a fallback would have made two places
 //  that both claim to say what a phone is called.
 //
-//  These are a closed set of nine and change about never, so a static map
-//  keyed on the enum is the honest shape.
-export const DEVICE_LABELS: Record<DeviceKey, { label: string; labelSingular: string }> = {
+//  A closed set that changes about never, so a static map keyed on the enum
+//  is the honest shape. Applications are in here too: they never come from
+//  Snipe, but they still need a name on a tile.
+export const SUBJECT_LABELS: Record<SubjectKey, { label: string; labelSingular: string }> = {
   laptop: { label: "Laptops", labelSingular: "laptop" },
   desktop: { label: "Desktops", labelSingular: "desktop" },
   phone: { label: "Phones", labelSingular: "phone" },
@@ -42,6 +43,16 @@ export const DEVICE_LABELS: Record<DeviceKey, { label: string; labelSingular: st
   mouse: { label: "Mice", labelSingular: "mouse" },
   keyboard: { label: "Keyboards", labelSingular: "keyboard" },
   webcam: { label: "Webcams", labelSingular: "webcam" },
+  dock: { label: "Docks", labelSingular: "dock" },
+  printer: { label: "Printers", labelSingular: "printer" },
+
+  // Applications. "Troubleshoot your OneDrive" reads oddly, so the singular
+  // is phrased to sit in that sentence rather than being a bare noun.
+  outlook: { label: "Email & Outlook", labelSingular: "email" },
+  onedrive: { label: "OneDrive", labelSingular: "OneDrive" },
+  sharepoint: { label: "SharePoint", labelSingular: "SharePoint" },
+  sap: { label: "SAP", labelSingular: "SAP account" },
+  ess: { label: "ESS", labelSingular: "ESS account" },
 };
 
 type Rule = {
@@ -67,6 +78,10 @@ const RULES: Rule[] = [
   { key: "laptop", keywords: ["laptop", "macbook", "notebook", "ultrabook"] },
   { key: "desktop", keywords: ["desktop", "workstation"], words: ["pc", "pcs", "tower", "towers"] },
   { key: "phone", keywords: ["phone", "mobile", "smartphone", "handset"], words: ["cell", "cells"] },
+  // Neither is requestable today, so these only matter if that changes — but
+  // the mapping costs nothing and its absence would be a silent gap.
+  { key: "dock", keywords: ["dock", "docking"] },
+  { key: "printer", keywords: ["printer", "mfd", "multifunction"] },
 ];
 
 /** Word-boundary test that survives punctuation and hyphens in category names. */

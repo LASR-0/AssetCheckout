@@ -1,15 +1,17 @@
 import {
   articleSchema,
-  deviceSchema,
+  subjectSchema,
   DEVICE_KEYS,
+  SUBJECT_KEYS,
   type Article,
-  type Device,
-  type DeviceKey,
+  type Subject,
+  type SubjectKey,
+  type SubjectKind,
   type Symptom,
   type SymptomCategory,
 } from "./schema.js";
-import { DEVICE_LABELS } from "./deviceKeys.js";
-import phone from "./devices/phone.js";
+import { SUBJECT_LABELS } from "./subjects.js";
+import phone from "./subjects/phone.js";
 import phoneWifi from "./articles/phone/wifi.js";
 
 ///  +-----------------------------------------------------------------+
@@ -18,8 +20,8 @@ import phoneWifi from "./articles/phone/wifi.js";
 //
 //  The seam between the content and everything that reads it. The disk
 //  implementation below is the only one today; the interface exists so it
-//  isn't the only one possible. If admin-editable content is ever wanted,
-//  a database implementation satisfies the same interface and the callers
+//  isn't the only one possible. If admin-editable content is ever wanted, a
+//  database implementation satisfies the same interface and the callers
 //  don't change — that is the whole reason the disk-first decision is
 //  reversible rather than a bet.
 //
@@ -40,58 +42,61 @@ export type SymptomCategoryListing = Omit<SymptomCategory, "symptoms"> & {
 
 /** A search hit, carrying enough context to render and link to it. */
 export type SymptomSearchResult = SymptomListing & {
-  deviceKey: DeviceKey;
+  subjectKey: SubjectKey;
   categoryId: string;
   categoryName: string;
 };
 
-export type DeviceSummary = {
-  key: DeviceKey;
+export type SubjectSummary = {
+  key: SubjectKey;
+  /** Splits the picker: devices get tiles, applications their own section. */
+  kind: SubjectKind;
   /** Plural, for the picker tile: "Phones". */
   label: string;
   /** Singular, for the page heading: "Troubleshoot your phone". */
   labelSingular: string;
-  /** How many symptoms have an article. Drives "3 of 19 covered" style copy. */
+  /** How many symptoms have an article. */
   articleCount: number;
   symptomCount: number;
 };
 
 /**
- * A tile in the device picker.
+ * An entry in the picker.
  *
- * `available` is what makes a tile clickable. A device earns a tile either
- * because its category is requestable or because we have written articles
- * for it, but only the second makes it worth opening — see buildPicker.
+ * `available` is what makes it clickable. A subject earns a place either
+ * because its Snipe category is requestable or because we have written
+ * articles for it, but only the second makes it worth opening.
  */
-export type DevicePickerTile = DeviceSummary & {
+export type SubjectPickerTile = SubjectSummary & {
   available: boolean;
 };
 
 export interface TroubleshootingRepository {
-  /** Every device the content library knows about, in picker order. */
-  listDevices(): DeviceSummary[];
-  /** The symptom taxonomy for one device. Empty array for an unknown device. */
-  getDeviceCategories(deviceKey: string): SymptomCategoryListing[];
+  /** Every subject the content library knows about, in picker order. */
+  listSubjects(): SubjectSummary[];
+  /** The symptom taxonomy for one subject. Empty array for an unknown one. */
+  getSubjectCategories(subjectKey: string): SymptomCategoryListing[];
   /** The article for a symptom, or null when it hasn't been written yet. */
-  getArticle(deviceKey: string, symptomId: string): Article | null;
+  getArticle(subjectKey: string, symptomId: string): Article | null;
   /**
    * Symptom label search. Case-insensitive substring, which is the right
-   * amount of cleverness for a library this size — there is no index to
-   * maintain and no ranking to tune. Pass a device key to scope it.
+   * amount of cleverness for a library this size — no index to maintain and
+   * no ranking to tune. Pass a key to scope it.
    */
-  searchSymptoms(query: string, deviceKey?: string): SymptomSearchResult[];
+  searchSymptoms(query: string, subjectKey?: string): SymptomSearchResult[];
   /** Sibling symptoms in the same category, for the chips under an article. */
-  getSiblingSymptoms(deviceKey: string, symptomId: string): SymptomListing[];
+  getSiblingSymptoms(subjectKey: string, symptomId: string): SymptomListing[];
   /**
-   * The device picker, given the device keys the deployment can request.
+   * The picker, given the device keys this deployment can request.
    *
-   * The union of those keys and the keys we have articles for. Requestable
-   * decides who gets a tile; content decides whether the tile opens. Content
-   * is unioned in rather than filtered by requestable so an article can never
-   * become unreachable — people keep holding a device long after it stops
-   * being orderable, and that is exactly when they need troubleshooting.
+   * The union of those keys and the subjects we have articles for.
+   * Requestable decides who gets a tile; content decides whether it opens.
+   * Content is unioned in rather than filtered by requestable so an article
+   * can never become unreachable — people keep holding a device long after
+   * it stops being orderable, and docks, printers and every application were
+   * never requestable in the first place.
    */
-  buildPicker(requestableKeys: DeviceKey[]): DevicePickerTile[];
+  buildPicker(requestableKeys: SubjectKey[]): SubjectPickerTile[];
 }
 
 /// ── Load and validate ────────────────────────────────────────────────────
@@ -106,25 +111,25 @@ export interface TroubleshootingRepository {
 //  survive it, and an explicit list means a file that was never wired up
 //  fails loudly in review instead of being quietly absent in production.
 
-const DEVICE_MODULES: unknown[] = [phone];
+const SUBJECT_MODULES: unknown[] = [phone];
 
 const ARTICLE_MODULES: unknown[] = [phoneWifi];
 
 /**
  * Parse and validate every registered content module.
  *
- * Exported because two other things need the validated content without
- * going through the query interface: the content test, which walks it to
- * resolve cross-references, and — if content ever moves to a database — the
- * seeding script, which is the migration path the repository interface
- * exists to keep cheap.
+ * Exported because two other things need the validated content without going
+ * through the query interface: the content test, which walks it to resolve
+ * cross-references, and — if content ever moves to a database — the seeding
+ * script, which is the migration path the repository interface exists to
+ * keep cheap.
  */
-export function parseContent(): { devices: Device[]; articles: Article[] } {
-  const devices = DEVICE_MODULES.map((raw, i) => {
-    const result = deviceSchema.safeParse(raw);
+export function parseContent(): { subjects: Subject[]; articles: Article[] } {
+  const subjects = SUBJECT_MODULES.map((raw, i) => {
+    const result = subjectSchema.safeParse(raw);
     if (!result.success) {
       throw new Error(
-        `Troubleshooting content: device #${i} failed validation:\n${formatIssues(result.error)}`
+        `Troubleshooting content: subject #${i} failed validation:\n${formatIssues(result.error)}`
       );
     }
     return result.data;
@@ -140,7 +145,7 @@ export function parseContent(): { devices: Device[]; articles: Article[] } {
     return result.data;
   });
 
-  return { devices, articles };
+  return { subjects, articles };
 }
 
 /** Zod issues as readable lines. Kept local — this is the only caller. */
@@ -150,74 +155,91 @@ function formatIssues(error: { issues: { path: PropertyKey[]; message: string }[
     .join("\n");
 }
 
+/** Derived from DEVICE_KEYS rather than listed again, so the enum stays the
+ *  one declaration of what counts as a device. */
+const DEVICE_KEY_SET: Set<string> = new Set(DEVICE_KEYS);
+
 /// ── Disk implementation ──────────────────────────────────────────────────
 
 export function createDiskRepository(): TroubleshootingRepository {
-  const { devices, articles } = parseContent();
+  const { subjects, articles } = parseContent();
 
-  const devicesByKey = new Map<string, Device>(devices.map((d) => [d.key, d]));
+  const subjectsByKey = new Map<string, Subject>(subjects.map((s) => [s.key, s]));
 
-  // Articles are keyed on device + symptom because symptom ids are only
-  // unique WITHIN a device — "wifi" is a sensible id on a phone and on a
-  // laptop, and they are different articles.
-  const articleKey = (deviceKey: string, symptomId: string) => `${deviceKey}/${symptomId}`;
-  const articlesByKey = new Map<string, Article>(
-    articles.map((a) => [articleKey(a.deviceKey, a.symptomId), a])
-  );
+  // Articles are keyed on subject + symptom because symptom ids are only
+  // unique WITHIN a subject — "wifi" is a sensible id on a phone and on a
+  // laptop, and they may be different articles.
+  //
+  // An article listing several subjects is indexed under each. That is the
+  // point of subjectKeys: the docking article is one article reachable from
+  // Laptops, Monitors and Docks alike, rather than three copies that drift.
+  const articleKey = (subjectKey: string, symptomId: string) =>
+    `${subjectKey}/${symptomId}`;
 
-  const hasArticle = (deviceKey: string, symptomId: string) =>
-    articlesByKey.has(articleKey(deviceKey, symptomId));
+  const articlesByKey = new Map<string, Article>();
+  for (const article of articles) {
+    for (const key of article.subjectKeys) {
+      articlesByKey.set(articleKey(key, article.symptomId), article);
+    }
+  }
 
-  const listCategories = (deviceKey: string): SymptomCategoryListing[] => {
-    const device = devicesByKey.get(deviceKey);
-    if (!device) return [];
-    return device.categories.map((category) => ({
+  const hasArticle = (subjectKey: string, symptomId: string) =>
+    articlesByKey.has(articleKey(subjectKey, symptomId));
+
+  const listCategories = (subjectKey: string): SymptomCategoryListing[] => {
+    const subject = subjectsByKey.get(subjectKey);
+    if (!subject) return [];
+    return subject.categories.map((category) => ({
       ...category,
       symptoms: category.symptoms.map((symptom) => ({
         ...symptom,
-        hasArticle: hasArticle(deviceKey, symptom.id),
+        hasArticle: hasArticle(subjectKey, symptom.id),
       })),
     }));
   };
 
-  /** Counts for a device key, whether or not the library has heard of it. */
-  const summarise = (key: DeviceKey): DeviceSummary => {
-    const symptoms = devicesByKey.get(key)?.categories.flatMap((c) => c.symptoms) ?? [];
+  /** Counts for a key, whether or not the library has heard of it. */
+  const summarise = (key: SubjectKey): SubjectSummary => {
+    const subject = subjectsByKey.get(key);
+    const symptoms = subject?.categories.flatMap((c) => c.symptoms) ?? [];
     return {
       key,
-      ...DEVICE_LABELS[key],
+      // An unwritten subject has no file to declare its kind, so it falls
+      // back to the key space: anything that isn't a device key is an app.
+      kind: subject?.kind ?? (DEVICE_KEY_SET.has(key) ? "device" : "app"),
+      ...SUBJECT_LABELS[key],
       symptomCount: symptoms.length,
       articleCount: symptoms.filter((s) => hasArticle(key, s.id)).length,
     };
   };
 
   return {
-    listDevices() {
-      return devices.map((device) => summarise(device.key));
+    listSubjects() {
+      return subjects.map((subject) => summarise(subject.key));
     },
 
-    getDeviceCategories: listCategories,
+    getSubjectCategories: listCategories,
 
-    getArticle(deviceKey, symptomId) {
-      return articlesByKey.get(articleKey(deviceKey, symptomId)) ?? null;
+    getArticle(subjectKey, symptomId) {
+      return articlesByKey.get(articleKey(subjectKey, symptomId)) ?? null;
     },
 
-    searchSymptoms(query, deviceKey) {
+    searchSymptoms(query, subjectKey) {
       const needle = query.trim().toLowerCase();
       if (!needle) return [];
 
-      const scope = deviceKey
-        ? devices.filter((d) => d.key === deviceKey)
-        : devices;
+      const scope = subjectKey
+        ? subjects.filter((s) => s.key === subjectKey)
+        : subjects;
 
-      return scope.flatMap((device) =>
-        device.categories.flatMap((category) =>
+      return scope.flatMap((subject) =>
+        subject.categories.flatMap((category) =>
           category.symptoms
             .filter((symptom) => symptom.label.toLowerCase().includes(needle))
             .map((symptom) => ({
               ...symptom,
-              hasArticle: hasArticle(device.key, symptom.id),
-              deviceKey: device.key,
+              hasArticle: hasArticle(subject.key, symptom.id),
+              subjectKey: subject.key,
               categoryId: category.id,
               categoryName: category.name,
             }))
@@ -225,8 +247,8 @@ export function createDiskRepository(): TroubleshootingRepository {
       );
     },
 
-    getSiblingSymptoms(deviceKey, symptomId) {
-      const categories = listCategories(deviceKey);
+    getSiblingSymptoms(subjectKey, symptomId) {
+      const categories = listCategories(subjectKey);
       const category = categories.find((c) =>
         c.symptoms.some((s) => s.id === symptomId)
       );
@@ -235,19 +257,19 @@ export function createDiskRepository(): TroubleshootingRepository {
     },
 
     buildPicker(requestableKeys) {
-      // A device with a taxonomy but no articles is a page of Drafts, which
-      // is not something to send anyone to — so coverage, not mere presence
-      // in the library, is what counts as content here.
+      // A subject with a taxonomy but no articles is a page of Drafts, which
+      // is not somewhere to send anyone — so coverage, not mere presence in
+      // the library, is what counts as content here.
       const covered = new Set(
-        devices.map((d) => d.key).filter((key) => summarise(key).articleCount > 0)
+        subjects.map((s) => s.key).filter((key) => summarise(key).articleCount > 0)
       );
       const requestable = new Set(requestableKeys);
 
-      // DEVICE_KEYS order, not the order either input arrived in, so the
+      // SUBJECT_KEYS order, not the order either input arrived in, so the
       // grid doesn't reshuffle when an admin edits the requestable list.
-      return DEVICE_KEYS.filter((key) => covered.has(key) || requestable.has(key)).map(
-        (key) => ({ ...summarise(key), available: covered.has(key) })
-      );
+      return SUBJECT_KEYS.filter(
+        (key) => covered.has(key) || requestable.has(key)
+      ).map((key) => ({ ...summarise(key), available: covered.has(key) }));
     },
   };
 }

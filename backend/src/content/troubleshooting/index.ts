@@ -3,7 +3,7 @@
 ///  +-----------------------------------------------------------------+
 //
 //  Import from here, not from the content modules. Anything that reaches
-//  past this barrel into devices/ or articles/ has bypassed validation and
+//  past this barrel into subjects/ or articles/ has bypassed validation and
 //  bound itself to the disk implementation, which is the one thing the
 //  repository interface exists to prevent.
 ///  +-----------------------------------------------------------------+
@@ -15,22 +15,24 @@ export type {
   SymptomListing,
   SymptomCategoryListing,
   SymptomSearchResult,
-  DeviceSummary,
-  DevicePickerTile,
+  SubjectSummary,
+  SubjectPickerTile,
 } from "./repository.js";
 
 export {
-  DEVICE_LABELS,
+  SUBJECT_LABELS,
   deviceKeyForCategoryName,
   deviceKeysForCategories,
-} from "./deviceKeys.js";
+} from "./subjects.js";
 
-export { DEVICE_KEYS } from "./schema.js";
+export { DEVICE_KEYS, APP_KEYS, SUBJECT_KEYS } from "./schema.js";
 
 export type {
   Article,
   Branch,
-  Device,
+  Subject,
+  SubjectKey,
+  SubjectKind,
   DeviceKey,
   Step,
   Symptom,

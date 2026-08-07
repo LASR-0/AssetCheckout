@@ -19,14 +19,14 @@ import { troubleshootingArticlePath } from "@/lib/troubleshootingRoutes";
 ///  +-----------------------------------------------------------------+
 
 type Props = {
-  deviceKey: string;
+  subjectKey: string;
   symptomId: string;
   label: string;
   variant: "branch" | "chip";
 };
 
-export default function SymptomLink({ deviceKey, symptomId, label, variant }: Props) {
-  const to = troubleshootingArticlePath(deviceKey, symptomId);
+export default function SymptomLink({ subjectKey, symptomId, label, variant }: Props) {
+  const to = troubleshootingArticlePath(subjectKey, symptomId);
 
   if (variant === "chip") {
     return (

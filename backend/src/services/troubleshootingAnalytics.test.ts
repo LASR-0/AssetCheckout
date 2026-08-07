@@ -38,7 +38,7 @@ type Ev = Record<string, unknown>;
 const event = (type: string, sessionId: string, extra: Ev = {}): Ev => ({
   type,
   sessionId,
-  deviceKey: null,
+  subjectKey: null,
   symptomId: null,
   stepNumber: null,
   query: null,
@@ -47,7 +47,7 @@ const event = (type: string, sessionId: string, extra: Ev = {}): Ev => ({
   ...extra,
 });
 
-const article = { deviceKey: "phone", symptomId: "wifi" };
+const article = { subjectKey: "phone", symptomId: "wifi" };
 
 beforeEach(() => findMany.mockReset());
 
@@ -126,8 +126,8 @@ describe("per-article stats", () => {
 
   it("attributes escapes to the articles the escaping visit read", async () => {
     findMany.mockResolvedValue([
-      event("ARTICLE_OPENED", "s1", { deviceKey: "phone", symptomId: "wifi" }),
-      event("ARTICLE_OPENED", "s2", { deviceKey: "phone", symptomId: "portal" }),
+      event("ARTICLE_OPENED", "s1", { subjectKey: "phone", symptomId: "wifi" }),
+      event("ARTICLE_OPENED", "s2", { subjectKey: "phone", symptomId: "portal" }),
       event("ESCAPE_TAKEN", "s1", { detail: "teams_call" }),
     ]);
 
@@ -140,7 +140,7 @@ describe("per-article stats", () => {
 
   it("falls back to the symptom id when the content no longer has a label", async () => {
     findMany.mockResolvedValue([
-      event("ARTICLE_OPENED", "s1", { deviceKey: "phone", symptomId: "since-deleted" }),
+      event("ARTICLE_OPENED", "s1", { subjectKey: "phone", symptomId: "since-deleted" }),
     ]);
 
     const { articles } = await getAnalyticsSummary(90);
