@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
 import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape";
@@ -6,6 +6,7 @@ import SymptomLink from "@/components/troubleshooting/SymptomLink";
 import { Callout } from "@/components/ui/callout";
 import { Badge } from "@/components/ui/statusbadge";
 import { getSymptom, getTroubleshootingConfig } from "@/api/troubleshooting";
+import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import {
   stepAnchorId,
   troubleshootingDevicePath,
@@ -29,10 +30,12 @@ import type {
 //  The sidebar switches to step navigation in here rather than staying on
 //  page navigation: the index's section anchors don't exist on this page.
 //
-//  There is no scroll tracking. The escape hatch carries no context by
-//  decision — someone who has exhausted these steps has a problem past what
-//  surface-level troubleshooting covers, so which step they stopped at
-//  doesn't travel usefully to whoever picks up the phone.
+//  Steps are observed as they scroll into view, but ONLY to record how far
+//  people get. The escape hatch carries no context by decision — someone who
+//  has exhausted these steps has a problem past what surface-level
+//  troubleshooting covers, so which step they stopped at doesn't travel
+//  usefully to whoever picks up the phone. It is still worth knowing in
+//  aggregate, which is what the tracking is for and all it is for.
 ///  +-----------------------------------------------------------------+
 
 /** Shown for a symptom that is listed but not yet written. A placeholder
@@ -60,15 +63,50 @@ function StepBlock({
   step,
   index,
   deviceKey,
+  symptomId,
 }: {
   step: Step;
   index: number;
   deviceKey: string;
+  symptomId: string;
 }) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  // "Steps reached" — how far into an article people get before giving up.
+  //
+  // Fired once per step, the first time it comes into view, and then the
+  // observer disconnects: re-scrolling past step 2 is not a second attempt at
+  // it, and counting it as one would inflate exactly the shallow steps that
+  // are least interesting.
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        trackTroubleshooting({
+          type: "STEP_REACHED",
+          deviceKey,
+          symptomId,
+          stepNumber: index + 1,
+        });
+        observer.disconnect();
+      },
+      // Half the step visible, so a step clipped at the bottom of the
+      // viewport on the way past doesn't count as reached.
+      { threshold: 0.5 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [deviceKey, symptomId, index]);
+
   return (
     // scroll-mt clears the fixed navbar, so a step linked from the sidebar
     // lands with its heading visible rather than tucked underneath it.
     <section
+      ref={ref}
       id={stepAnchorId(index)}
       className="grid scroll-mt-24 grid-cols-[2rem_minmax(0,1fr)] gap-4 border-b border-outline/40 py-6 last:border-b-0"
     >
@@ -149,6 +187,16 @@ export default function TroubleshootingArticlePage() {
   }, [deviceKey, symptomId]);
 
   const article = data?.article ?? null;
+
+  // "Articles opened" — which articles anyone actually reads.
+  //
+  // Keyed on the route rather than on the fetch, and fired for Drafts too: a
+  // Draft that gets opened repeatedly is the strongest signal there is that
+  // it's the next one worth writing.
+  useEffect(() => {
+    if (!deviceKey || !symptomId) return;
+    trackTroubleshooting({ type: "ARTICLE_OPENED", deviceKey, symptomId });
+  }, [deviceKey, symptomId]);
 
   // Inside an article the sidebar is step navigation rather than page
   // navigation — the index's "Your device / Symptoms" anchors point at
@@ -302,6 +350,7 @@ export default function TroubleshootingArticlePage() {
                   step={step}
                   index={i}
                   deviceKey={deviceKey!}
+                  symptomId={symptomId!}
                 />
               ))}
             </div>
@@ -331,7 +380,12 @@ export default function TroubleshootingArticlePage() {
         </article>
       )}
 
-      {config && <SupportEscapeSection config={config} />}
+      {config && (
+        <SupportEscapeSection
+          config={config}
+          context={{ deviceKey, symptomId }}
+        />
+      )}
     </TroubleshootingLayout>
   );
 }

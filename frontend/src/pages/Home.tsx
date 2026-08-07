@@ -839,6 +839,12 @@ function QuickLinks() {
       to: "/assets",
     },
     {
+      icon: "troubleshoot",
+      title: "Troubleshooting",
+      desc: "Fix common device problems before raising a ticket.",
+      to: "/troubleshooting",
+    },
+    {
       icon: "settings",
       title: "Settings",
       desc: "Categories, price tiers & approvers.",

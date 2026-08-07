@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -11,6 +12,9 @@ import { submitCorrection, type NoLongerHeldReason } from "@/api/corrections";
 import { getAssetCategories } from "@/api/categories";
 import { getAccessoryCategories } from "@/api/accessories";
 import { iconForCategory } from "@/lib/categoryIcon";
+import { getTroubleshootingDevices } from "@/api/troubleshooting";
+import { troubleshootingPathForCategory } from "@/lib/troubleshootingRoutes";
+import type { DevicePickerTile } from "@/types/troubleshootingType";
 import { whereToFind } from "@/lib/whereToFind";
 import type { AssetHolding, AccessoryHolding } from "@/types/holdingsType";
 
@@ -147,6 +151,24 @@ export default function MyHoldingsDialog({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetched quietly alongside the holdings so the troubleshooting choice can
+  // resolve a category to a device the moment it's clicked. A failure leaves
+  // this empty, which sends the user to the plain troubleshooting index —
+  // the same place an uncovered category goes, so nothing looks broken.
+  const [tsDevices, setTsDevices] = useState<DevicePickerTile[]>([]);
+
+  const navigate = useNavigate();
+
+  // Separate from the blocking fetch below on purpose: the dialog's real job
+  // is corrections, and troubleshooting must never be what makes it slow to
+  // open or what fails it.
+  useEffect(() => {
+    if (!open) return;
+    getTroubleshootingDevices()
+      .then(setTsDevices)
+      .catch(() => setTsDevices([]));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -408,6 +430,26 @@ export default function MyHoldingsDialog({
                 onClick={() => {
                   setError(null);
                   setPhase("gone");
+                }}
+              />
+              {/* Leaves the correction flow entirely rather than continuing
+                  it. Everything above is "our record is wrong"; this one is
+                  "the record is right and the thing is broken", which is a
+                  different errand and a different page.
+
+                  Lands on the device's own symptoms when we have articles for
+                  its category, and on the troubleshooting index otherwise —
+                  see troubleshootingPathForCategory. The dialog closes first
+                  so it isn't left open behind the new page. */}
+              <Choice
+                icon="troubleshoot"
+                title={`It's not working properly`}
+                body="Work through the troubleshooting steps for this kind of device."
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate(
+                    troubleshootingPathForCategory(tsDevices, selected?.categoryId ?? null)
+                  );
                 }}
               />
             </div>

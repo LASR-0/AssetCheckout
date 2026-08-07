@@ -357,10 +357,22 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "30",
     description: "Days after shipping to escalate to the user and admins (overdue)" 
   },
-  { key: "feedback_enabled", 
+  { key: "feedback_enabled",
     envVar: "FEEDBACK_ENABLED",
-    defaultValue: "true", 
-    description: "Whether the anonymous feedback feature is active (page, nudge, and CTA)" 
+    defaultValue: "true",
+    description: "Whether the anonymous feedback feature is active (page, nudge, and CTA)"
+  },
+  { key: "troubleshooting_analytics_enabled",
+    envVar: "TROUBLESHOOTING_ANALYTICS_ENABLED",
+    defaultValue: "true",
+    description:
+      "Whether troubleshooting usage events are recorded (articles opened, steps reached, escapes taken, searches with no match). Events are anonymous and grouped only by a per-visit session id."
+  },
+  { key: "troubleshooting.retentionDays",
+    envVar: "TROUBLESHOOTING_RETENTION_DAYS",
+    defaultValue: "365",
+    description:
+      "TroubleshootingEvent rows older than this many days are purged by the daily cleanup job. A year, rather than the 90 days job history keeps, because the question these answer is 'which articles earned their place' and that needs seasons, not weeks."
   },
   { key: "sharepoint_sync_enabled",
     envVar: "SHAREPOINT_SYNC_ENABLED",

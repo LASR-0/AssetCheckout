@@ -27,9 +27,12 @@ export type DevicePickerTile = {
   symptomCount: number;
   articleCount: number;
   available: boolean;
+  /** Snipe category ids that resolve to this device, for deep linking in
+   *  from somewhere that knows a category rather than a device. */
+  categoryIds: number[];
 };
 
-export type DeviceSummary = Omit<DevicePickerTile, "available">;
+export type DeviceSummary = Omit<DevicePickerTile, "available" | "categoryIds">;
 
 /** A symptom. `hasArticle` false is the Draft state — listed, not hidden. */
 export type SymptomListing = {

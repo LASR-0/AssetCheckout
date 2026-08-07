@@ -10,6 +10,7 @@ import {
   getTroubleshootingDevices,
 } from "@/api/troubleshooting";
 import { troubleshootingDevicePath } from "@/lib/troubleshootingRoutes";
+import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import type {
   DeviceCategoriesResponse,
   DevicePickerTile,
@@ -117,6 +118,29 @@ export default function TroubleshootingPage() {
   // While searching every surviving category is open — a match hidden inside
   // a collapsed section reads as no match at all.
   const effectiveOpenIds = needle ? filtered.map((c) => c.id) : openIds;
+
+  // "Searches with no match" — the most useful signal of the four, because
+  // it is users naming the articles that should be written next in their own
+  // words.
+  //
+  // Debounced hard, and only when the box has settled: typing "bluetooth"
+  // passes through "b", "bl", "blu" and so on, every one of which matches
+  // nothing on the way. Recording those would bury the real misses under a
+  // pile of prefixes. A pause this long means they stopped and looked at an
+  // empty result, which is the thing worth knowing.
+  useEffect(() => {
+    if (!needle || matchCount > 0) return;
+
+    const timer = setTimeout(() => {
+      trackTroubleshooting({
+        type: "SEARCH_NO_MATCH",
+        query: query.trim(),
+        deviceKey: deviceKey ?? null,
+      });
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [needle, matchCount, query, deviceKey]);
 
   function handleOpenChange(categoryId: string, open: boolean) {
     if (needle) return; // Search owns the open state while it's active.

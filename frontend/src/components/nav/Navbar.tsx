@@ -117,6 +117,20 @@ export default function Navbar() {
               Requests
             </Link>
 
+            <Link
+              to="/troubleshooting"
+              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+                isActive("/troubleshooting")
+                  ? "text-nav-tab-selected border-b-2 border-underline"
+                  : "text-nav-tab hover:text-nav-tab-selected"
+              }`}
+            >
+              <span className="material-symbols-outlined !text-xl">
+                troubleshoot
+              </span>
+              Troubleshooting
+            </Link>
+
           </nav>
         </div>
 
@@ -265,6 +279,21 @@ export default function Navbar() {
               pending_actions
             </span>
             Requests
+          </Link>
+
+          <Link
+            to="/troubleshooting"
+            onClick={() => setMobileNavOpen(false)}
+            className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              isActive("/troubleshooting")
+                ? "text-nav-tab-selected border-b-2 border-underline"
+                : "text-nav-tab hover:text-nav-tab-selected"
+            }`}
+          >
+            <span className="material-symbols-outlined !text-xl">
+              troubleshoot
+            </span>
+            Troubleshooting
           </Link>
 
         </nav>

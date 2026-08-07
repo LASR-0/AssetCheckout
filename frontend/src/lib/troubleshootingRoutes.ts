@@ -42,3 +42,25 @@ export function troubleshootingArticlePath(
 export function stepAnchorId(index: number): string {
   return `step-${index + 1}`;
 }
+
+/**
+ * Where to send someone who is looking at a specific holding.
+ *
+ * Straight to that device's symptoms when we have articles for it, and to
+ * the plain index otherwise. Falling back rather than blocking is the point:
+ * most categories have no content yet, so a "troubleshoot this" action that
+ * only worked for phones would be a dead control almost everywhere. The
+ * index at least shows them the picker and the support number.
+ */
+export function troubleshootingPathForCategory(
+  devices: { key: string; available: boolean; categoryIds: number[] }[],
+  categoryId: number | null
+): string {
+  if (categoryId === null) return troubleshootingIndexPath();
+
+  const match = devices.find(
+    (d) => d.available && d.categoryIds.includes(categoryId)
+  );
+
+  return match ? troubleshootingDevicePath(match.key) : troubleshootingIndexPath();
+}

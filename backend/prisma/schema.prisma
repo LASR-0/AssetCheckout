@@ -354,3 +354,61 @@ enum NoLongerHeldReason {
   GAVE_AWAY
   OTHER
 }
+/* ===================== TROUBLESHOOTING ANALYTICS ===================== */
+// Whether the troubleshooting library actually deflects tickets, recorded as
+// an event log rather than four counters — a counter can only ever answer the
+// question it was created for, and the useful questions here aren't all known
+// yet.
+//
+// ANONYMOUS, BUT GROUPED. No name or email is stored. `sessionId` is a random
+// value minted per visit and thrown away with the tab, and it exists for one
+// reason: the deflection rate is the point of the whole exercise, and "of the
+// people who opened an article, how many escaped anyway" cannot be answered
+// from totals alone. It ties events within one visit together and identifies
+// nobody outside it.
+//
+// The nullable columns are filled per type — see TroubleshootingEventType.
+// One table with nullable columns rather than four tables because these are
+// read together, and every query worth writing spans more than one type.
+model TroubleshootingEvent {
+  id         Int                      @id @default(autoincrement())
+  type       TroubleshootingEventType
+
+  /// Random per-visit value. Not a user id and not stable across visits.
+  sessionId  String
+
+  /// Which device's library. Null for a search made before a device resolved.
+  deviceKey  String?
+  /// The symptom an article belongs to. Null for SEARCH_NO_MATCH.
+  symptomId  String?
+  /// 1-based. STEP_REACHED only.
+  stepNumber Int?
+  /// The search text that returned nothing. SEARCH_NO_MATCH only — this is
+  /// the most actionable column in the table, since it is users naming the
+  /// articles that should be written next, in their own words.
+  query      String?
+
+  /// Qualifier for the event. ESCAPE_TAKEN only, recording which control was
+  /// used: "nothing_worked" or "teams_call". Both mean the article failed
+  /// them, but one is a person reaching for the phone and the other is a
+  /// person giving up on the page, and the mix is worth being able to see.
+  detail     String?
+
+  createdAt  DateTime                 @default(now())
+
+  /// The settings card groups by type and orders by recency; the retention
+  /// sweep deletes by createdAt.
+  @@index([type, createdAt])
+  @@index([createdAt])
+}
+
+/// ARTICLE_OPENED   an article page was reached (deviceKey + symptomId)
+/// STEP_REACHED     a step scrolled into view (deviceKey + symptomId + stepNumber)
+/// ESCAPE_TAKEN     an escape control was used (deviceKey + symptomId? + detail)
+/// SEARCH_NO_MATCH  a symptom search returned nothing (query + deviceKey?)
+enum TroubleshootingEventType {
+  ARTICLE_OPENED
+  STEP_REACHED
+  ESCAPE_TAKEN
+  SEARCH_NO_MATCH
+}

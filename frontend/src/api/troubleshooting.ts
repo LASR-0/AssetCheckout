@@ -48,3 +48,57 @@ export async function getSymptom(
       `/symptoms/${encodeURIComponent(symptomId)}`
   );
 }
+
+///  +-----------------------------------------------------------------+
+///  |                    ANALYTICS (admin)                            |
+///  +-----------------------------------------------------------------+
+//
+//  Recording events is deliberately NOT here — see lib/troubleshootingAnalytics,
+//  which posts directly rather than through apiFetch. That path must never
+//  throw and never block a page render, which is the opposite of what
+//  apiFetch is built to do.
+
+export type ArticleStat = {
+  deviceKey: string;
+  symptomId: string;
+  label: string;
+  opens: number;
+  escapes: number;
+  deepestStep: number | null;
+};
+
+export type NoMatchSearch = {
+  query: string;
+  count: number;
+  lastSearchedAt: string;
+};
+
+export type AnalyticsSummary = {
+  enabled: boolean;
+  totals: {
+    articlesOpened: number;
+    stepsReached: number;
+    escapesTaken: number;
+    searchesWithNoMatch: number;
+    sessionsWithArticle: number;
+    sessionsWithEscape: number;
+  };
+  articles: ArticleStat[];
+  noMatchSearches: NoMatchSearch[];
+  escapesByControl: { detail: string; count: number }[];
+};
+
+export async function getTroubleshootingAnalytics(
+  days: number
+): Promise<AnalyticsSummary> {
+  return apiFetch<AnalyticsSummary>(`/api/troubleshooting/analytics?days=${days}`);
+}
+
+export async function setTroubleshootingAnalyticsEnabled(
+  enabled: boolean
+): Promise<void> {
+  await apiFetch("/api/troubleshooting/analytics/enabled", {
+    method: "POST",
+    body: { enabled },
+  });
+}

@@ -27,9 +27,11 @@ export default function Footer() {
     <footer className="border-t border-outline shadow-md bg-footer-bg">
       {/* Mobile: the company name and the links share one row, the links
           wrapping and right-aligned, at a smaller size and tighter padding.
-          Four links no longer fit a phone width at text-sm, and stacking them
-          vertically would have grown the footer's height — so the type scales
-          down and wraps instead. Desktop is unchanged from sm up. */}
+          The links stopped fitting a phone width at text-sm once there were
+          four of them, and stacking them vertically would have grown the
+          footer's height — so the type scales down and wraps instead. The
+          2-per-row basis absorbs each addition as another row; troubleshooting
+          made five. Desktop is unchanged from sm up. */}
       <div className="max-w-[1160px] mx-auto px-5 sm:px-8 py-5 sm:py-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-info-light">
         <span className="shrink-0">{COMPANY}</span>
         <nav className="ml-auto flex flex-wrap gap-x-6 gap-y-1.5 sm:gap-5 font-semibold">
@@ -41,6 +43,9 @@ export default function Footer() {
           </Link>
           <Link className={FOOTER_LINK} to="/requests">
             Requests
+          </Link>
+          <Link className={FOOTER_LINK} to="/troubleshooting">
+            Troubleshooting
           </Link>
           <FeedbackNavLink />
         </nav>

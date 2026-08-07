@@ -1,12 +1,22 @@
 import { Router, Request, Response, NextFunction } from "express";
 import {
   troubleshootingRepository,
+  deviceKeyForCategoryName,
   deviceKeysForCategories,
   type DeviceKey,
 } from "../content/troubleshooting/index.js";
 import { getSupportPhone, isSupportPhoneConfigured } from "../config/support.js";
 import { getRequestableAssetCategories } from "../services/snipeitassets.js";
 import { getRequestableAccessoryCategories } from "../services/snipeitaccessories.js";
+import {
+  analyticsEnabled,
+  getAnalyticsSummary,
+  isEventType,
+  recordEvent,
+} from "../services/troubleshootingAnalytics.js";
+import { getActorEmail } from "../config/auth.js";
+import { isAdminEmail } from "../config/auth.js";
+import { getSetting, setSetting } from "../services/settings.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                   TROUBLESHOOTING ROUTES                        |
@@ -53,7 +63,7 @@ router.get("/config", (_req: Request, res: Response) => {
 //  would be the wrong trade. The same reasoning as AccessoryQuickStart on the
 //  home page, which renders nothing rather than an error state.
 
-async function requestableDeviceKeys(): Promise<DeviceKey[]> {
+async function requestableCategories(): Promise<{ id: number; name: string }[]> {
   try {
     const [assets, accessories] = await Promise.all([
       getRequestableAssetCategories(),
@@ -61,7 +71,7 @@ async function requestableDeviceKeys(): Promise<DeviceKey[]> {
     ]);
     // Both lists together: the nine device keys span asset categories
     // (laptop, phone, monitor) and accessory categories (headphones, mouse).
-    return deviceKeysForCategories([...assets, ...accessories]);
+    return [...assets, ...accessories];
   } catch (err) {
     console.error("[troubleshooting] requestable categories unavailable:", err);
     return [];
@@ -70,8 +80,35 @@ async function requestableDeviceKeys(): Promise<DeviceKey[]> {
 
 router.get("/devices", async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const devices = troubleshootingRepository.buildPicker(await requestableDeviceKeys());
-    res.json({ devices });
+    const categories = await requestableCategories();
+    const tiles = troubleshootingRepository.buildPicker(
+      deviceKeysForCategories(categories)
+    );
+
+    // Which Snipe categories landed on each tile, so a caller holding a
+    // category id can find its device without repeating the name-matching
+    // rules on the client. The "what's wrong with it?" dialog uses this to
+    // send somebody straight to the right device's symptoms.
+    //
+    // Attached here rather than inside the repository on purpose: a Snipe
+    // category id is a fact about this deployment, not about the content, and
+    // the repository is the seam that a database implementation would have to
+    // satisfy.
+    const categoryIds = new Map<DeviceKey, number[]>();
+    for (const category of categories) {
+      const key = deviceKeyForCategoryName(category.name);
+      if (!key) continue;
+      const existing = categoryIds.get(key);
+      if (existing) existing.push(category.id);
+      else categoryIds.set(key, [category.id]);
+    }
+
+    res.json({
+      devices: tiles.map((tile) => ({
+        ...tile,
+        categoryIds: categoryIds.get(tile.key) ?? [],
+      })),
+    });
   } catch (err) {
     next(err);
   }
@@ -140,5 +177,86 @@ router.get(
     }
   }
 );
+
+/// ── Instrumentation ──────────────────────────────────────────────────────
+//
+//  Whether the library deflects tickets, or whether people read four steps
+//  and ring IT anyway. Without this the pilot can't answer its own question.
+//
+//  NEVER FAILS THE CALLER. Recording is fire-and-forget: a 202 goes back
+//  regardless, and a write failure is logged server-side and swallowed. An
+//  analytics write must not be able to break a page somebody opened because
+//  their phone is already broken — and the client has nothing useful to do
+//  with the error anyway.
+
+router.post("/events", async (req: Request, res: Response) => {
+  // Answer first, record after. Nothing downstream depends on the outcome.
+  res.status(202).json({ recorded: true });
+
+  try {
+    if (!(await analyticsEnabled())) return;
+
+    const { type, sessionId, deviceKey, symptomId, stepNumber, query, detail } =
+      req.body ?? {};
+
+    // A bad payload is dropped rather than reported: this endpoint is only
+    // ever called by our own page, so a malformed body is a bug to find in
+    // the logs, not something to tell the browser about.
+    if (!isEventType(type) || typeof sessionId !== "string" || !sessionId.trim()) {
+      console.warn("[troubleshooting] ignored malformed event:", { type, sessionId });
+      return;
+    }
+
+    await recordEvent({ type, sessionId, deviceKey, symptomId, stepNumber, query, detail });
+  } catch (err) {
+    console.error("[troubleshooting] failed to record event:", err);
+  }
+});
+
+/// ── Admin: the settings card ─────────────────────────────────────────────
+
+const DEFAULT_WINDOW_DAYS = 90;
+
+router.get("/analytics", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const raw = Number(req.query.days);
+    const days = Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : DEFAULT_WINDOW_DAYS;
+
+    res.json(await getAnalyticsSummary(days));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/analytics/enabled", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const actorEmail = getActorEmail(req);
+    if (!isAdminEmail(actorEmail)) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const { enabled } = req.body ?? {};
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ success: false, message: "enabled must be a boolean" });
+    }
+
+    await setSetting("troubleshooting_analytics_enabled", String(enabled), actorEmail);
+    res.json({ success: true, enabled });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/analytics/enabled", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ enabled: (await getSetting("troubleshooting_analytics_enabled")) === "true" });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

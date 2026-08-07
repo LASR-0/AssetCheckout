@@ -10,6 +10,7 @@ import JobHistoryTable from "@/components/settings/JobsHistoryTable";
 import JobStatusBar from "@/components/settings/JobStatusBar";
 import FeedbackSettingsCard from "@/components/settings/FeedbackSettingsCard";
 import CollapsibleSection from "@/components/ui/collapsible-section";
+import TroubleshootingSettingsCard from "@/components/settings/TroubleshootingSettingsCard";
 import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
 import MobileFilterCard from "@/components/settings/MobileFilterCard";
 import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
@@ -166,6 +167,13 @@ export default function SettingsPage() {
             </CollapsibleSection>
           </div>
         </div>
+      </SettingsSection>
+      <SettingsSection icon="troubleshoot" title="Troubleshooting">
+        <p className="text-sm text-info-light mb-4">
+          How the troubleshooting library is being used, and whether it stops tickets.
+          Collection is anonymous; turn it off here if you'd rather not gather it.
+        </p>
+        <TroubleshootingSettingsCard />
       </SettingsSection>
       <SettingsSection icon="forum" title="Feedback">
         <p className="text-sm text-info-light mb-4">

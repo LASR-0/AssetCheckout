@@ -1,8 +1,10 @@
 import { prisma } from "../../db/prisma.js";
 import { getSetting } from "../../services/settings.js";
+import { purgeOldEvents } from "../../services/troubleshootingAnalytics.js";
 
 const BATCH_SIZE = 500;
 const DEFAULT_RETENTION_DAYS = 90;
+const DEFAULT_TROUBLESHOOTING_RETENTION_DAYS = 365;
 
 /**
  * PURGE_OLD_JOB_HISTORY handler.
@@ -17,6 +19,15 @@ const DEFAULT_RETENTION_DAYS = 90;
  *
  * Returns the number deleted, the cutoff date, and the retention window so
  * the job history shows what was swept.
+ *
+ * ALSO SWEEPS TROUBLESHOOTING EVENTS. They ride along here rather than in a
+ * job of their own because a second nightly cron doing one deleteMany is
+ * ceremony for its own sake — this job is already "the thing that stops
+ * tables growing forever", and the alternative is another scheduler entry and
+ * another row in Settings for admins to reason about. They keep their own
+ * retention window, which is much longer: job history answers "what happened
+ * last week", troubleshooting events answer "which articles earned their
+ * place", and that needs seasons rather than weeks.
  */
 export async function purgeOldJobHistoryHandler(): Promise<Record<string, unknown>> {
   const raw = await getSetting("jobs.historyRetentionDays");
@@ -54,9 +65,25 @@ export async function purgeOldJobHistoryHandler(): Promise<Record<string, unknow
     if (batch.length < BATCH_SIZE) break;
   }
 
+  // Its own window, and its own failure boundary: a problem sweeping
+  // analytics must not make the job report a failed job-history purge that
+  // actually succeeded.
+  const tsRaw = await getSetting("troubleshooting.retentionDays");
+  const tsRetentionDays =
+    Number(tsRaw) > 0 ? Number(tsRaw) : DEFAULT_TROUBLESHOOTING_RETENTION_DAYS;
+
+  let troubleshootingDeleted: number | null = null;
+  try {
+    troubleshootingDeleted = await purgeOldEvents(tsRetentionDays);
+  } catch (err) {
+    console.error("[purgeOldJobHistory] troubleshooting event sweep failed:", err);
+  }
+
   return {
     deleted: totalDeleted,
     cutoffDate: cutoff.toISOString(),
     retentionDays,
+    troubleshootingDeleted,
+    troubleshootingRetentionDays: tsRetentionDays,
   };
 }
