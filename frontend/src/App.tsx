@@ -12,6 +12,7 @@ import LandingPage from "./pages/Home";
 import FeedbackPage from "./pages/FeedbackPage";
 import TroubleshootingPage from "./pages/TroubleshootingPage";
 import TroubleshootingArticlePage from "./pages/TroubleshootingArticlePage";
+import { TROUBLESHOOTING_ROUTES } from "./lib/troubleshootingRoutes";
 import Footer from "./components/footer/Footer";
 
 function App() {
@@ -44,14 +45,18 @@ function App() {
               carries its symptom in the URL so IT can send somebody a direct
               link to it. The bare /troubleshooting path redirects to the
               first device with content rather than rendering a deviceless
-              state. */}
-          <Route path="/troubleshooting" element={
+              state.
+
+              The patterns come from lib/troubleshootingRoutes so the links
+              are built from the same source that registers them — Phase 0's
+              accessory deep link broke on exactly that mismatch. */}
+          <Route path={TROUBLESHOOTING_ROUTES.index} element={
             <ProtectedRoute requireRole={false}><TroubleshootingPage /></ProtectedRoute>
           } />
-          <Route path="/troubleshooting/:deviceKey" element={
+          <Route path={TROUBLESHOOTING_ROUTES.device} element={
             <ProtectedRoute requireRole={false}><TroubleshootingPage /></ProtectedRoute>
           } />
-          <Route path="/troubleshooting/:deviceKey/:symptomId" element={
+          <Route path={TROUBLESHOOTING_ROUTES.article} element={
             <ProtectedRoute requireRole={false}><TroubleshootingArticlePage /></ProtectedRoute>
           } />
           <Route path="/no-access" element={<NoAccessPage />} />

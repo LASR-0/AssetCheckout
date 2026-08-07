@@ -9,6 +9,7 @@ import {
   getTroubleshootingConfig,
   getTroubleshootingDevices,
 } from "@/api/troubleshooting";
+import { troubleshootingDevicePath } from "@/lib/troubleshootingRoutes";
 import type {
   DeviceCategoriesResponse,
   DevicePickerTile,
@@ -65,7 +66,7 @@ export default function TroubleshootingPage() {
   useEffect(() => {
     if (deviceKey || devices.length === 0) return;
     const first = devices.find((d) => d.available);
-    if (first) navigate(`/troubleshooting/${first.key}`, { replace: true });
+    if (first) navigate(troubleshootingDevicePath(first.key), { replace: true });
   }, [deviceKey, devices, navigate]);
 
   useEffect(() => {
@@ -167,7 +168,7 @@ export default function TroubleshootingPage() {
           <DevicePicker
             devices={devices}
             selectedKey={deviceKey ?? null}
-            onSelect={(key) => navigate(`/troubleshooting/${key}`)}
+            onSelect={(key) => navigate(troubleshootingDevicePath(key))}
           />
         ) : (
           <p className="text-sm text-info-light">

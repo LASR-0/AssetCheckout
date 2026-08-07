@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
 import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape";
+import SymptomLink from "@/components/troubleshooting/SymptomLink";
 import { Callout } from "@/components/ui/callout";
 import { Badge } from "@/components/ui/statusbadge";
 import { getSymptom, getTroubleshootingConfig } from "@/api/troubleshooting";
+import {
+  stepAnchorId,
+  troubleshootingDevicePath,
+  troubleshootingIndexPath,
+} from "@/lib/troubleshootingRoutes";
 import type {
   Step,
   SymptomResponse,
@@ -20,10 +26,13 @@ import type {
 //  feature is for, so the symptom is a route parameter rather than component
 //  state.
 //
-//  Still to come in the next increment: the sidebar switching to step
-//  navigation, branch buttons through to a related symptom, and the sibling
-//  chips at the foot. The step data already carries its branches — they just
-//  aren't rendered yet.
+//  The sidebar switches to step navigation in here rather than staying on
+//  page navigation: the index's section anchors don't exist on this page.
+//
+//  There is no scroll tracking. The escape hatch carries no context by
+//  decision — someone who has exhausted these steps has a problem past what
+//  surface-level troubleshooting covers, so which step they stopped at
+//  doesn't travel usefully to whoever picks up the phone.
 ///  +-----------------------------------------------------------------+
 
 /** Shown for a symptom that is listed but not yet written. A placeholder
@@ -47,9 +56,22 @@ function DraftNotice() {
   );
 }
 
-function StepBlock({ step, index }: { step: Step; index: number }) {
+function StepBlock({
+  step,
+  index,
+  deviceKey,
+}: {
+  step: Step;
+  index: number;
+  deviceKey: string;
+}) {
   return (
-    <section className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 border-b border-outline/40 py-6 last:border-b-0">
+    // scroll-mt clears the fixed navbar, so a step linked from the sidebar
+    // lands with its heading visible rather than tucked underneath it.
+    <section
+      id={stepAnchorId(index)}
+      className="grid scroll-mt-24 grid-cols-[2rem_minmax(0,1fr)] gap-4 border-b border-outline/40 py-6 last:border-b-0"
+    >
       <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
         {index + 1}
       </span>
@@ -71,6 +93,18 @@ function StepBlock({ step, index }: { step: Step; index: number }) {
             <span className="material-symbols-outlined !text-[16px]">image</span>
             {step.figure}
           </p>
+        )}
+
+        {/* The exit for when this step reveals the real problem is a
+            different symptom. Branches may point at another device, so the
+            target's own key wins when it carries one. */}
+        {step.branch && (
+          <SymptomLink
+            variant="branch"
+            deviceKey={step.branch.targetDeviceKey ?? deviceKey}
+            symptomId={step.branch.targetSymptomId}
+            label={step.branch.label}
+          />
         )}
       </div>
     </section>
@@ -116,21 +150,45 @@ export default function TroubleshootingArticlePage() {
 
   const article = data?.article ?? null;
 
+  // Inside an article the sidebar is step navigation rather than page
+  // navigation — the index's "Your device / Symptoms" anchors point at
+  // sections that don't exist here, so carrying them over would leave two
+  // dead links in the rail.
+  //
+  // Plain anchors, no scroll-spy: nothing on this page needs to know which
+  // step you're on now that the escape hatch doesn't carry context.
   const sidebar = (
     <>
-      <Eyebrow>This article</Eyebrow>
-      <Link
-        to={`/troubleshooting/${deviceKey}`}
-        className="rounded-lg px-2.5 py-2 text-sm font-semibold text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
-      >
-        ← All symptoms
-      </Link>
+      <Eyebrow>{article ? "Steps" : "This article"}</Eyebrow>
+
+      {article && (
+        <nav className="flex flex-col gap-0.5">
+          {article.steps.map((step, i) => (
+            <a
+              key={stepAnchorId(i)}
+              href={`#${stepAnchorId(i)}`}
+              className="flex gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] leading-snug text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
+            >
+              <span className="shrink-0 text-info-light">{i + 1}</span>
+              <span className="min-w-0">{step.title}</span>
+            </a>
+          ))}
+        </nav>
+      )}
+
       <a
         href="#help"
         className="rounded-lg px-2.5 py-2 text-[13px] font-semibold text-info-light hover:text-primary transition-colors"
       >
         ↳ Still not fixed
       </a>
+
+      <Link
+        to={troubleshootingDevicePath(deviceKey ?? "")}
+        className="rounded-lg border border-outline px-2.5 py-2 text-center text-[13px] font-semibold text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
+      >
+        ← All symptoms
+      </Link>
     </>
   );
 
@@ -157,7 +215,7 @@ export default function TroubleshootingArticlePage() {
             {error}
           </div>
           <Link
-            to="/troubleshooting"
+            to={troubleshootingIndexPath()}
             className="text-sm font-semibold text-primary hover:underline"
           >
             ← Back to troubleshooting
@@ -170,7 +228,7 @@ export default function TroubleshootingArticlePage() {
           <div className="flex flex-col gap-3 border-b border-outline/40 pb-5">
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                to={`/troubleshooting/${deviceKey}`}
+                to={troubleshootingDevicePath(deviceKey ?? "")}
                 className="rounded-lg border border-outline px-2.5 py-1 text-xs font-semibold text-info-light hover:bg-surface-container-low/30 transition-colors"
               >
                 ← All symptoms
@@ -239,9 +297,36 @@ export default function TroubleshootingArticlePage() {
           {article && (
             <div className="flex flex-col">
               {article.steps.map((step, i) => (
-                <StepBlock key={step.title} step={step} index={i} />
+                <StepBlock
+                  key={stepAnchorId(i)}
+                  step={step}
+                  index={i}
+                  deviceKey={deviceKey!}
+                />
               ))}
             </div>
+          )}
+
+          {/* Siblings from the same category, offered once the steps have run
+              out. Drafts are included deliberately — the same reasoning as
+              listing them on the index: a symptom we know about but haven't
+              written up is still worth showing, and hiding it here would make
+              the category look thinner than it is. */}
+          {data.siblings.length > 0 && (
+            <section className="flex flex-col gap-3 pt-2">
+              <Eyebrow>Other symptoms in {data.category.name}</Eyebrow>
+              <div className="flex flex-wrap gap-2">
+                {data.siblings.map((sibling) => (
+                  <SymptomLink
+                    key={sibling.id}
+                    variant="chip"
+                    deviceKey={deviceKey!}
+                    symptomId={sibling.id}
+                    label={sibling.label}
+                  />
+                ))}
+              </div>
+            </section>
           )}
         </article>
       )}

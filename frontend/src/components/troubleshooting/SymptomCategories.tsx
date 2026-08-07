@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import CollapsibleSection from "@/components/ui/collapsible-section";
 import { Badge } from "@/components/ui/statusbadge";
+import { troubleshootingArticlePath } from "@/lib/troubleshootingRoutes";
 import type { SymptomCategoryListing } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -72,7 +73,7 @@ export default function SymptomCategories({
             {category.symptoms.map((symptom) => (
               <li key={symptom.id}>
                 <Link
-                  to={`/troubleshooting/${deviceKey}/${symptom.id}`}
+                  to={troubleshootingArticlePath(deviceKey, symptom.id)}
                   className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-on-background hover:bg-surface-container-low/30 transition-colors"
                 >
                   <span className="size-1.5 shrink-0 rounded-full bg-info-light" />

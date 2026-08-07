@@ -1,5 +1,9 @@
 import { Link } from "react-router-dom";
 import { SupportEscapeCard } from "./SupportEscape";
+import {
+  troubleshootingDevicePath,
+  troubleshootingIndexPath,
+} from "@/lib/troubleshootingRoutes";
 import type { TroubleshootingConfig } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -60,14 +64,14 @@ export default function TroubleshootingLayout({
             Home
           </Link>
           <span aria-hidden>/</span>
-          <Link to="/troubleshooting" className="hover:text-on-background transition-colors">
+          <Link to={troubleshootingIndexPath()} className="hover:text-on-background transition-colors">
             Troubleshooting
           </Link>
           {deviceKey && (
             <>
               <span aria-hidden>/</span>
               <Link
-                to={`/troubleshooting/${deviceKey}`}
+                to={troubleshootingDevicePath(deviceKey)}
                 className="hover:text-on-background transition-colors"
               >
                 {deviceLabel}
