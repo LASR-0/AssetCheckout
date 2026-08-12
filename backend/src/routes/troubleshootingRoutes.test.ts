@@ -52,6 +52,42 @@ vi.mock("../services/snipeitaccessories.js", () => ({
 }));
 
 const { default: troubleshootingRoutes } = await import("./troubleshootingRoutes.js");
+const { parseContent } = await import("../content/troubleshooting/repository.js");
+
+// A real written phone symptom, found rather than named. These contract tests
+// are about response SHAPE; hardcoding a symptom id made them fail every time
+// an article was renamed, which is how a test earns a reputation for being
+// safe to edit without reading.
+// The written case is taken from phones because one assertion below checks
+// the subject label; the Draft case is taken from ANYWHERE in the library.
+// Scoping the Draft to phones broke the day phones were finished, and a test
+// that fails because content got better is the worst kind there is.
+const { writtenPhone, draft } = (() => {
+  const { subjects, articles } = parseContent();
+  const writtenKey = new Set(
+    articles.flatMap((a) => a.subjectKeys.map((k) => `${k}/${a.symptomId}`))
+  );
+  const flat = subjects.flatMap((subject) =>
+    subject.categories.flatMap((category) =>
+      category.symptoms.map((symptom) => ({
+        subjectKey: subject.key,
+        symptomId: symptom.id,
+        label: symptom.label,
+        categoryName: category.name,
+      }))
+    )
+  );
+
+  const hit = flat.find(
+    (s) => s.subjectKey === "phone" && writtenKey.has(`${s.subjectKey}/${s.symptomId}`)
+  );
+  const miss = flat.find((s) => !writtenKey.has(`${s.subjectKey}/${s.symptomId}`));
+
+  if (!hit) throw new Error("No written phone article to test the symptom contract against");
+  if (!miss) throw new Error("No unwritten symptom anywhere to test the Draft contract against");
+
+  return { writtenPhone: hit, draft: miss };
+})();
 
 let server: Server;
 let baseUrl: string;
@@ -103,22 +139,30 @@ describe("GET /subjects", () => {
     const keys = body.subjects.map((d: { key: string }) => d.key);
 
     expect(status).toBe(200);
-    // Laptops and headphones are requestable; phones are not, but we have an
-    // article for them, so they stay reachable. Licences map to no subject.
-    expect(keys).toEqual(["laptop", "phone", "headphones"]);
+    // Asserted by containment, not as an exact list: writing an article for
+    // any new subject adds it here, and a test that fails whenever content is
+    // added is a test people edit without reading.
+    //
+    // Laptops and headphones are requestable, so both appear. Phones are not
+    // requestable but have articles, so they stay reachable — that union is
+    // the whole point. Licences map to no subject at all.
+    expect(keys).toContain("laptop");
+    expect(keys).toContain("headphones");
+    expect(keys).toContain("phone");
+    expect(keys).not.toContain("licence");
   });
 
-  it("only marks subjects with articles as available", async () => {
-    getRequestableAssetCategories.mockResolvedValue([{ id: 1, name: "Laptops" }]);
+  it("marks a subject available exactly when it has a taxonomy", async () => {
+    getRequestableAssetCategories.mockResolvedValue([{ id: 1, name: "Keyboards" }]);
     getRequestableAccessoryCategories.mockResolvedValue([]);
 
     const { body } = await get("/subjects");
-    const byKey = Object.fromEntries(
-      body.subjects.map((d: { key: string; available: boolean }) => [d.key, d.available])
-    );
 
-    expect(byKey.phone).toBe(true);
-    expect(byKey.laptop).toBe(false);
+    // Drafts are browsable on purpose — opening a listed symptom tells the
+    // reader it is recognised, which is more use than a greyed-out tile.
+    for (const s of body.subjects as { available: boolean; symptomCount: number }[]) {
+      expect(s.available).toBe(s.symptomCount > 0);
+    }
   });
 
   ///  The dialog deep link depends on this: it holds a Snipe category id and
@@ -152,7 +196,17 @@ describe("GET /subjects", () => {
     // A page somebody reached because something is already broken must not
     // break again over a catalogue call.
     expect(status).toBe(200);
-    expect(body.subjects.map((d: { key: string }) => d.key)).toEqual(["phone"]);
+
+    // The library stands on its own with Snipe entirely absent: everything
+    // still offered is something we hold a taxonomy for, and some of it has
+    // real articles behind it.
+    expect(body.subjects.length).toBeGreaterThan(0);
+    for (const s of body.subjects as { available: boolean }[]) {
+      expect(s.available).toBe(true);
+    }
+    expect(
+      (body.subjects as { articleCount: number }[]).some((s) => s.articleCount > 0)
+    ).toBe(true);
   });
 });
 
@@ -172,22 +226,28 @@ describe("GET /subjects/:subjectKey", () => {
 
 describe("GET /subjects/:subjectKey/symptoms/:symptomId", () => {
   it("returns the article, its category and its siblings", async () => {
-    const { status, body } = await get("/subjects/phone/symptoms/wifi");
+    const { status, body } = await get(
+      `/subjects/phone/symptoms/${writtenPhone.symptomId}`
+    );
 
     expect(status).toBe(200);
-    expect(body.article.symptomId).toBe("wifi");
+    expect(body.article.symptomId).toBe(writtenPhone.symptomId);
     expect(body.article.steps.length).toBeGreaterThan(0);
-    expect(body.category.name).toBe("Network & connectivity");
-    expect(body.siblings.map((s: { id: string }) => s.id)).not.toContain("wifi");
+    expect(body.category.name).toBe(writtenPhone.categoryName);
+    expect(body.siblings.map((s: { id: string }) => s.id)).not.toContain(
+      writtenPhone.symptomId
+    );
   });
 
   it("returns 200 with a null article for a symptom nobody has written yet", async () => {
-    const { status, body } = await get("/subjects/phone/symptoms/bluetooth");
+    const { status, body } = await get(
+      `/subjects/${draft.subjectKey}/symptoms/${draft.symptomId}`
+    );
 
     expect(status).toBe(200);
     expect(body.article).toBeNull();
     // The symptom itself still comes back, so the Draft page can name it.
-    expect(body.symptom.label).toBe("Bluetooth won't pair");
+    expect(body.symptom.label).toBe(draft.label);
     expect(body.symptom.hasArticle).toBe(false);
   });
 

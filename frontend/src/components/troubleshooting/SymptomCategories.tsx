@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import CollapsibleSection from "@/components/ui/collapsible-section";
 import { Badge } from "@/components/ui/statusbadge";
-import { troubleshootingArticlePath } from "@/lib/troubleshootingRoutes";
+import { FROM_SYMPTOM_LIST, troubleshootingArticlePath } from "@/lib/troubleshootingRoutes";
 import type { SymptomCategoryListing } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -74,6 +74,10 @@ export default function SymptomCategories({
               <li key={symptom.id}>
                 <Link
                   to={troubleshootingArticlePath(subjectKey, symptom.id)}
+                  // Tags the article's history entry so its "All symptoms"
+                  // links know this list is directly behind them and can go
+                  // genuinely back to it — see hooks/useSubjectBackNav.
+                  state={{ [FROM_SYMPTOM_LIST]: true }}
                   className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-on-background hover:bg-surface-container-low/30 transition-colors"
                 >
                   <span className="size-1.5 shrink-0 rounded-full bg-info-light" />

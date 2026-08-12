@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
 import SubjectPicker from "@/components/troubleshooting/SubjectPicker";
 import SymptomCategories from "@/components/troubleshooting/SymptomCategories";
@@ -11,6 +11,7 @@ import {
 } from "@/api/troubleshooting";
 import { troubleshootingSubjectPath } from "@/lib/troubleshootingRoutes";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
+import { useRestoredState, useViewState } from "@/hooks/useViewState";
 import type {
   SubjectCategoriesResponse,
   SubjectPickerTile,
@@ -24,28 +25,68 @@ import type {
 //  Device picker, then the symptom accordion for whichever device is
 //  selected, with a client-side search over symptom labels.
 //
-//  THE DEVICE IS IN THE URL. /troubleshooting on its own redirects to the
-//  first device that has content, so there is no state in which the address
-//  bar doesn't say what you're looking at. The prototype held all of this in
-//  component state and could link to none of it.
+//  THE DEVICE IS IN THE URL. The prototype held all of this in component
+//  state and could link to none of it; here every device and every article
+//  has an address, which is most of the point — IT sending somebody a direct
+//  link is a large part of what this feature is for.
+//
+//  NOTHING IS SELECTED UNTIL SOMEBODY SELECTS IT. `/troubleshooting` used to
+//  redirect to the first device with content, which meant the page opened
+//  with Laptops chosen and a wall of laptop symptoms in front of a reader who
+//  had not yet said anything about their problem. Worse, it quietly answered
+//  the question the page had just asked them. The empty state asks and waits.
 //
 //  Search is client-side because the whole taxonomy for one device — a
 //  couple of dozen labels — is already in hand once the page loads. A round
 //  trip per keystroke would buy nothing at this size.
+//
+//  COMING BACK FROM AN ARTICLE IS NOT A FRESH VISIT. Which categories were
+//  expanded, what was typed in the search box and how far down the page you
+//  were are all restored when you press Back — see hooks/useViewState, which
+//  keys the snapshot on the history entry rather than the url so that a
+//  deliberate navigation to the same page still starts clean.
 ///  +-----------------------------------------------------------------+
+
+/** What survives a trip into an article and back. Kept small: it is
+ *  serialised into sessionStorage on every change. */
+type IndexView = {
+  /** Guards against restoring one device's expanded sections onto another. */
+  subjectKey: string | null;
+  openIds: string[];
+  query: string;
+};
+
+const VIEW_NAME = "troubleshooting-index";
 
 export default function TroubleshootingPage() {
   const { subjectKey } = useParams<{ subjectKey?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Read once, at mount, and used to seed the state below rather than applied
+  // through an effect — restoring through an effect would render the page
+  // collapsed and then visibly snap it open.
+  const restored = useRestoredState<IndexView>(VIEW_NAME, location.key);
 
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
   const [subjects, setSubjects] = useState<SubjectPickerTile[]>([]);
   const [data, setData] = useState<SubjectCategoriesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [query, setQuery] = useState("");
-  const [openIds, setOpenIds] = useState<string[]>([]);
+  const [query, setQuery] = useState(restored?.query ?? "");
+  const [openIds, setOpenIds] = useState<string[]>(restored?.openIds ?? []);
+
+  // The categories to re-open once the fetch below lands, consumed once.
+  //
+  // The fetch clears the accordion on purpose — switching device should not
+  // leave the previous device's sections open — but on the way back from an
+  // article that clear would undo the whole restore. Holding the restored ids
+  // here lets the fetch tell the two cases apart: it re-opens only when the
+  // device is the one the snapshot was taken on, and only for the first load.
+  const pendingOpenIds = useRef<string[] | null>(
+    restored && restored.subjectKey === (subjectKey ?? null) ? restored.openIds : null
+  );
 
   // Config is decorative relative to the rest of the page — a missing
   // support number must not stop the symptoms rendering, so it fails quietly
@@ -62,16 +103,15 @@ export default function TroubleshootingPage() {
       .catch(() => setSubjects([]));
   }, []);
 
-  // No device in the URL: pick the first one with content and put it there,
-  // replacing rather than pushing so Back doesn't bounce through the redirect.
   useEffect(() => {
-    if (subjectKey || subjects.length === 0) return;
-    const first = subjects.find((s) => s.available);
-    if (first) navigate(troubleshootingSubjectPath(first.key), { replace: true });
-  }, [subjectKey, subjects, navigate]);
-
-  useEffect(() => {
-    if (!subjectKey) return;
+    // Nothing chosen yet. Not an error and not a loading state — the picker
+    // above is the whole page until somebody answers it.
+    if (!subjectKey) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     setLoading(true);
@@ -82,8 +122,11 @@ export default function TroubleshootingPage() {
         if (cancelled) return;
         setData(res);
         // Nothing expanded on arrival: six open categories is a wall of
-        // links, and the blurbs are what the closed state is for.
-        setOpenIds([]);
+        // links, and the blurbs are what the closed state is for. The
+        // exception is arriving back from an article, where the reader had
+        // already opened these and expects to find them as they left them.
+        setOpenIds(pendingOpenIds.current ?? []);
+        pendingOpenIds.current = null;
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message || "Couldn't load troubleshooting steps.");
@@ -141,6 +184,21 @@ export default function TroubleshootingPage() {
 
     return () => clearTimeout(timer);
   }, [needle, matchCount, query, subjectKey]);
+
+  // Persist this history entry's view, and put the scroll position back once
+  // the symptom list has rendered. Before that the page is only as tall as
+  // the picker, and scrolling past its height would silently do nothing.
+  //
+  // With no device chosen there is nothing further to wait for, so the page
+  // counts as ready immediately.
+  const contentReady = !subjectKey || (!loading && data !== null);
+
+  useViewState<IndexView>(
+    VIEW_NAME,
+    location.key,
+    { subjectKey: subjectKey ?? null, openIds, query },
+    contentReady
+  );
 
   function handleOpenChange(categoryId: string, open: boolean) {
     if (needle) return; // Search owns the open state while it's active.
@@ -204,6 +262,11 @@ export default function TroubleshootingPage() {
       <section id="symptoms" className="scroll-mt-24">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-bold">What&apos;s happening?</h2>
+          {!subjectKey && (
+            <span className="text-[13px] text-info-light">
+              Choose something above first
+            </span>
+          )}
           {data && (
             <span className="text-[13px] text-info-light">
               {matchCount} {matchCount === 1 ? "symptom" : "symptoms"}
@@ -232,18 +295,38 @@ export default function TroubleshootingPage() {
           )}
         </div>
 
-        <div className="relative mb-4">
-          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 !text-[18px] text-info-light">
-            search
-          </span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search symptoms — e.g. battery, wi-fi, screen"
-            aria-label="Search symptoms"
-            className="w-full rounded-lg border border-outline bg-surface py-2.5 pl-10 pr-3 text-sm text-on-background placeholder:text-info-light focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
+        {/* The search box searches the selected device's symptoms, so it has
+            nothing to act on until one is chosen — an empty box that silently
+            does nothing is worse than no box. */}
+        {subjectKey && (
+          <div className="relative mb-4">
+            <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 !text-[18px] text-info-light">
+              search
+            </span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search symptoms — e.g. battery, wi-fi, screen"
+              aria-label="Search symptoms"
+              className="w-full rounded-lg border border-outline bg-surface py-2.5 pl-10 pr-3 text-sm text-on-background placeholder:text-info-light focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+        )}
+
+        {/* Nothing picked yet. A prompt rather than a blank space or a
+            spinner: the page has asked a question and this says so, instead
+            of looking like something failed to load. */}
+        {!subjectKey && (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-outline px-6 py-12 text-center">
+            <span className="material-symbols-outlined !text-[28px] text-info-light">
+              touch_app
+            </span>
+            <p className="max-w-[46ch] text-sm text-info-light">
+              Pick what you&apos;re having trouble with above and the symptoms we
+              have steps for will appear here.
+            </p>
+          </div>
+        )}
 
         {loading && (
           <div className="flex items-center justify-center gap-3 py-12 text-sm text-info-light">

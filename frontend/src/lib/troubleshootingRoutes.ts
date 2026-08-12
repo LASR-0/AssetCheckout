@@ -16,6 +16,22 @@
 //  but it does put the two things that must match on adjacent lines.
 ///  +-----------------------------------------------------------------+
 
+/**
+ * Marks a navigation as "I came here from the symptom list".
+ *
+ * Set by the symptom links on the index and read by the article's own
+ * "All symptoms" links and breadcrumb, which use it to go genuinely BACK
+ * rather than pushing a fresh copy of the page the reader just left.
+ *
+ * It lives here with the route contract because it is part of that contract:
+ * the link that sets it and the link that reads it are in different files,
+ * and a typo between them would fail silently — the exact failure mode this
+ * whole module exists to prevent.
+ */
+export const FROM_SYMPTOM_LIST = "fromSymptomList";
+
+export type TroubleshootingLinkState = { [FROM_SYMPTOM_LIST]?: boolean };
+
 /** Route patterns — these are what App.tsx registers. */
 export const TROUBLESHOOTING_ROUTES = {
   index: "/troubleshooting",

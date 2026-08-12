@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { useTheme } from "next-themes";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
 import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape";
 import SymptomLink from "@/components/troubleshooting/SymptomLink";
@@ -7,12 +8,12 @@ import { Callout } from "@/components/ui/callout";
 import { Badge } from "@/components/ui/statusbadge";
 import { getSymptom, getTroubleshootingConfig } from "@/api/troubleshooting";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
-import {
-  stepAnchorId,
-  troubleshootingSubjectPath,
-  troubleshootingIndexPath,
-} from "@/lib/troubleshootingRoutes";
+import { useViewState } from "@/hooks/useViewState";
+import { useSubjectBackNav } from "@/hooks/useSubjectBackNav";
+import { stepAnchorId, troubleshootingIndexPath } from "@/lib/troubleshootingRoutes";
 import type {
+  Figure,
+  FigureImage,
   Step,
   SymptomResponse,
   TroubleshootingConfig,
@@ -56,6 +57,119 @@ function DraftNotice() {
         us this is one worth writing up next.
       </p>
     </div>
+  );
+}
+
+/**
+ * A step's figure: none, one or several screenshots above a required caption.
+ *
+ * The caption renders either way and carries the accessible description, so
+ * the pictures are all `alt=""` — the two would say the same thing, and a
+ * screen reader announcing a caption once per image is worse than once.
+ *
+ * Bordered and boxed rather than bare so a screenshot of a window doesn't
+ * bleed into the page around it; screenshots of UI have no natural edge.
+ *
+ * A cap rather than a percentage, because a percentage is relative to the
+ * column and would scale a narrow screenshot and a wide one by different
+ * amounts.
+ */
+const FIGURE_IMAGE = "max-w-full self-start rounded-lg border border-outline";
+
+// Three widths, chosen by the figure rather than measured from the file. A
+// tray flyout is legible small and dominates the step at full size; a Task
+// Manager window is unreadable at flyout width; and a whole-screen capture is
+// unreadable at either, because the control being pointed at is a small part
+// of a 1400px-wide picture. Full class literals, not built by concatenation,
+// so Tailwind can see them.
+//
+// `full` fills the column rather than naming a number. Every capture using it
+// is at least 1129px wide against a column of roughly 790px, so it is still
+// being scaled DOWN — the size is a ceiling on how small to draw it, never a
+// licence to upscale a small image into a blurry one.
+const FIGURE_WIDTH = {
+  flyout: "sm:max-w-[17rem]",
+  window: "sm:max-w-[34rem]",
+  full: "sm:max-w-full",
+} as const;
+
+// The same three sizes when a figure holds a sequence, so the whole row takes
+// about as much room as one picture would and the step below stays in view.
+// Phone screenshots are portrait and very tall, which is why the paired
+// flyout width is well under half — two full-height iPhone captures at 17rem
+// each would be a 1200px wall in the middle of a five-step article.
+const FIGURE_WIDTH_PAIRED = {
+  flyout: "max-w-[9rem] sm:max-w-[11rem]",
+  window: "sm:max-w-[17rem]",
+  full: "sm:max-w-[24rem]",
+} as const;
+
+/**
+ * One picture in a figure, in whichever theme is on screen.
+ *
+ * Read from next-themes rather than swapped with a `dark:` utility. This app
+ * has a `.dark` class but has never wired Tailwind's `dark:` variant to it —
+ * under Tailwind v4 that variant defaults to prefers-color-scheme, so
+ * `dark:hidden` follows the OPERATING SYSTEM and ignores the in-app toggle
+ * entirely. Theming here works through CSS custom properties instead (the
+ * tokens take different values inside `.dark`), which is why nothing else in
+ * the app needed the variant.
+ *
+ * resolvedTheme rather than theme, so "system" resolves to what is actually
+ * on screen. It is undefined until the provider mounts; the light image shows
+ * until then, which is what a reader on the default theme sees anyway.
+ */
+function FigureShot({ image, className }: { image: FigureImage; className: string }) {
+  const { resolvedTheme } = useTheme();
+  const src = resolvedTheme === "dark" && image.srcDark ? image.srcDark : image.src;
+
+  return (
+    <img
+      src={`/troubleshooting/${src}`}
+      // Empty alt on purpose: the figcaption below carries the same words, and
+      // a screen reader would otherwise announce them once per picture. The
+      // caption is the accessible description — see schema.ts, where it is
+      // required and the images are not.
+      alt=""
+      className={className}
+      loading="lazy"
+    />
+  );
+}
+
+function StepFigure({ figure }: { figure: Figure }) {
+  const images = figure.images ?? [];
+
+  // A pair renders side by side and each picture takes half the room, so the
+  // two together occupy what one would have. That is the point of a pair —
+  // the route and the destination read as one illustration, not as two
+  // figures stacked up pushing the next step off the screen.
+  //
+  // `flex-wrap` rather than a fixed two-column grid: on a narrow screen a
+  // phone screenshot cut to half width is unreadable, so they stack instead.
+  const many = images.length > 1;
+  const width = many
+    ? FIGURE_WIDTH_PAIRED[figure.size ?? "flyout"]
+    : FIGURE_WIDTH[figure.size ?? "flyout"];
+
+  return (
+    <figure className="flex flex-col gap-2">
+      {images.length > 0 && (
+        <div className="flex flex-wrap items-start gap-3">
+          {images.map((image) => (
+            <FigureShot
+              key={image.src}
+              image={image}
+              className={`${FIGURE_IMAGE} ${width}`}
+            />
+          ))}
+        </div>
+      )}
+      <figcaption className="flex items-center gap-2 text-[13px] text-info-light">
+        <span className="material-symbols-outlined !text-[16px]">image</span>
+        {figure.caption}
+      </figcaption>
+    </figure>
   );
 }
 
@@ -122,16 +236,7 @@ function StepBlock({
         {step.note && <Callout variant="note">{step.note}</Callout>}
         {step.warn && <Callout variant="warn">{step.warn}</Callout>}
 
-        {/* A caption with no image. v1 ships no screenshots deliberately — a
-            screenshot of a superseded settings screen misleads worse than
-            prose does — and the caption carries the navigation path, which
-            is what the picture would mostly have shown anyway. */}
-        {step.figure && (
-          <p className="flex items-center gap-2 text-[13px] text-info-light">
-            <span className="material-symbols-outlined !text-[16px]">image</span>
-            {step.figure}
-          </p>
-        )}
+        {step.figure && <StepFigure figure={step.figure} />}
 
         {/* The exit for when this step reveals the real problem is a
             different symptom. Branches may point at another device, so the
@@ -151,6 +256,11 @@ function StepBlock({
 
 export default function TroubleshootingArticlePage() {
   const { subjectKey, symptomId } = useParams<{ subjectKey: string; symptomId: string }>();
+  const location = useLocation();
+
+  // Returns to the symptom list as the reader left it when they arrived from
+  // it, and behaves as an ordinary link when they didn't.
+  const backToSymptoms = useSubjectBackNav(subjectKey);
 
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
   const [data, setData] = useState<SymptomResponse | null>(null);
@@ -198,6 +308,20 @@ export default function TroubleshootingArticlePage() {
     trackTroubleshooting({ type: "ARTICLE_OPENED", subjectKey, symptomId });
   }, [subjectKey, symptomId]);
 
+  // An article has no state of its own worth keeping — no accordion, no
+  // search — but scroll position matters as much as it does on the index.
+  // Following a branch from step 5 and pressing Back should return you to
+  // step 5, not to the top of an article you had already worked through.
+  //
+  // Ready once the steps have rendered: until then the page is a spinner and
+  // scrolling down it would do nothing.
+  useViewState(
+    "troubleshooting-article",
+    location.key,
+    null,
+    !loading && !error && data !== null
+  );
+
   // Inside an article the sidebar is step navigation rather than page
   // navigation — the index's "Your device / Symptoms" anchors point at
   // sections that don't exist here, so carrying them over would leave two
@@ -232,7 +356,7 @@ export default function TroubleshootingArticlePage() {
       </a>
 
       <Link
-        to={troubleshootingSubjectPath(subjectKey ?? "")}
+        {...backToSymptoms}
         className="rounded-lg border border-outline px-2.5 py-2 text-center text-[13px] font-semibold text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
       >
         ← All symptoms
@@ -276,7 +400,7 @@ export default function TroubleshootingArticlePage() {
           <div className="flex flex-col gap-3 border-b border-outline/40 pb-5">
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                to={troubleshootingSubjectPath(subjectKey ?? "")}
+                {...backToSymptoms}
                 className="rounded-lg border border-outline px-2.5 py-1 text-xs font-semibold text-info-light hover:bg-surface-container-low/30 transition-colors"
               >
                 ← All symptoms
@@ -354,6 +478,33 @@ export default function TroubleshootingArticlePage() {
                 />
               ))}
             </div>
+          )}
+
+          {/* Where the steps came from, when they came from a manufacturer.
+              Most of the library is rewritten from Apple's and Samsung's own
+              documentation, because people will not leave this site to go and
+              read a vendor page — so we bring the content to them.
+
+              BELOW THE STEPS, NOT ABOVE THEM, and deliberately quiet. The
+              reader is here to fix a phone, and a citation at the top is an
+              invitation to go and read the other page instead, which is the
+              exact behaviour this library exists to remove. It sits at the
+              end for the person who wants to check our working, and for a
+              reviewer who needs to know which page to re-check when Apple
+              moves a setting. */}
+          {article?.source && (
+            <p className="flex items-center gap-1.5 text-[13px] text-info-light">
+              <span className="material-symbols-outlined !text-[16px]">link</span>
+              Adapted from{" "}
+              <a
+                href={article.source.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="font-semibold text-primary hover:underline"
+              >
+                {article.source.name}
+              </a>
+            </p>
           )}
 
           {/* Siblings from the same category, offered once the steps have run

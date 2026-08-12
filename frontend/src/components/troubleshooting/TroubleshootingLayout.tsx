@@ -1,9 +1,7 @@
 import { Link } from "react-router-dom";
 import { SupportEscapeCard } from "./SupportEscape";
-import {
-  troubleshootingSubjectPath,
-  troubleshootingIndexPath,
-} from "@/lib/troubleshootingRoutes";
+import { useSubjectBackNav } from "@/hooks/useSubjectBackNav";
+import { troubleshootingIndexPath } from "@/lib/troubleshootingRoutes";
 import type { TroubleshootingConfig } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -53,6 +51,11 @@ export default function TroubleshootingLayout({
   sidebar,
   children,
 }: Props) {
+  // The subject crumb is a Back affordance when the reader came from the
+  // symptom list, and an ordinary link otherwise. On the index itself
+  // there is no list behind it and it stays a plain link either way.
+  const backToSymptoms = useSubjectBackNav(subjectKey);
+
   return (
     <main className="min-h-screen bg-landing-bg text-on-background">
       <div className="mx-auto max-w-6xl px-4 pb-20 pt-8 md:px-8">
@@ -70,12 +73,25 @@ export default function TroubleshootingLayout({
           {subjectKey && (
             <>
               <span aria-hidden>/</span>
-              <Link
-                to={troubleshootingSubjectPath(subjectKey)}
-                className="hover:text-on-background transition-colors"
-              >
-                {subjectLabel}
-              </Link>
+              {/* On the symptom list itself this crumb IS the current page,
+                  so it is marked as such rather than being a link back to
+                  where you already are — which would push a fresh entry and
+                  collapse everything the reader had opened.
+
+                  Inside an article it behaves as Back when the list is
+                  directly behind, returning them to it as they left it. */}
+              {breadcrumbTail ? (
+                <Link
+                  {...backToSymptoms}
+                  className="hover:text-on-background transition-colors"
+                >
+                  {subjectLabel}
+                </Link>
+              ) : (
+                <span aria-current="page" className="text-on-background">
+                  {subjectLabel}
+                </span>
+              )}
             </>
           )}
           {breadcrumbTail && (

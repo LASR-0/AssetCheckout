@@ -67,13 +67,34 @@ export type Branch = {
   targetSubjectKey?: SubjectKey;
 };
 
+/** One picture, with an optional dark-theme twin. `src` is relative to
+ *  /troubleshooting/. */
+export type FigureImage = {
+  src: string;
+  /** Dark-theme variant. When absent, `src` is used in both themes. */
+  srcDark?: string;
+};
+
+/** Caption required, screenshots optional — the words are the content and
+ *  the pictures are the aid. */
+export type Figure = {
+  /** In the order the reader walks them: the menu first, then where it lands. */
+  images?: FigureImage[];
+  /**
+   * How much room the picture needs. Omitted is a small UI flyout;
+   * "window" an application window; "full" a whole-screen capture whose
+   * detail is illegible at anything less.
+   */
+  size?: "window" | "full";
+  caption: string;
+};
+
 export type Step = {
   title: string;
   body: string;
   note?: string;
   warn?: string;
-  /** A caption, not an image path — v1 ships no screenshots. */
-  figure?: string;
+  figure?: Figure;
   branch?: Branch;
 };
 

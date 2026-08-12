@@ -11,8 +11,82 @@ import {
   type SymptomCategory,
 } from "./schema.js";
 import { SUBJECT_LABELS } from "./subjects.js";
+import desktop from "./subjects/desktop.js";
+import dock from "./subjects/dock.js";
+import ess from "./subjects/ess.js";
+import headphones from "./subjects/headphones.js";
+import keyboard from "./subjects/keyboard.js";
+import laptop from "./subjects/laptop.js";
+import monitor from "./subjects/monitor.js";
+import mouse from "./subjects/mouse.js";
+import onedrive from "./subjects/onedrive.js";
+import outlook from "./subjects/outlook.js";
 import phone from "./subjects/phone.js";
-import phoneWifi from "./articles/phone/wifi.js";
+import printer from "./subjects/printer.js";
+import sap from "./subjects/sap.js";
+import sharepoint from "./subjects/sharepoint.js";
+import tablet from "./subjects/tablet.js";
+import webcam from "./subjects/webcam.js";
+import laptopWifi from "./articles/laptop/connect-ksb-office-wifi.js";
+import laptopVpn from "./articles/laptop/vpn-from-home.js";
+import laptopPrintersMissing from "./articles/laptop/printers-missing.js";
+import laptopPrintPin from "./articles/laptop/print-pin.js";
+import laptopLockScreen from "./articles/laptop/lock-screen-blank.js";
+import laptopTaskbar from "./articles/laptop/taskbar-not-responding.js";
+import laptopFileType from "./articles/laptop/cannot-open-file-type.js";
+import laptopAppsSlow from "./articles/laptop/apps-slow.js";
+import laptopWifiDown from "./articles/laptop/wifi-down-ethernet-fine.js";
+import laptopWontTurnOn from "./articles/laptop/wont-turn-on.js";
+import laptopNotCharging from "./articles/laptop/not-charging.js";
+import laptopOverheating from "./articles/laptop/overheating.js";
+import laptopNoDisplayDock from "./articles/laptop/no-display-dock.js";
+import laptopNoDisplayHdmi from "./articles/laptop/no-display-hdmi.js";
+import laptopNoDisplayDp from "./articles/laptop/no-display-displayport.js";
+import laptopScreensWrongSide from "./articles/laptop/screens-wrong-side.js";
+import laptopScreenRotated from "./articles/laptop/screen-rotated.js";
+import laptopDisplayFlickering from "./articles/laptop/display-flickering.js";
+import desktopWontTurnOn from "./articles/desktop/wont-turn-on.js";
+import laptopPrintCloudError from "./articles/laptop/print-cloud-error.js";
+import printerSafeqConnectionError from "./articles/printer/safeq-connection-error.js";
+import monitorWontTurnOn from "./articles/monitor/wont-turn-on.js";
+import dockNoPower from "./articles/dock/no-power.js";
+import dockUsbNotWorking from "./articles/dock/usb-not-working.js";
+import dockEthernetNotWorking from "./articles/dock/ethernet-not-working.js";
+import outlookEmailsNotArriving from "./articles/outlook/emails-not-arriving.js";
+import outlookSlow from "./articles/outlook/outlook-slow.js";
+import headsetWontConnect from "./articles/headphones/wont-connect.js";
+import headsetNotInTeams from "./articles/headphones/not-in-teams.js";
+import mouseWontConnect from "./articles/mouse/wont-connect.js";
+import mouseNotMoving from "./articles/mouse/not-moving.js";
+import mouseBattery from "./articles/mouse/battery.js";
+import keyboardWontConnect from "./articles/keyboard/wont-connect.js";
+import keysNotWorking from "./articles/keyboard/keys-not-working.js";
+import webcamNotDetected from "./articles/webcam/not-detected.js";
+import webcamNotInTeams from "./articles/webcam/not-in-teams.js";
+import phoneKsbMobileIos from "./articles/phone/connect-ksb-mobile-ios.js";
+import phoneKsbMobileSamsung from "./articles/phone/connect-ksb-mobile-samsung.js";
+import phoneWontTurnOnIos from "./articles/phone/wont-turn-on-ios.js";
+import phoneWontTurnOnSamsung from "./articles/phone/wont-turn-on-samsung.js";
+import phoneNoCharge from "./articles/phone/no-charge.js";
+import phoneNoDataIos from "./articles/phone/no-data-ios.js";
+import phoneNoDataSamsung from "./articles/phone/no-data-samsung.js";
+import phoneCracked from "./articles/phone/cracked.js";
+import phoneInstallApp from "./articles/phone/install-app.js";
+import phoneBatteryDrainIos from "./articles/phone/battery-drain-ios.js";
+import phoneBatteryDrainSamsung from "./articles/phone/battery-drain-samsung.js";
+import phoneStorage from "./articles/phone/storage.js";
+import phoneSlow from "./articles/phone/slow.js";
+import phoneOverheating from "./articles/phone/overheating.js";
+import phoneTouchDead from "./articles/phone/touch-dead.js";
+import phoneFlicker from "./articles/phone/flicker.js";
+import phoneDroppedCalls from "./articles/phone/dropped-calls.js";
+import phoneBluetooth from "./articles/phone/bluetooth.js";
+import phoneCrash from "./articles/phone/crash.js";
+import phoneNoSound from "./articles/phone/no-sound.js";
+import phoneMic from "./articles/phone/mic.js";
+import phoneCamera from "./articles/phone/camera.js";
+import phoneNotCompliant from "./articles/phone/not-compliant.js";
+import phonePortal from "./articles/phone/portal.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                 TROUBLESHOOTING REPOSITORY                      |
@@ -99,6 +173,75 @@ export interface TroubleshootingRepository {
   buildPicker(requestableKeys: SubjectKey[]): SubjectPickerTile[];
 }
 
+/// ── Naming the reader's own device ───────────────────────────────────────
+//
+//  An article listed under several subjects is read by people holding
+//  different things. "Your laptop won't turn on" is wrong under Desktops and
+//  "your phone is full" is wrong under Tablets, and getting that wrong on
+//  every line is worse than the mild awkwardness of neutral wording — it
+//  reads as an article written for somebody else.
+//
+//  So content writes {device} where it means THE THING THE READER CAME HERE
+//  ABOUT, and the repository fills it in with that subject's own name at the
+//  moment it serves the article. Substituting here rather than in the browser
+//  keeps it in one place and means the API returns text that is already
+//  correct — nothing downstream has to know the mechanism exists.
+//
+//  DELIBERATELY NOT A BLIND RENAME OF EVERY MENTION. Plenty of articles name
+//  a laptop while meaning the other end of a cable — "plug it into the
+//  laptop" in a docking or mouse article, "unlike the Microsoft Store on
+//  laptops" in a phone one. Those are different objects and must stay
+//  literal. Only a self-reference becomes a token, which is a judgement the
+//  author makes and a script cannot.
+//
+//  Four spellings, because English needs them at the start of a sentence and
+//  in the plural. An unknown token is left alone rather than blanked: a
+//  visible {typo} in review is far better than a sentence that quietly loses
+//  its subject.
+
+const SUBJECT_TOKEN = /\{(device|devices|Device|Devices)\}/g;
+
+function fillTokens(text: string, key: SubjectKey): string {
+  const labels = SUBJECT_LABELS[key];
+  const singular = labels.labelSingular;
+  const plural = labels.label.toLowerCase();
+  const capitalise = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+  return text.replace(SUBJECT_TOKEN, (_, token: string) => {
+    switch (token) {
+      case "device": return singular;
+      case "devices": return plural;
+      case "Device": return capitalise(singular);
+      default: return capitalise(plural);
+    }
+  });
+}
+
+/** A copy of the article speaking about the subject the reader arrived from. */
+function nameTheSubject(article: Article, subjectKey: string): Article {
+  const key = subjectKey as SubjectKey;
+  if (!SUBJECT_LABELS[key]) return article;
+
+  const fill = (text: string) => fillTokens(text, key);
+  const maybe = (text?: string) => (text === undefined ? undefined : fill(text));
+
+  return {
+    ...article,
+    summary: fill(article.summary),
+    appliesTo: fill(article.appliesTo),
+    before: article.before.map(fill),
+    steps: article.steps.map((step) => ({
+      ...step,
+      title: fill(step.title),
+      body: fill(step.body),
+      note: maybe(step.note),
+      warn: maybe(step.warn),
+      figure: step.figure && { ...step.figure, caption: fill(step.figure.caption) },
+      branch: step.branch && { ...step.branch, label: fill(step.branch.label) },
+    })),
+  };
+}
+
 /// ── Load and validate ────────────────────────────────────────────────────
 //
 //  Content is validated at module load, not lazily per request. A malformed
@@ -111,9 +254,74 @@ export interface TroubleshootingRepository {
 //  survive it, and an explicit list means a file that was never wired up
 //  fails loudly in review instead of being quietly absent in production.
 
-const SUBJECT_MODULES: unknown[] = [phone];
+const SUBJECT_MODULES: unknown[] = [
+  laptop, desktop, phone, tablet, monitor, dock, printer,
+  headphones, mouse, keyboard, webcam,
+  outlook, onedrive, sharepoint, sap, ess,
+];
 
-const ARTICLE_MODULES: unknown[] = [phoneWifi];
+const ARTICLE_MODULES: unknown[] = [
+  laptopWifi,
+  laptopVpn,
+  laptopPrintersMissing,
+  laptopPrintPin,
+  laptopLockScreen,
+  laptopTaskbar,
+  laptopFileType,
+  laptopAppsSlow,
+  laptopWifiDown,
+  laptopWontTurnOn,
+  laptopNotCharging,
+  laptopOverheating,
+  laptopNoDisplayDock,
+  laptopNoDisplayHdmi,
+  laptopNoDisplayDp,
+  laptopScreensWrongSide,
+  laptopScreenRotated,
+  laptopDisplayFlickering,
+  desktopWontTurnOn,
+  laptopPrintCloudError,
+  printerSafeqConnectionError,
+  monitorWontTurnOn,
+  dockNoPower,
+  dockUsbNotWorking,
+  dockEthernetNotWorking,
+  phoneKsbMobileIos,
+  phoneKsbMobileSamsung,
+  phoneWontTurnOnIos,
+  phoneWontTurnOnSamsung,
+  phoneNoCharge,
+  phoneNoDataIos,
+  phoneNoDataSamsung,
+  phoneCracked,
+  phoneInstallApp,
+  phoneBatteryDrainIos,
+  phoneBatteryDrainSamsung,
+  phoneStorage,
+  phoneSlow,
+  phoneOverheating,
+  phoneTouchDead,
+  phoneFlicker,
+  phoneDroppedCalls,
+  phoneBluetooth,
+  phoneCrash,
+  phoneNoSound,
+  phoneMic,
+  phoneCamera,
+  phoneNotCompliant,
+  phonePortal,
+  headsetWontConnect,
+  headsetNotInTeams,
+  mouseWontConnect,
+  mouseNotMoving,
+  mouseBattery,
+  keyboardWontConnect,
+  keysNotWorking,
+  webcamNotDetected,
+  webcamNotInTeams,
+  outlookEmailsNotArriving,
+  outlookSlow,
+];
 
 /**
  * Parse and validate every registered content module.
@@ -221,7 +429,8 @@ export function createDiskRepository(): TroubleshootingRepository {
     getSubjectCategories: listCategories,
 
     getArticle(subjectKey, symptomId) {
-      return articlesByKey.get(articleKey(subjectKey, symptomId)) ?? null;
+      const article = articlesByKey.get(articleKey(subjectKey, symptomId));
+      return article ? nameTheSubject(article, subjectKey) : null;
     },
 
     searchSymptoms(query, subjectKey) {
@@ -257,19 +466,26 @@ export function createDiskRepository(): TroubleshootingRepository {
     },
 
     buildPicker(requestableKeys) {
-      // A subject with a taxonomy but no articles is a page of Drafts, which
-      // is not somewhere to send anyone — so coverage, not mere presence in
-      // the library, is what counts as content here.
-      const covered = new Set(
-        subjects.map((s) => s.key).filter((key) => summarise(key).articleCount > 0)
-      );
+      // A TAXONOMY IS WHAT MAKES A SUBJECT CLICKABLE, not articles.
+      //
+      // An earlier version greyed out anything with no articles, reasoning
+      // that a page of Drafts was nowhere to send anyone. That was wrong: we
+      // list a symptom precisely because we intend to cover it, and a reader
+      // who opens it learns the problem is known and recognised rather than
+      // being told nothing at all. It also gives their search somewhere to
+      // land instead of registering as no-match.
+      //
+      // Greying out is reserved for subjects with nothing behind them at all
+      // — a Snipe category we can name but have never written a taxonomy for.
+      // Those genuinely lead nowhere.
+      const known = new Set<SubjectKey>(subjects.map((s) => s.key));
       const requestable = new Set(requestableKeys);
 
       // SUBJECT_KEYS order, not the order either input arrived in, so the
       // grid doesn't reshuffle when an admin edits the requestable list.
       return SUBJECT_KEYS.filter(
-        (key) => covered.has(key) || requestable.has(key)
-      ).map((key) => ({ ...summarise(key), available: covered.has(key) }));
+        (key) => known.has(key) || requestable.has(key)
+      ).map((key) => ({ ...summarise(key), available: known.has(key) }));
     },
   };
 }

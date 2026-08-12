@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
+import { existsSync } from "fs";
+import { resolve } from "path";
 import { parseContent, createDiskRepository } from "./repository.js";
-import { deviceKeyForCategoryName, deviceKeysForCategories } from "./subjects.js";
+import {
+  deviceKeyForCategoryName,
+  deviceKeysForCategories,
+  SUBJECT_LABELS,
+} from "./subjects.js";
+import { SUBJECT_KEYS } from "./schema.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |               TROUBLESHOOTING CONTENT VALIDATION                |
@@ -100,6 +107,121 @@ describe("cross-references resolve", () => {
   });
 });
 
+describe("figures", () => {
+  ///  A figure's caption is the content and its image is the aid, so a
+  ///  caption is mandatory and a src is not. The schema enforces that; this
+  ///  enforces the half a schema cannot — that a referenced file is actually
+  ///  there. A broken image path fails silently in a browser, which means the
+  ///  person who finds it is a user part-way through fixing their laptop.
+  const IMAGE_ROOT = resolve(process.cwd(), "../frontend/public/troubleshooting");
+
+  // Both theme variants, flattened — a missing dark image is just as broken
+  // as a missing light one, and only half the readers would ever see it.
+  const figures = articles.flatMap((article) =>
+    article.steps.flatMap((step, index) =>
+      (step.figure?.images ?? [])
+        .flatMap((image) => [image.src, image.srcDark])
+        .filter((src): src is string => !!src)
+        .map((src) => ({ article: article.symptomId, step: index + 1, src }))
+    )
+  );
+
+  it("resolves every referenced screenshot to a file on disk", () => {
+    const missing = figures
+      .filter((f) => !existsSync(resolve(IMAGE_ROOT, f.src)))
+      .map((f) => `${f.article} step ${f.step} → ${f.src}`);
+
+    expect(missing).toEqual([]);
+  });
+
+  it("keeps screenshots inside the image root", () => {
+    // A src is a path we join onto a directory, so a traversal segment would
+    // reach outside it. Nothing legitimate needs one.
+    const escaping = figures.filter(
+      (f) => f.src.includes("..") || f.src.startsWith("/")
+    );
+
+    expect(escaping).toEqual([]);
+  });
+});
+
+describe("naming the reader's own device", () => {
+  ///  Shared articles write {device} where they mean the thing the reader
+  ///  came about, and the repository fills it in per subject. Two ways that
+  ///  goes wrong, both silent, both caught here.
+
+  it("leaves no unfilled token in any article, under any of its subjects", () => {
+    // A typo'd token — {devise}, {Devices } — is passed through untouched
+    // rather than blanked, precisely so it can be caught. This is the catch.
+    const leaked: string[] = [];
+
+    for (const article of articles) {
+      for (const key of article.subjectKeys) {
+        const served = repo.getArticle(key, article.symptomId);
+        if (!served) continue;
+
+        const text = [
+          served.summary,
+          served.appliesTo,
+          ...served.before,
+          ...served.steps.flatMap((s) => [
+            s.title, s.body, s.note, s.warn, s.figure?.caption, s.branch?.label,
+          ]),
+        ]
+          .filter((t): t is string => !!t)
+          .join(" ");
+
+        for (const m of text.matchAll(/\{[^}]*\}/g)) {
+          leaked.push(`${key}/${article.symptomId}: ${m[0]}`);
+        }
+      }
+    }
+
+    expect(leaked).toEqual([]);
+  });
+
+  it("never says the subject's name twice in a row", () => {
+    // "KSB laptops and desktops" tokenised to "KSB desktops and desktops",
+    // and "phones and iPads" became "tablets and iPads". Both read as
+    // nonsense and neither breaks anything, so only a test finds them.
+    const doubled: string[] = [];
+
+    for (const article of articles) {
+      for (const key of article.subjectKeys) {
+        const served = repo.getArticle(key, article.symptomId);
+        if (!served) continue;
+        const noun = SUBJECT_LABELS[key].label.toLowerCase();
+        const pattern = new RegExp(`\\b${noun} and ${noun}\\b`, "i");
+        if (pattern.test(served.appliesTo)) {
+          doubled.push(`${key}/${article.symptomId}: ${served.appliesTo}`);
+        }
+      }
+    }
+
+    expect(doubled).toEqual([]);
+  });
+
+  it("substitutes the subject the reader arrived from", () => {
+    // The behaviour itself: one article, two subjects, two different nouns.
+    const shared = articles.find(
+      (a) => a.subjectKeys.includes("phone") && a.subjectKeys.includes("tablet")
+    )!;
+    expect(shared).toBeDefined();
+
+    const asPhone = repo.getArticle("phone", shared.symptomId)!;
+    const asTablet = repo.getArticle("tablet", shared.symptomId)!;
+
+    // Whatever the wording, the two must not come out identical — that would
+    // mean the article never names the reader's device at all.
+    const flatten = (a: typeof asPhone) =>
+      [a.summary, a.appliesTo, ...a.steps.map((s) => s.body)].join(" ");
+
+    expect(flatten(asPhone)).not.toBe(flatten(asTablet));
+    expect(flatten(asPhone)).toContain("phone");
+    expect(flatten(asTablet)).toContain("tablet");
+  });
+});
+
 describe("identifiers are unique", () => {
   ///  Symptom ids become URL segments, so a duplicate within a device means
   ///  two symptoms competing for one route and one of them being
@@ -142,42 +264,87 @@ describe("identifiers are unique", () => {
 });
 
 describe("repository queries", () => {
-  it("lists subjects with honest article coverage", () => {
-    const phone = repo.listSubjects().find((d) => d.key === "phone");
+  ///  These need one symptom that has an article and one that doesn't, and
+  ///  they FIND them rather than naming them. Naming them is how this block
+  ///  has broken before: the phone article was renamed and four unrelated
+  ///  tests failed, which teaches people to edit tests without reading them.
+  ///  The behaviour under test is "written vs draft", not "wifi vs bluetooth".
+  ///
+  ///  THE DRAFT IS SOUGHT ACROSS THE WHOLE LIBRARY, not within one subject.
+  ///  An earlier version looked for it in phones specifically and broke the
+  ///  day phones were finished — a test that fails because content got BETTER
+  ///  is the worst kind. Some subject will have an unwritten symptom for a
+  ///  long while yet, and if that ever stops being true the premise test
+  ///  below says so plainly instead of four others failing on undefined.
+  const writtenKey = new Set(
+    articles.flatMap((a) => a.subjectKeys.map((k) => `${k}/${a.symptomId}`))
+  );
+  const key = (s: { subjectKey: string; symptomId: string }) =>
+    `${s.subjectKey}/${s.symptomId}`;
 
-    expect(phone).toBeDefined();
-    expect(phone!.symptomCount).toBeGreaterThan(phone!.articleCount);
-    expect(phone!.articleCount).toBe(
-      articles.filter((a) => a.subjectKeys.includes("phone")).length
-    );
+  const written = allSymptoms.find((s) => writtenKey.has(key(s)))!;
+  const draft = allSymptoms.find((s) => !writtenKey.has(key(s)))!;
+
+  it("has a written and an unwritten symptom to test against", () => {
+    // The premise of everything below. Asserted rather than assumed so a
+    // library where it stops holding fails here, saying why, instead of
+    // failing four tests with an undefined property.
+    expect(written).toBeDefined();
+    expect(draft).toBeDefined();
+  });
+
+  it("lists subjects with honest article coverage", () => {
+    // The invariant, for every subject: articleCount is exactly how many
+    // articles claim that subject, and never exceeds the symptom count.
+    // Deliberately not "phones have drafts" — phones are finished, and a
+    // complete subject must not fail a coverage test.
+    for (const summary of repo.listSubjects()) {
+      expect(summary.articleCount).toBe(
+        articles.filter((a) => a.subjectKeys.includes(summary.key)).length
+      );
+      expect(summary.articleCount).toBeLessThanOrEqual(summary.symptomCount);
+    }
   });
 
   it("marks symptoms without an article as drafts rather than hiding them", () => {
-    const categories = repo.getSubjectCategories("phone");
-    const network = categories.find((c) => c.id === "network");
+    // The whole library, and the invariant rather than a chosen pair:
+    // hasArticle is true exactly when an article exists, and every symptom in
+    // the taxonomy is still listed either way.
+    const listed = subjects.flatMap((subject) =>
+      repo.getSubjectCategories(subject.key).flatMap((category) =>
+        category.symptoms.map((symptom) => ({
+          key: `${subject.key}/${symptom.id}`,
+          hasArticle: symptom.hasArticle,
+        }))
+      )
+    );
 
-    expect(network).toBeDefined();
-    // The written one and an unwritten sibling both appear.
-    expect(network!.symptoms.find((s) => s.id === "wifi")?.hasArticle).toBe(true);
-    expect(network!.symptoms.find((s) => s.id === "bluetooth")?.hasArticle).toBe(false);
+    expect(listed.length).toBe(allSymptoms.length);
+    expect(listed.filter((s) => s.hasArticle !== writtenKey.has(s.key))).toEqual([]);
+    // Both states are represented, or the check above passes vacuously.
+    expect(listed.some((s) => s.hasArticle)).toBe(true);
+    expect(listed.some((s) => !s.hasArticle)).toBe(true);
   });
 
   it("returns an article for a written symptom and null for a draft", () => {
-    expect(repo.getArticle("phone", "wifi")).not.toBeNull();
-    expect(repo.getArticle("phone", "bluetooth")).toBeNull();
+    expect(repo.getArticle(written.subjectKey, written.symptomId)).not.toBeNull();
+    expect(repo.getArticle(draft.subjectKey, draft.symptomId)).toBeNull();
   });
 
   it("returns null for an unknown subject or symptom", () => {
     expect(repo.getArticle("phone", "does-not-exist")).toBeNull();
-    expect(repo.getArticle("toaster", "wifi")).toBeNull();
+    expect(repo.getArticle("toaster", written.symptomId)).toBeNull();
     expect(repo.getSubjectCategories("toaster")).toEqual([]);
   });
 
   it("searches symptom labels case-insensitively", () => {
-    const hits = repo.searchSymptoms("WI-FI", "phone");
+    // Upper-cased half of a real label, so the test exercises case folding
+    // without pinning itself to any one symptom's wording.
+    const word = written.label.split(" ")[0].toUpperCase();
+    const hits = repo.searchSymptoms(word, written.subjectKey);
 
-    expect(hits.map((h) => h.id)).toContain("wifi");
-    expect(hits.every((h) => h.subjectKey === "phone")).toBe(true);
+    expect(hits.map((h) => h.id)).toContain(written.symptomId);
+    expect(hits.every((h) => h.subjectKey === written.subjectKey)).toBe(true);
   });
 
   it("returns nothing for an empty search rather than everything", () => {
@@ -188,11 +355,18 @@ describe("repository queries", () => {
   });
 
   it("excludes the current symptom from its own siblings", () => {
-    const siblings = repo.getSiblingSymptoms("phone", "wifi");
+    const siblings = repo.getSiblingSymptoms(written.subjectKey, written.symptomId);
+    const expected = allSymptoms.filter(
+      (s) =>
+        s.subjectKey === written.subjectKey &&
+        s.categoryId === written.categoryId &&
+        s.symptomId !== written.symptomId
+    );
 
     expect(siblings.length).toBeGreaterThan(0);
-    expect(siblings.map((s) => s.id)).not.toContain("wifi");
-    expect(siblings.map((s) => s.id)).toContain("bluetooth");
+    expect(siblings.map((s) => s.id).sort()).toEqual(
+      expected.map((s) => s.symptomId).sort()
+    );
   });
 
   it("returns no siblings for an unknown symptom", () => {
@@ -268,12 +442,27 @@ describe("snipe category names resolve to device keys", () => {
 });
 
 describe("subject picker derivation", () => {
-  it("marks subjects with articles available and requestable-only ones disabled", () => {
-    const tiles = repo.buildPicker(["phone", "laptop", "monitor"]);
+  ///  Asserted as an INVARIANT rather than against named subjects. Earlier
+  ///  versions hardcoded which subjects had content and broke every time some
+  ///  was written — a test that fails on success is one people learn to edit
+  ///  without reading.
+  it("marks a subject available exactly when it has a taxonomy", () => {
+    const tiles = repo.buildPicker(["phone", "laptop", "monitor", "keyboard"]);
 
-    expect(tiles.map((t) => t.key)).toEqual(["laptop", "phone", "monitor"]);
-    expect(tiles.find((t) => t.key === "phone")!.available).toBe(true);
-    expect(tiles.find((t) => t.key === "laptop")!.available).toBe(false);
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const tile of tiles) {
+      // Symptoms only exist for a subject with a taxonomy, so this is the
+      // observable form of "we have something to show you".
+      expect(tile.available).toBe(tile.symptomCount > 0);
+    }
+  });
+
+  it("orders the picker by the key enum, not by the order keys arrived in", () => {
+    const tiles = repo.buildPicker(["monitor", "laptop", "phone"]);
+    const keys = tiles.map((t) => t.key);
+
+    expect(keys.indexOf("laptop")).toBeLessThan(keys.indexOf("phone"));
+    expect(keys.indexOf("phone")).toBeLessThan(keys.indexOf("monitor"));
   });
 
   ///  The whole point of unioning content in rather than filtering by
@@ -286,15 +475,30 @@ describe("subject picker derivation", () => {
     expect(tiles.find((t) => t.key === "phone")!.available).toBe(true);
   });
 
-  it("names subjects the content library has never heard of", () => {
-    const laptop = repo.buildPicker(["laptop"]).find((t) => t.key === "laptop")!;
-
-    expect(laptop.label).toBe("Laptops");
-    expect(laptop.labelSingular).toBe("laptop");
-    expect(laptop.symptomCount).toBe(0);
+  ///  Every subject now has a taxonomy, so the old version of this — which
+  ///  found an unwritten subject and checked its tile still had a name — has
+  ///  no case left to exercise. It was written to fail loudly when that day
+  ///  came rather than pass vacuously, and it did.
+  ///
+  ///  What it was really protecting is still worth asserting: a subject can
+  ///  reach the picker from Snipe alone, so every key must have a name to
+  ///  render whether or not anyone has written content for it.
+  it("has a usable name for every subject key", () => {
+    for (const key of SUBJECT_KEYS) {
+      const labels = SUBJECT_LABELS[key];
+      expect(labels, `no label for ${key}`).toBeDefined();
+      expect(labels.label.length).toBeGreaterThan(0);
+      expect(labels.labelSingular.length).toBeGreaterThan(0);
+    }
   });
 
-  it("still offers covered subjects when nothing is requestable", () => {
-    expect(repo.buildPicker([]).map((t) => t.key)).toEqual(["phone"]);
+  it("still offers every known subject when nothing is requestable", () => {
+    // Applications are never requestable from Snipe, so without this they
+    // would have no route into the picker at all.
+    const known = repo.listSubjects().map((s) => s.key);
+    const tiles = repo.buildPicker([]);
+
+    expect(tiles.map((t) => t.key).sort()).toEqual([...known].sort());
+    expect(known.length).toBeGreaterThan(0);
   });
 });

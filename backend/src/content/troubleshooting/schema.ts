@@ -96,17 +96,103 @@ export type SubjectKind = z.infer<typeof subjectKindSchema>;
 //  each in every article written or sketched, and the flat shape keeps the
 //  column mapping obvious.
 //
-//  `figure` is a CAPTION, not an image path. v1 ships no screenshots — a
-//  screenshot of a superseded settings screen is worse than none, and the
-//  caption alone ("Settings › Wi-Fi › Forget This Network") carries the
-//  navigation the image would have. When images arrive this field gains a
-//  sibling rather than changing meaning.
+//  `figure` is a caption and, optionally, a screenshot.
+//
+//  THE CAPTION IS REQUIRED AND THE IMAGE IS NOT. A caption carries the
+//  navigation path in words ("Settings › Wi-Fi › Forget This Network"), which
+//  survives a redesign of the screen it describes and is readable by someone
+//  using a screen reader. An image goes stale silently and says nothing to
+//  anyone who can't see it. So the words are the content and the picture is
+//  the aid — never the other way round — and a figure whose image is later
+//  pulled still reads correctly.
+//
+//  One object rather than two sibling fields (an earlier note here proposed a
+//  sibling): a bare image path with no caption is never valid, and two
+//  independent optional fields can't express that.
 //
 //  `branch` is the cross-over mechanism. A monitor that shows nothing is
 //  often a dock fault, and the monitor article should be able to hand the
 //  reader straight to the dock article rather than dead-ending. Branches may
 //  cross subjects, which is what `targetSubjectKey` is for — including from
 //  a device to an application.
+/**
+ * One picture, with an optional dark-theme twin.
+ *
+ * Split out from the figure so a figure can hold a SEQUENCE. A settings path
+ * three levels deep is far easier to follow as "here is the menu, here is the
+ * screen you land on" than as one screenshot of the destination with no
+ * indication of how you got there — the reader has to recognise a screen they
+ * have never seen before. Phone captures need this most: iOS and One UI both
+ * bury things several taps down, and every one of those taps is invisible in
+ * a single shot of the final screen.
+ */
+export const figureImageSchema = z.object({
+  /**
+   * Path to the screenshot, relative to the troubleshooting image root
+   * (frontend/public/troubleshooting/) — e.g.
+   * "laptop/connect-ksb-office-wifi/wifi-menu.png".
+   *
+   * Relative rather than a full URL because WHERE the images are served from
+   * is a frontend concern, and because an article can be listed under several
+   * subjects — so the path can't be derived from one of them.
+   *
+   * A content test asserts every one of these resolves to a file that exists.
+   * A broken image path is otherwise found by a user, not by us.
+   */
+  src: z.string().min(1),
+  /**
+   * Optional dark-theme variant of the same screenshot.
+   *
+   * Screenshots of an OS or an app carry that app's own light or dark
+   * chrome, so a light-mode capture sitting in a dark article is a bright
+   * rectangle in the middle of the page — legible, but jarring enough to
+   * read as a mistake. When both exist the page shows whichever matches.
+   *
+   * `src` alone stays valid and is used in both themes. That is deliberate:
+   * requiring a pair would mean no screenshot at all until somebody produced
+   * two, and one image is worth more than none.
+   */
+  srcDark: z.string().min(1).optional(),
+});
+
+export const figureSchema = z.object({
+  /**
+   * The pictures, IN THE ORDER THE READER WALKS THEM.
+   *
+   * Usually one. Two where the destination is buried and needs a route: the
+   * menu that gets you there first, then the screen you land on. They render
+   * side by side, so the reader sees the journey rather than having to
+   * recognise an unfamiliar screen out of context.
+   *
+   * Optional in full — a caption alone is a valid figure, and the commonest
+   * state while somebody is still capturing screenshots.
+   */
+  images: z.array(figureImageSchema).min(1).optional(),
+  /**
+   * How much room the picture needs to be readable. Omitted means a small UI
+   * flyout — a tray menu, a right-click menu, the Windows + P pane.
+   *
+   *   "window"  an application window: Task Manager, File Explorer, an
+   *             installer. Roughly double a flyout.
+   *   "full"    a whole-screen capture, where the thing being pointed at is
+   *             a small control inside a large window. Fills the column.
+   *
+   * A NAME RATHER THAN A PIXEL WIDTH. Only the author knows whether the
+   * detail in a screenshot matters; nobody authoring content should be
+   * choosing layout numbers, and a number here would also have to be
+   * re-chosen every time the page's column width changed.
+   *
+   * "full" is the third size this field's previous note said to add "only
+   * when a real image needs one" — and one did. Full-screen Settings and
+   * Vantage captures are about 1400x760, so at window width they render
+   * under 300px tall and the highlighted control is illegible. It replaced a
+   * boolean `wide`, which had no room left to say this.
+   */
+  size: z.enum(["window", "full"]).optional(),
+  /** Always required — see the note above. */
+  caption: z.string().min(1),
+});
+
 export const branchSchema = z.object({
   /** Button label. Written as the user's situation, not as a destination. */
   label: z.string().min(1),
@@ -122,7 +208,7 @@ export const stepSchema = z.object({
   body: z.string().min(1),
   note: z.string().min(1).optional(),
   warn: z.string().min(1).optional(),
-  figure: z.string().min(1).optional(),
+  figure: figureSchema.optional(),
   branch: branchSchema.optional(),
 });
 
@@ -209,6 +295,8 @@ export const subjectSchema = z.object({
   categories: z.array(symptomCategorySchema),
 });
 
+export type FigureImage = z.infer<typeof figureImageSchema>;
+export type Figure = z.infer<typeof figureSchema>;
 export type Branch = z.infer<typeof branchSchema>;
 export type Step = z.infer<typeof stepSchema>;
 export type Article = z.infer<typeof articleSchema>;

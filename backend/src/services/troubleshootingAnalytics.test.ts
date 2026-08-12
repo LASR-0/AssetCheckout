@@ -32,6 +32,13 @@ vi.mock("./settings.js", () => ({
 }));
 
 const { getAnalyticsSummary } = await import("./troubleshootingAnalytics.js");
+const { default: phone } = await import("../content/troubleshooting/subjects/phone.js");
+
+// Two real phone symptoms, found rather than named. These tests are about
+// AGGREGATION, and pinning them to a symptom id meant renaming an article
+// broke arithmetic tests that have nothing to do with content. `known` is the
+// one whose label gets asserted; `other` only has to be a different real id.
+const [known, other] = phone.categories.flatMap((c) => c.symptoms);
 
 type Ev = Record<string, unknown>;
 
@@ -47,7 +54,7 @@ const event = (type: string, sessionId: string, extra: Ev = {}): Ev => ({
   ...extra,
 });
 
-const article = { subjectKey: "phone", symptomId: "wifi" };
+const article = { subjectKey: "phone", symptomId: known.id };
 
 beforeEach(() => findMany.mockReset());
 
@@ -126,16 +133,16 @@ describe("per-article stats", () => {
 
   it("attributes escapes to the articles the escaping visit read", async () => {
     findMany.mockResolvedValue([
-      event("ARTICLE_OPENED", "s1", { subjectKey: "phone", symptomId: "wifi" }),
-      event("ARTICLE_OPENED", "s2", { subjectKey: "phone", symptomId: "portal" }),
+      event("ARTICLE_OPENED", "s1", { subjectKey: "phone", symptomId: known.id }),
+      event("ARTICLE_OPENED", "s2", { subjectKey: "phone", symptomId: other.id }),
       event("ESCAPE_TAKEN", "s1", { detail: "teams_call" }),
     ]);
 
     const { articles } = await getAnalyticsSummary(90);
     const byId = Object.fromEntries(articles.map((a) => [a.symptomId, a]));
 
-    expect(byId.wifi.escapes).toBe(1);
-    expect(byId.portal.escapes).toBe(0);
+    expect(byId[known.id].escapes).toBe(1);
+    expect(byId[other.id].escapes).toBe(0);
   });
 
   it("falls back to the symptom id when the content no longer has a label", async () => {
@@ -154,7 +161,7 @@ describe("per-article stats", () => {
 
     const { articles } = await getAnalyticsSummary(90);
 
-    expect(articles[0].label).toBe("Won't connect to KSB Wi-Fi");
+    expect(articles[0].label).toBe(known.label);
   });
 });
 
