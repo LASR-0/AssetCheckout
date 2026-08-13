@@ -43,13 +43,13 @@ const appsSlow: Article = {
       title: "If it's a website, check whether it's just that one",
       body: "Open two or three other sites — an internal one and an external one such as a news site. If everything is slow, it is your connection. If only one site is slow, it is that site, and there is nothing to fix on your machine.",
       note: "If you are connected to the VPN, expect everything to be slower. All traffic routes through our parent company's firewall in Germany and back, so disconnecting when you don't need an internal site often fixes 'the internet is slow' on its own.",
-      branch: {
-        label: "How do I check whether I'm on the VPN?",
-        targetSymptomId: "vpn-from-home",
-      },
       figure: {
         images: [{ src: "laptop/shared/Globalprotect-disconnect-light.jpg" }],
         caption: "Hidden icon tray › GlobalProtect › Disconnect",
+      },
+      branch: {
+        label: "How do I check whether I'm on the VPN?",
+        targetSymptomId: "vpn-from-home",
       },
     },
     {

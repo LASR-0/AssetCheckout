@@ -61,9 +61,7 @@ const connectKsbMobileIos: Article = {
       title: "Tap KSB-Mobile in the Wi-Fi list",
       body: "Open Settings › Wi-Fi and tap KSB-Mobile. It connects on its own after a few seconds. There is nothing to type — no username, no password, no Wi-Fi key — and for almost everybody this is the entire job.",
       note: "If the {device} does ask you for a username and password, don't try to guess them: there is no password for this network. KSB-Mobile recognises the {device} by a certificate it was issued when IT set it up, so a prompt means that certificate is missing. The rest of this article is about getting it back.",
-      figure: {
-        caption: "Settings › Wi-Fi › KSB-Mobile",
-      },
+      figure: { caption: "Settings › Wi-Fi › KSB-Mobile" },
     },
     {
       title: "Forget KSB-Mobile, restart, and rejoin",
@@ -77,10 +75,6 @@ const connectKsbMobileIos: Article = {
       title: "Install any pending iOS update",
       body: "KSB-Mobile only admits devices that are compliant, and compliance here means one thing: an iOS version inside the approved range. Go to Settings › General › Software Update, install whatever it offers, let the device restart, and then try KSB-Mobile again.",
       note: "You can confirm the result in Company Portal or At Work, whichever one you have — open it, let it refresh, and it will report the device as compliant once the update has landed. You will have one of those two apps and never both. If you have neither, skip to the last step: the device isn't on the company profile at all.",
-      branch: {
-        label: "It says it's up to date but still isn't compliant",
-        targetSymptomId: "not-compliant",
-      },
       figure: {
         images: [
           {
@@ -93,6 +87,10 @@ const connectKsbMobileIos: Article = {
           },
         ],
         caption: "Settings › General › Software Update",
+      },
+      branch: {
+        label: "It says it's up to date but still isn't compliant",
+        targetSymptomId: "not-compliant",
       },
     },
     {

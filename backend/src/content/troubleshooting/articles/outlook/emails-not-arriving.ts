@@ -44,17 +44,13 @@ const emailsNotArriving: Article = {
     {
       title: "Check whether a rule is filing it away",
       body: "In Outlook, go to File › Manage Rules & Alerts and read the list. A rule set up months ago for one project will keep moving mail into a folder you have stopped looking at. Rules also inherit from old mailbox setups and can be quietly moving mail nobody remembers asking to move.",
-      figure: {
-        caption: "Outlook › File › Manage Rules & Alerts",
-      },
+      figure: { caption: "Outlook › File › Manage Rules & Alerts" },
     },
     {
       title: "Make sure Outlook isn't working offline",
       body: "Open the Send/Receive tab in the ribbon and look at the Work Offline button. If it is highlighted, Outlook has stopped talking to the server entirely — while continuing to look completely normal, with all your old mail still in place. Click it once to go back online.",
       note: "The status bar at the very bottom of the Outlook window says Working Offline or Disconnected when this is the problem. It is easy to miss and easy to press by accident.",
-      figure: {
-        caption: "Outlook › Send/Receive tab › Work Offline",
-      },
+      figure: { caption: "Outlook › Send/Receive tab › Work Offline" },
     },
     {
       title: "Check your mailbox isn't full",

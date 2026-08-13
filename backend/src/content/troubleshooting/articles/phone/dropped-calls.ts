@@ -50,10 +50,6 @@ const droppedCalls: Article = {
       title: "Turn Wi-Fi calling on",
       body: "This is the one that actually fixes the problem in a building with no signal: the {device} routes the call over Wi-Fi instead of the mobile network, and it works anywhere you have KSB-Mobile. On an iPhone: Settings › Apps › Phone › Wi-Fi Calling. On a Samsung: Settings › Connections › Wi-Fi Calling, or the tile in the quick panel.",
       note: "Calls started on Wi-Fi may drop as you walk out of range of the office Wi-Fi, so it is best in a fixed dead spot rather than while moving around a site.",
-      branch: {
-        label: "I'm not connected to KSB-Mobile Wi-Fi",
-        targetSymptomId: "connect-ksb-mobile-ios",
-      },
       figure: {
         images: [
           {
@@ -63,6 +59,10 @@ const droppedCalls: Article = {
         ],
         caption:
           "Settings › Apps › Phone › Wi-Fi Calling — or Settings › Connections › Wi-Fi Calling",
+      },
+      branch: {
+        label: "I'm not connected to KSB-Mobile Wi-Fi",
+        targetSymptomId: "connect-ksb-mobile-ios",
       },
     },
     {

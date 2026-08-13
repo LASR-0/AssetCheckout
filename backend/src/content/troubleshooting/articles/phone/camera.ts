@@ -55,10 +55,6 @@ const camera: Article = {
     {
       title: "If it's one app, check its camera permission",
       body: "On an iPhone: Settings › Privacy & Security › Camera, and make sure the app is switched on. On a Samsung: Settings › Apps, tap the app, then Permissions › Camera. An app that was never granted the camera shows a black rectangle rather than an error, which is why this is so rarely guessed.",
-      branch: {
-        label: "That app closes as soon as I open it",
-        targetSymptomId: "crash",
-      },
       figure: {
         images: [
           {
@@ -73,14 +69,15 @@ const camera: Article = {
         caption:
           "Settings › Privacy & Security › Camera — or Settings › Apps › [app] › Permissions",
       },
+      branch: {
+        label: "That app closes as soon as I open it",
+        targetSymptomId: "crash",
+      },
     },
     {
       title: "Check the {device} isn't too hot",
       body: "A {device} that has been in the sun disables the camera before anything else, because the camera generates more heat than almost any other function. If it has been on a dashboard or you have been filming for a while, let it cool and try again.",
-      branch: {
-        label: "The {device} is hot",
-        targetSymptomId: "overheating",
-      },
+      branch: { label: "The {device} is hot", targetSymptomId: "overheating" },
     },
     {
       title: "Still not right? Contact IT",

@@ -49,9 +49,7 @@ const connectKsbMobileSamsung: Article = {
       title: "Tap KSB-Mobile in the Wi-Fi list",
       body: "Open Settings › Connections › Wi-Fi and tap KSB-Mobile. It connects on its own after a few seconds. There is nothing to type: no username, no password, no Wi-Fi key, and for almost everybody this is the entire job.",
       note: "If the {device} does ask you for a username and password, don't try to guess them: there is no password for this network. KSB-Mobile recognises the {device} by a certificate it was issued when IT set it up, so a prompt means that certificate is missing. The rest of this article is about getting it back.",
-      figure: {
-        caption: "Settings › Connections › Wi-Fi › KSB-Mobile",
-      },
+      figure: { caption: "Settings › Connections › Wi-Fi › KSB-Mobile" },
     },
     {
       title: "Forget KSB-Mobile, restart, and rejoin",
@@ -66,12 +64,10 @@ const connectKsbMobileSamsung: Article = {
       title: "Install any pending software update",
       body: "KSB-Mobile only admits {devices} that are compliant, and compliance here means one thing: an Android version inside the approved range. Go to Settings › Software update › Download and install, install whatever it offers, let the {device} restart, and then try KSB-Mobile again.",
       note: "You can confirm the result in Company Portal or At Work EMM, whichever one you have — note the EMM, because on an iPhone the same app is just called At Work and people go looking for the wrong name. You will have one of those two apps and never both. If you have neither, skip to the last step: the {device} isn't on the company profile at all.",
+      figure: { caption: "Settings › Software update › Download and install" },
       branch: {
         label: "It says it's up to date but still isn't compliant",
         targetSymptomId: "not-compliant",
-      },
-      figure: {
-        caption: "Settings › Software update › Download and install",
       },
     },
     {

@@ -56,9 +56,7 @@ const headsetNotInTeams: Article = {
     {
       title: "Check Windows isn't sending audio somewhere else",
       body: "Click the speaker icon at the right-hand end of the taskbar and check the output device named there is your headset. Windows switches this by itself when a monitor, a dock or another Bluetooth device connects — so a headset that worked yesterday can be quietly displaced by plugging into the dock.",
-      figure: {
-        caption: "Taskbar › speaker icon › output device",
-      },
+      figure: { caption: "Taskbar › speaker icon › output device" },
     },
     {
       title: "Check the headset's own mute switch and volume",

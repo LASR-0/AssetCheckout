@@ -37,9 +37,7 @@ const noDataSamsung: Article = {
       title: "Check mobile data is switched on and Flight mode is off",
       body: "Swipe down from the top of the screen to open the quick panel and check the Mobile data tile is on and the Flight mode tile is off. Both get switched by accident more often than anyone admits, particularly Flight mode after a trip. The full setting lives at Settings › Connections › Data usage › Mobile data.",
       note: "Check Data saver in the same menu while you are there. It doesn't cut data off, but it stops apps using it in the background, which feels exactly like a broken connection if that is what you were waiting on.",
-      figure: {
-        caption: "Quick panel › Mobile data and Flight mode tiles",
-      },
+      figure: { caption: "Quick panel › Mobile data and Flight mode tiles" },
     },
     {
       title: "Turn Flight mode on, wait ten seconds, turn it off",

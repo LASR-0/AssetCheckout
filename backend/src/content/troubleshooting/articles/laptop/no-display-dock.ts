@@ -38,7 +38,8 @@ const noDisplayDock: Article = {
   ],
   steps: [
     {
-      title: "Unplug the dock cable from the computer, wait, and plug it back in",
+      title:
+        "Unplug the dock cable from the computer, wait, and plug it back in",
       body: "Take the single cable running from the dock to the computer out entirely, count to ten, and push it firmly back in. This one step fixes more docking problems than everything else here put together.",
       note: "If yours is a Thunderbolt dock, it must go into a Thunderbolt port on the computer — marked with a small lightning bolt beside the socket. A Thunderbolt dock plugged into an ordinary USB-C port may charge and pass through USB while driving no screens at all.",
     },

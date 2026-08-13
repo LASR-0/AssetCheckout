@@ -48,9 +48,7 @@ const keysNotWorking: Article = {
       title: "If keys type the wrong character, it's the layout",
       body: 'The classic sign is @ and " swapping places, and the hash and pound signs moving. Nothing is wrong with the keyboard — Windows has picked up a US layout. Click the language indicator at the right-hand end of the taskbar, near the clock, and switch back to English (Australia). If there is no indicator, it is at Settings › Time & language › Language & region.',
       note: "This happens by itself after some updates, and it can be toggled accidentally with a keyboard shortcut. Nobody guesses it, and keyboards get replaced over it.",
-      figure: {
-        caption: "Taskbar › language indicator › English (Australia)",
-      },
+      figure: { caption: "Taskbar › language indicator › English (Australia)" },
     },
     {
       title: "Turn it over and shake it out",

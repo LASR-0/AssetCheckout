@@ -45,9 +45,7 @@ const displayFlickering: Article = {
     {
       title: "Check the refresh rate",
       body: "Open Display settings, scroll to Advanced display, select the affected screen, and look at the refresh rate. If several are offered, try the highest the monitor supports — and if it is already there and flickering, step down one and see whether it settles.",
-      figure: {
-        caption: "Display settings › Advanced display › refresh rate",
-      },
+      figure: { caption: "Display settings › Advanced display › refresh rate" },
     },
     {
       title: "Update the graphics driver, then restart",

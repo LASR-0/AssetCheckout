@@ -58,9 +58,7 @@ const batteryDrainSamsung: Article = {
       title: "Put the offending app to sleep",
       body: "Go to Settings › Battery › Background usage limits. Adding an app to Sleeping apps stops it running in the background but lets it update occasionally; Deep sleeping apps stops it completely, so it only ever runs while you have it open. Use Deep sleeping apps for the one the battery list pointed at — Sleeping apps often isn't strong enough to make a visible difference.",
       warn: "Don't deep-sleep Company Portal, At Work, Teams or Outlook. Those need to run in the background to keep the {device} compliant and to deliver notifications, and silencing them causes a different problem a fortnight later that nobody connects back to this.",
-      figure: {
-        caption: "Settings › Battery › Background usage limits",
-      },
+      figure: { caption: "Settings › Battery › Background usage limits" },
     },
     {
       title: "Shorten the screen timeout",

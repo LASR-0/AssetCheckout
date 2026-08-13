@@ -36,16 +36,12 @@ const notCharging: Article = {
     {
       title: "Check what Windows thinks",
       body: "Hover over the battery icon at the right-hand end of the taskbar. It will say whether it is charging, plugged in and not charging, or running on battery — which is worth knowing, because 'plugged in, not charging' is a different fault from no power at all.",
-      figure: {
-        caption: "Taskbar › battery icon › charging status",
-      },
+      figure: { caption: "Taskbar › battery icon › charging status" },
     },
     {
       title: "Check the battery in Lenovo Commercial Vantage",
       body: "Open Lenovo Commercial Vantage from the Start menu and look at the battery details. It reports the battery's condition and its charge, which separates a battery that has worn out from a charger that isn't delivering power — they look identical from the outside.",
-      figure: {
-        caption: "Lenovo Commercial Vantage › battery details",
-      },
+      figure: { caption: "Lenovo Commercial Vantage › battery details" },
     },
     {
       title: "Still not charging? Contact IT",

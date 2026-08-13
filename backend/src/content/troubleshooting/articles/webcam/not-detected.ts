@@ -48,16 +48,12 @@ const webcamNotDetected: Article = {
     {
       title: "Open the Windows Camera app to test it",
       body: "Search the Start menu for Camera and open it. This tests the camera on its own, away from any meeting software. A picture here means the camera works and the problem belongs to whichever app was complaining; nothing here means Windows genuinely cannot see it.",
-      figure: {
-        caption: "Start menu › Camera",
-      },
+      figure: { caption: "Start menu › Camera" },
     },
     {
       title: "Check camera access is switched on for apps",
       body: "Open Settings › Privacy & security › Camera. Make sure camera access is on, that apps are allowed to use it, and that the app you need appears in the list below and is switched on. This gets turned off by accident and is invisible from inside the app that is failing.",
-      figure: {
-        caption: "Settings › Privacy & security › Camera",
-      },
+      figure: { caption: "Settings › Privacy & security › Camera" },
     },
     {
       title: "If it's an external webcam, reseat it and change port",

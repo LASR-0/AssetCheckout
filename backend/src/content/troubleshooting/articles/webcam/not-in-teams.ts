@@ -41,9 +41,7 @@ const webcamNotInTeams: Article = {
     {
       title: "Pick the right camera inside Teams",
       body: "In Teams, click your picture at the top right, then Settings › Devices, and look at Camera. Choose the one you actually want by name and check the preview underneath shows you. On a laptop with an external webcam there will be two entries, and Teams regularly settles on the one pointing at the ceiling.",
-      figure: {
-        caption: "Teams › your picture › Settings › Devices › Camera",
-      },
+      figure: { caption: "Teams › your picture › Settings › Devices › Camera" },
     },
     {
       title: "Close anything else holding the camera",
@@ -57,9 +55,7 @@ const webcamNotInTeams: Article = {
     {
       title: "Check Teams is allowed to use the camera",
       body: "Open Settings › Privacy & security › Camera, make sure camera access is on, and scroll to check Teams itself is switched on in the list of apps. A permission declined once during setup is never asked about again, and from inside Teams it looks identical to a camera that isn't there.",
-      figure: {
-        caption: "Settings › Privacy & security › Camera › app list",
-      },
+      figure: { caption: "Settings › Privacy & security › Camera › app list" },
     },
     {
       title: "Restart the laptop and try one more time",
