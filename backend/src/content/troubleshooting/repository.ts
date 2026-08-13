@@ -145,11 +145,69 @@ export type SubjectPickerTile = SubjectSummary & {
   available: boolean;
 };
 
+/// ── Visibility ───────────────────────────────────────────────────────────
+//
+//  Two admin switches, and they are NOT part of the draft: hiding is almost
+//  always "this is wrong, get it off the site now", and making that wait
+//  behind a publish would be backwards. Article text is what gets drafted.
+//
+//  LISTING-SHAPED METHODS FILTER; FETCH-SHAPED ONES DO NOT. Everything that
+//  produces a list — the taxonomy, search, siblings, the picker counts — skips
+//  hidden symptoms and disabled categories. `getArticle` and `findSymptom` do
+//  not, and that is the whole reason a direct link to a hidden article still
+//  opens rather than 404ing. Hidden means unlisted, not retracted.
+//
+//  A hidden symptom leaves the listing ENTIRELY rather than dropping back to a
+//  Draft badge. The badge means "we intend to cover this", which is the
+//  opposite of what hiding says, and the article does still exist and open.
+
+/** A category as authored, plus the admin switch. */
+export type CategoryContent = SymptomCategory & { disabled: boolean };
+
+/** A subject as authored, with its categories carrying visibility. */
+export type SubjectContent = Omit<Subject, "categories"> & {
+  categories: CategoryContent[];
+};
+
+/** An article as authored, plus the admin switch. */
+export type ArticleContent = Article & { hidden: boolean };
+
+/**
+ * Everything the query layer needs, already validated.
+ *
+ * The seam that lets one copy of the query logic serve both the disk modules
+ * and the database: `createRepositoryOver` cares only about this shape, not
+ * where it came from. Disk content has no visibility switches, so the disk
+ * loader defaults both to false and behaves exactly as it always has.
+ */
+export type ContentSnapshot = {
+  subjects: SubjectContent[];
+  articles: ArticleContent[];
+};
+
+/** A symptom found without regard to whether it is listed. */
+export type SymptomLocation = {
+  symptom: Symptom;
+  category: SymptomCategory;
+  /** False when hidden, or when its category is disabled. */
+  listed: boolean;
+};
+
 export interface TroubleshootingRepository {
   /** Every subject the content library knows about, in picker order. */
   listSubjects(): SubjectSummary[];
   /** The symptom taxonomy for one subject. Empty array for an unknown one. */
   getSubjectCategories(subjectKey: string): SymptomCategoryListing[];
+  /**
+   * Locate a symptom whether or not it is listed.
+   *
+   * Callers deciding whether a URL is REAL must use this rather than
+   * searching `getSubjectCategories`, which filters. A hidden symptom is
+   * still a valid address; the route that 404s on it is a bug.
+   */
+  findSymptom(subjectKey: string, symptomId: string): SymptomLocation | null;
+  /** Whether the library knows this subject at all. */
+  hasSubject(subjectKey: string): boolean;
   /** The article for a symptom, or null when it hasn't been written yet. */
   getArticle(subjectKey: string, symptomId: string): Article | null;
   /**
@@ -201,7 +259,7 @@ export interface TroubleshootingRepository {
 
 const SUBJECT_TOKEN = /\{(device|devices|Device|Devices)\}/g;
 
-function fillTokens(text: string, key: SubjectKey): string {
+export function fillTokens(text: string, key: SubjectKey): string {
   const labels = SUBJECT_LABELS[key];
   const singular = labels.labelSingular;
   const plural = labels.label.toLowerCase();
@@ -218,7 +276,7 @@ function fillTokens(text: string, key: SubjectKey): string {
 }
 
 /** A copy of the article speaking about the subject the reader arrived from. */
-function nameTheSubject(article: Article, subjectKey: string): Article {
+export function nameTheSubject(article: Article, subjectKey: string): Article {
   const key = subjectKey as SubjectKey;
   if (!SUBJECT_LABELS[key]) return article;
 
@@ -368,11 +426,45 @@ function formatIssues(error: { issues: { path: PropertyKey[]; message: string }[
 const DEVICE_KEY_SET: Set<string> = new Set(DEVICE_KEYS);
 
 /// ── Disk implementation ──────────────────────────────────────────────────
+//
+//  The authored modules, as a snapshot. Kept after the move to a database
+//  because it is what the SEED reads and what the content tests validate —
+//  the corpus has to stay valid, because a fresh database is built from it.
+//
+//  Disk content carries no visibility switches; there is nowhere in a `.ts`
+//  module to write one, and nor should there be. Both default to false, so a
+//  repository built over disk behaves exactly as it always has.
 
-export function createDiskRepository(): TroubleshootingRepository {
+export function contentFromDisk(): ContentSnapshot {
   const { subjects, articles } = parseContent();
 
-  const subjectsByKey = new Map<string, Subject>(subjects.map((s) => [s.key, s]));
+  return {
+    subjects: subjects.map((subject) => ({
+      ...subject,
+      categories: subject.categories.map((category) => ({
+        ...category,
+        disabled: false,
+      })),
+    })),
+    articles: articles.map((article) => ({ ...article, hidden: false })),
+  };
+}
+
+export function createDiskRepository(): TroubleshootingRepository {
+  return createRepositoryOver(contentFromDisk());
+}
+
+/// ── The query layer ──────────────────────────────────────────────────────
+//
+//  One copy, over a validated snapshot. Both the disk modules and the
+//  database produce a ContentSnapshot, so neither implementation owns a
+//  second copy of search, siblings, the picker or token substitution — which
+//  is what kept the disk-to-database migration a swap rather than a rewrite.
+
+export function createRepositoryOver(content: ContentSnapshot): TroubleshootingRepository {
+  const { subjects, articles } = content;
+
+  const subjectsByKey = new Map<string, SubjectContent>(subjects.map((s) => [s.key, s]));
 
   // Articles are keyed on subject + symptom because symptom ids are only
   // unique WITHIN a subject — "wifi" is a sensible id on a phone and on a
@@ -384,7 +476,7 @@ export function createDiskRepository(): TroubleshootingRepository {
   const articleKey = (subjectKey: string, symptomId: string) =>
     `${subjectKey}/${symptomId}`;
 
-  const articlesByKey = new Map<string, Article>();
+  const articlesByKey = new Map<string, ArticleContent>();
   for (const article of articles) {
     for (const key of article.subjectKeys) {
       articlesByKey.set(articleKey(key, article.symptomId), article);
@@ -394,22 +486,36 @@ export function createDiskRepository(): TroubleshootingRepository {
   const hasArticle = (subjectKey: string, symptomId: string) =>
     articlesByKey.has(articleKey(subjectKey, symptomId));
 
+  /** Hidden is a property of the ARTICLE, so a symptom with no article
+   *  written yet is never hidden — there is nothing to hide. */
+  const isHidden = (subjectKey: string, symptomId: string) =>
+    articlesByKey.get(articleKey(subjectKey, symptomId))?.hidden ?? false;
+
+  /** The listed taxonomy: disabled categories gone, hidden symptoms gone. */
   const listCategories = (subjectKey: string): SymptomCategoryListing[] => {
     const subject = subjectsByKey.get(subjectKey);
     if (!subject) return [];
-    return subject.categories.map((category) => ({
-      ...category,
-      symptoms: category.symptoms.map((symptom) => ({
-        ...symptom,
-        hasArticle: hasArticle(subjectKey, symptom.id),
-      })),
-    }));
+    return subject.categories
+      .filter((category) => !category.disabled)
+      .map((category) => ({
+        ...category,
+        symptoms: category.symptoms
+          .filter((symptom) => !isHidden(subjectKey, symptom.id))
+          .map((symptom) => ({
+            ...symptom,
+            hasArticle: hasArticle(subjectKey, symptom.id),
+          })),
+      }));
   };
 
-  /** Counts for a key, whether or not the library has heard of it. */
+  /** Counts for a key, whether or not the library has heard of it.
+   *
+   *  Counts the LISTED taxonomy — a disabled category or a hidden symptom is
+   *  not something the reader can reach, so a tile claiming otherwise would
+   *  be advertising content that isn't there. */
   const summarise = (key: SubjectKey): SubjectSummary => {
     const subject = subjectsByKey.get(key);
-    const symptoms = subject?.categories.flatMap((c) => c.symptoms) ?? [];
+    const symptoms = listCategories(key).flatMap((c) => c.symptoms);
     return {
       key,
       // An unwritten subject has no file to declare its kind, so it falls
@@ -417,7 +523,7 @@ export function createDiskRepository(): TroubleshootingRepository {
       kind: subject?.kind ?? (DEVICE_KEY_SET.has(key) ? "device" : "app"),
       ...SUBJECT_LABELS[key],
       symptomCount: symptoms.length,
-      articleCount: symptoms.filter((s) => hasArticle(key, s.id)).length,
+      articleCount: symptoms.filter((s) => s.hasArticle).length,
     };
   };
 
@@ -427,6 +533,31 @@ export function createDiskRepository(): TroubleshootingRepository {
     },
 
     getSubjectCategories: listCategories,
+
+    hasSubject(subjectKey) {
+      return subjectsByKey.has(subjectKey);
+    },
+
+    findSymptom(subjectKey, symptomId) {
+      // UNFILTERED, deliberately. This answers "is this a real address?", and
+      // a hidden symptom still is one. Deciding a 404 from the listed
+      // taxonomy instead would make hiding an article break its URL, which is
+      // the one thing hiding must not do.
+      const subject = subjectsByKey.get(subjectKey);
+      if (!subject) return null;
+
+      for (const category of subject.categories) {
+        const symptom = category.symptoms.find((s) => s.id === symptomId);
+        if (!symptom) continue;
+        return {
+          symptom,
+          category,
+          listed: !category.disabled && !isHidden(subjectKey, symptomId),
+        };
+      }
+
+      return null;
+    },
 
     getArticle(subjectKey, symptomId) {
       const article = articlesByKey.get(articleKey(subjectKey, symptomId));
@@ -441,13 +572,15 @@ export function createDiskRepository(): TroubleshootingRepository {
         ? subjects.filter((s) => s.key === subjectKey)
         : subjects;
 
+      // Over the LISTED taxonomy, not the raw one. A hidden symptom that a
+      // search still surfaced would be hidden from the accordion and nowhere
+      // else, which is not hidden at all.
       return scope.flatMap((subject) =>
-        subject.categories.flatMap((category) =>
+        listCategories(subject.key).flatMap((category) =>
           category.symptoms
             .filter((symptom) => symptom.label.toLowerCase().includes(needle))
             .map((symptom) => ({
               ...symptom,
-              hasArticle: hasArticle(subject.key, symptom.id),
               subjectKey: subject.key,
               categoryId: category.id,
               categoryName: category.name,
@@ -490,6 +623,52 @@ export function createDiskRepository(): TroubleshootingRepository {
   };
 }
 
-/** The process-wide instance. Content is static, so one load is enough. */
-export const troubleshootingRepository: TroubleshootingRepository =
-  createDiskRepository();
+/// ── The process-wide instance ────────────────────────────────────────────
+//
+//  A DELEGATING WRAPPER over a snapshot that can be swapped, rather than a
+//  repository built once at import. Content used to be static; it is now
+//  edited in the UI, so the library has to be replaceable without restarting
+//  and without every caller re-fetching a new object.
+//
+//  PRISMA IS DELIBERATELY NOT IMPORTED IN THIS FILE. The content tests and
+//  the row-mapping tests import the repository and run with no database at
+//  all; pulling a Prisma client in here would drag one into every one of
+//  them. The database loader lives in prismaContent.ts and pushes its
+//  snapshot in through `setRepositoryContent`, so the dependency points the
+//  right way round.
+//
+//  IT STARTS ON DISK CONTENT. That keeps the import-time behaviour identical
+//  to what it has always been — tests and scripts that never call the loader
+//  see the authored library — and it means a database that fails to load
+//  leaves a working library rather than an empty one. Boot still treats that
+//  failure as fatal; this is a floor, not a way to limp along unnoticed.
+
+let query: TroubleshootingRepository = createRepositoryOver(contentFromDisk());
+
+/** Replace the served library. Called by the database loader after any write. */
+export function setRepositoryContent(content: ContentSnapshot): void {
+  query = createRepositoryOver(content);
+}
+
+/**
+ * Serve the authored modules rather than the database.
+ *
+ * The seam the tests use. `troubleshootingRoutes.test.ts` mocks Prisma away
+ * to keep a database out of a route-contract test; this lets it populate the
+ * library without one.
+ */
+export function useDiskContent(): void {
+  setRepositoryContent(contentFromDisk());
+}
+
+export const troubleshootingRepository: TroubleshootingRepository = {
+  listSubjects: () => query.listSubjects(),
+  getSubjectCategories: (subjectKey) => query.getSubjectCategories(subjectKey),
+  findSymptom: (subjectKey, symptomId) => query.findSymptom(subjectKey, symptomId),
+  hasSubject: (subjectKey) => query.hasSubject(subjectKey),
+  getArticle: (subjectKey, symptomId) => query.getArticle(subjectKey, symptomId),
+  searchSymptoms: (search, subjectKey) => query.searchSymptoms(search, subjectKey),
+  getSiblingSymptoms: (subjectKey, symptomId) =>
+    query.getSiblingSymptoms(subjectKey, symptomId),
+  buildPicker: (requestableKeys) => query.buildPicker(requestableKeys),
+};

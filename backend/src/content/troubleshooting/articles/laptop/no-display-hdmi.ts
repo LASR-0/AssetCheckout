@@ -23,7 +23,7 @@ const noDisplayHdmi: Article = {
   summary:
     "Nothing appears when you connect a screen straight to the computer's HDMI port. Almost always the cable, the projection mode, or a graphics driver that needs a nudge.",
   timeEstimate: "About 10 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: [
     "The screen is switched on and connected to the computer by HDMI, not through a dock",

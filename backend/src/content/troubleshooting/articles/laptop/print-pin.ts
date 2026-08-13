@@ -20,7 +20,7 @@ const printPin: Article = {
   summary:
     "Your PIN releases jobs from the secure print queue at any printer on the network. You only need it for that — printing straight to a printer doesn't use a PIN at all.",
   timeEstimate: "About 3 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-07",
   before: [
     "You are signed in to SAFEQ — the printer icon in the hidden icon tray has no orange exclamation mark",

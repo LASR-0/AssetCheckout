@@ -19,7 +19,7 @@ const noDisplayDisplayPort: Article = {
   summary:
     "Nothing appears over DisplayPort. Usually the cable or the projection mode — but DisplayPort has two traps of its own worth knowing about.",
   timeEstimate: "About 10 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: [
     "The screen is switched on and connected by DisplayPort or by a USB-C to DisplayPort lead",

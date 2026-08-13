@@ -33,7 +33,7 @@ const printCloudError: Article = {
   summary:
     "Almost always the VPN. SAFEQ printing does not work while GlobalProtect is connected — disconnect it, print, and reconnect afterwards if you still need it.",
   timeEstimate: "About 5 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-11",
   before: [],
   steps: [

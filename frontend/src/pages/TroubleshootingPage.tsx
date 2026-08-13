@@ -12,6 +12,8 @@ import {
 import { troubleshootingSubjectPath } from "@/lib/troubleshootingRoutes";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useRestoredState, useViewState } from "@/hooks/useViewState";
+import { useAuth } from "@/hooks/useAuth";
+import SubjectEditor from "@/components/troubleshooting/edit/SubjectEditor";
 import type {
   SubjectCategoriesResponse,
   SubjectPickerTile,
@@ -67,6 +69,12 @@ export default function TroubleshootingPage() {
   // through an effect — restoring through an effect would render the page
   // collapsed and then visibly snap it open.
   const restored = useRestoredState<IndexView>(VIEW_NAME, location.key);
+
+  // Editing the list is admin-only and off by default, so an admin browses
+  // the page exactly as a user does until they ask to change it.
+  const { role } = useAuth();
+  const isAdmin = role === "ADMIN";
+  const [editingList, setEditingList] = useState(false);
 
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
   const [subjects, setSubjects] = useState<SubjectPickerTile[]>([]);
@@ -277,6 +285,16 @@ export default function TroubleshootingPage() {
           )}
           {data && !needle && (
             <div className="ml-auto flex gap-2">
+              {isAdmin && !editingList && (
+                <button
+                  type="button"
+                  onClick={() => setEditingList(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 hover:cursor-pointer transition-colors"
+                >
+                  <span className="material-symbols-outlined !text-[16px]">edit</span>
+                  Edit list
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setOpenIds(data.categories.map((c) => c.id))}
@@ -342,7 +360,19 @@ export default function TroubleshootingPage() {
           </div>
         )}
 
-        {!loading && !error && data && (
+        {!loading && !error && data && editingList && isAdmin && subjectKey && (
+          <SubjectEditor
+            subjectKey={subjectKey}
+            onClose={() => {
+              setEditingList(false);
+              // Re-fetch: hiding something changes what this page shows, and
+              // the reader view is served filtered.
+              getSubjectCategories(subjectKey).then(setData).catch(() => {});
+            }}
+          />
+        )}
+
+        {!loading && !error && data && !(editingList && isAdmin) && (
           <>
             <SymptomCategories
               subjectKey={subjectKey!}

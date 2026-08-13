@@ -18,7 +18,7 @@ const screensWrongSide: Article = {
   summary:
     "Your mouse leaves the left of one screen and appears on the right of the other. Windows doesn't know how your monitors sit on the desk — you tell it once, in Display settings.",
   timeEstimate: "About 3 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: [
     "Both screens are working — this is about where they are, not whether they show a picture",

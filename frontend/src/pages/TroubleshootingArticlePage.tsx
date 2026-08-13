@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/statusbadge";
 import { getSymptom, getTroubleshootingConfig } from "@/api/troubleshooting";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useViewState } from "@/hooks/useViewState";
+import { useAuth } from "@/hooks/useAuth";
+import { useArticleEditor } from "@/hooks/useArticleEditor";
+import EditModeBar from "@/components/troubleshooting/edit/EditModeBar";
+import EditableText from "@/components/troubleshooting/edit/EditableText";
+import StepEditor from "@/components/troubleshooting/edit/StepEditor";
 import { useSubjectBackNav } from "@/hooks/useSubjectBackNav";
 import { stepAnchorId, troubleshootingIndexPath } from "@/lib/troubleshootingRoutes";
 import type {
@@ -262,6 +267,14 @@ export default function TroubleshootingArticlePage() {
   // it, and behaves as an ordinary link when they didn't.
   const backToSymptoms = useSubjectBackNav(subjectKey);
 
+  // Edit mode is OFF by default, so an admin reads the page exactly as a user
+  // does until they ask to change it. The button is a courtesy — the real
+  // guard is server-side, and every admin route 403s without it.
+  const { role } = useAuth();
+  const isAdmin = role === "ADMIN";
+  const [editing, setEditing] = useState(false);
+  const editor = useArticleEditor(subjectKey, symptomId, editing && isAdmin);
+
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
   const [data, setData] = useState<SymptomResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -395,6 +408,27 @@ export default function TroubleshootingArticlePage() {
         </div>
       )}
 
+      {editing && isAdmin && editor.working && (
+        <EditModeBar
+          hasDraft={editor.hasDraft}
+          saveState={editor.saveState}
+          publishing={editor.publishing}
+          issues={editor.issues}
+          warnings={editor.warnings}
+          subjectKeys={editor.article?.subjectKeys ?? []}
+          currentSubjectKey={subjectKey ?? ""}
+          onPublish={() => {
+            void editor.publish().then((ok) => {
+              // Republish means the page's own copy is stale — reload it so
+              // the admin sees what a reader now sees.
+              if (ok) void getSymptom(subjectKey!, symptomId!).then(setData);
+            });
+          }}
+          onDiscard={() => void editor.discard()}
+          onDone={() => setEditing(false)}
+        />
+      )}
+
       {!loading && !error && data && (
         <article className="flex flex-col gap-6">
           <div className="flex flex-col gap-3 border-b border-outline/40 pb-5">
@@ -412,6 +446,16 @@ export default function TroubleshootingArticlePage() {
                 text="text-primary"
                 size="compact"
               />
+              {isAdmin && !editing && article && (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="ml-auto flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 hover:cursor-pointer transition-colors"
+                >
+                  <span className="material-symbols-outlined !text-[16px]">edit</span>
+                  Edit
+                </button>
+              )}
             </div>
 
             <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
@@ -420,9 +464,21 @@ export default function TroubleshootingArticlePage() {
 
             {article && (
               <>
-                <p className="max-w-[66ch] text-[15px] text-info-light">
-                  {article.summary}
-                </p>
+                {editing && editor.working ? (
+                  <EditableText
+                    value={editor.working.summary}
+                    onChange={(summary) =>
+                      editor.update((body) => ({ ...body, summary }))
+                    }
+                    ariaLabel="Article summary"
+                    className="max-w-[66ch] text-[15px] text-info-light"
+                    rows={2}
+                  />
+                ) : (
+                  <p className="max-w-[66ch] text-[15px] text-info-light">
+                    {article.summary}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-info-light">
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined !text-[16px]">schedule</span>
@@ -466,7 +522,61 @@ export default function TroubleshootingArticlePage() {
             </section>
           )}
 
-          {article && (
+          {article && editing && editor.working ? (
+            <div className="flex flex-col">
+              {editor.working.steps.map((step, i) => (
+                <StepEditor
+                  key={i}
+                  step={step}
+                  index={i}
+                  total={editor.working!.steps.length}
+                  subjectKey={subjectKey!}
+                  symptomId={symptomId!}
+                  symptoms={[data.symptom, ...data.siblings]}
+                  onChange={(next) =>
+                    editor.update((body) => ({
+                      ...body,
+                      steps: body.steps.map((s, j) => (j === i ? next : s)),
+                    }))
+                  }
+                  onMove={(direction) =>
+                    editor.update((body) => {
+                      const target = i + direction;
+                      if (target < 0 || target >= body.steps.length) return body;
+                      const steps = [...body.steps];
+                      [steps[i], steps[target]] = [steps[target], steps[i]];
+                      return { ...body, steps };
+                    })
+                  }
+                  onRemove={() =>
+                    editor.update((body) => ({
+                      ...body,
+                      // The schema requires at least one step, so the last one
+                      // cannot be deleted — an article with no steps is a
+                      // draft, not an article.
+                      steps:
+                        body.steps.length > 1
+                          ? body.steps.filter((_, j) => j !== i)
+                          : body.steps,
+                    }))
+                  }
+                />
+              ))}
+
+              <button
+                type="button"
+                onClick={() =>
+                  editor.update((body) => ({
+                    ...body,
+                    steps: [...body.steps, { title: "", body: "" }],
+                  }))
+                }
+                className="mt-4 self-start rounded-lg border border-dashed border-outline px-3 py-2 text-sm font-semibold text-info-light hover:bg-surface-container-low/30 hover:cursor-pointer transition-colors"
+              >
+                + Add step
+              </button>
+            </div>
+          ) : article ? (
             <div className="flex flex-col">
               {article.steps.map((step, i) => (
                 <StepBlock
@@ -478,7 +588,7 @@ export default function TroubleshootingArticlePage() {
                 />
               ))}
             </div>
-          )}
+          ) : null}
 
           {/* Where the steps came from, when they came from a manufacturer.
               Most of the library is rewritten from Apple's and Samsung's own

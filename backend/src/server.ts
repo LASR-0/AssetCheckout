@@ -7,6 +7,9 @@ import { ensureDefaults } from "./services/settings.js";
 import { startJobs } from './jobs/index.js';
 import { assertAppLinksConfig } from './jobs/handlers/appLinks.js';
 import { assertQuoteStorage } from './services/quoteStorage.js';
+import { ensureTroubleshootingContent } from './services/troubleshootingContentSeed.js';
+import { reloadTroubleshootingContent } from './content/troubleshooting/prismaContent.js';
+import { assertTroubleshootingImageStorage, troubleshootingImagesDir } from './services/troubleshootingImages.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,11 +36,22 @@ const PORT = Number(process.env.PORT) || 3000;
 //
 //  Matched narrowly: POST to .../quote exactly. The quote accept/reject and
 //  document routes carry ordinary small bodies and keep the default.
-const QUOTE_UPLOAD_PATH = /^\/api\/approval\/\d+\/quote$/;
+//  A LIST, because there are now two of these. Troubleshooting screenshots
+//  arrive the same way — base64 in JSON — and the global parser's 100kb
+//  default would reject an upload before its route could apply its own limit.
+//  Forgetting to add a path here fails as a confusing 413 on a route that
+//  looks correctly configured, so they live together where they can be seen.
+const RAW_BODY_ROUTES: RegExp[] = [
+  /^\/api\/approval\/\d+\/quote$/,
+  /^\/api\/troubleshooting\/admin\/subjects\/[a-z-]+\/symptoms\/[a-z0-9-]+\/images$/,
+];
+
 const jsonParser = express.json();
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.method === "POST" && QUOTE_UPLOAD_PATH.test(req.path)) return next();
+  if (req.method === "POST" && RAW_BODY_ROUTES.some((r) => r.test(req.path))) {
+    return next();
+  }
   jsonParser(req, res, next);
 });
 
@@ -54,7 +68,29 @@ app.get('/health', (req: Request, res: Response) => {
 
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '..', 'frontend');
+
+  //  TROUBLESHOOTING SCREENSHOTS COME FROM TWO ROOTS, and the order matters.
+  //
+  //  The seed images ship inside the bundle: Vite copies frontend/public into
+  //  dist, and the Dockerfile copies that into the image. Uploaded ones live
+  //  on the /data volume, because the container filesystem does not survive a
+  //  deploy. The volume is mounted FIRST so that replacing a screenshot
+  //  shadows the bundled copy rather than being shadowed by it.
+  app.use('/troubleshooting', express.static(troubleshootingImagesDir()));
   app.use(express.static(frontendDist));
+
+  //  A REAL 404 FOR MISSING SCREENSHOTS, before the SPA fallback below.
+  //
+  //  Without this, a missing image falls through to the catch-all and is
+  //  answered with index.html and a 200 — an <img> pointing at an HTML
+  //  document, which fails silently and shows nothing. That is exactly the
+  //  class of breakage the content test used to catch on disk, and it stops
+  //  being catchable at build time once images live on a volume. A 404 at
+  //  least appears in devtools and in the console.
+  app.use('/troubleshooting', (_req: Request, res: Response) => {
+    res.status(404).end();
+  });
+
   app.use((_req: Request, res: Response) => {
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
@@ -102,9 +138,28 @@ async function start() {
   // admin has already chased down a quote and filled in the form.
   await assertQuoteStorage();
 
+  // Same again for troubleshooting screenshots. In production this is the
+  // /data volume; an unmounted one should stop the deploy rather than surface
+  // when an admin has cropped a screenshot and pressed upload.
+  await assertTroubleshootingImageStorage();
+
   await configureDatabase();
   await ensureDefaults();
   console.log("Settings defaults ensured");
+
+  // The troubleshooting library, from the authored modules, on a fresh
+  // database only. `prisma migrate deploy` carries schema and never data, so
+  // without this a new deployment comes up with an empty library and nobody
+  // finds out until somebody opens Troubleshooting with a broken phone.
+  await ensureTroubleshootingContent();
+
+  // From here the database is the library. The repository starts on the
+  // authored modules so nothing is ever empty, and this replaces them with
+  // the rows. Fatal if it fails: serving the disk copy while an admin's edits
+  // sat unreachable in a database nobody could read would be worse than not
+  // starting, because it would look like it was working.
+  await reloadTroubleshootingContent();
+  console.log("Troubleshooting content loaded from database");
 
   await startJobs();
 

@@ -10,18 +10,34 @@ import {
 import { SUBJECT_KEYS } from "./schema.js";
 
 ///  +-----------------------------------------------------------------+
-///  |               TROUBLESHOOTING CONTENT VALIDATION                |
+///  |            SEED CORPUS VALIDATION (the .ts modules)             |
 ///  +-----------------------------------------------------------------+
 //
-//  These tests are about the CONTENT, not the code. They are the thing that
-//  makes typed files on disk safe to author against: the schema catches a
+//  These tests are about the CONTENT, not the code: the schema catches a
 //  malformed record, and the cross-reference tests below catch the mistakes
 //  a schema structurally cannot — a branch pointing at a symptom that was
 //  renamed, an article for a symptom that no longer exists in the taxonomy,
 //  two symptoms sharing an id and so sharing a URL.
 //
-//  Every one of these failure modes is otherwise discovered by a user, at
-//  the exact moment they were already having a bad day with their phone.
+//  WHAT THESE FILES ARE NOW. The library is served from the database; the
+//  modules under subjects/ and articles/ are the SEED a fresh deployment is
+//  built from. Editing one no longer changes what anyone reads. They still
+//  have to be valid — an invalid seed means a new environment comes up with
+//  a broken library — so every assertion here still earns its place, but it
+//  is guarding the starting point rather than the live content.
+//
+//  WHAT MOVED OUT. These same guarantees over LIVE content could not stay
+//  here: a test on a developer's machine cannot speak for rows an admin
+//  edited in a browser, or for images on a production volume. They now run
+//  in two places instead —
+//
+//    * the publish gate in services/troubleshootingContent.ts, which refuses
+//      to publish a dangling branch or an unrecognised {token};
+//    * GET /api/troubleshooting/admin/health, which reports missing images,
+//      orphaned files and dangling branches to an operator.
+//
+//  The image-existence test below still runs, and still means something,
+//  because these particular files are committed alongside the modules.
 ///  +-----------------------------------------------------------------+
 
 const { subjects, articles } = parseContent();
@@ -113,6 +129,11 @@ describe("figures", () => {
   ///  enforces the half a schema cannot — that a referenced file is actually
   ///  there. A broken image path fails silently in a browser, which means the
   ///  person who finds it is a user part-way through fixing their laptop.
+  ///
+  ///  SEED IMAGES ONLY. These are the ones committed to the repository, so
+  ///  the assertion is still true and still worth making. Screenshots an
+  ///  admin uploads live on a volume this test cannot see — those are covered
+  ///  by /admin/health instead.
   const IMAGE_ROOT = resolve(process.cwd(), "../frontend/public/troubleshooting");
 
   // Both theme variants, flattened — a missing dark image is just as broken

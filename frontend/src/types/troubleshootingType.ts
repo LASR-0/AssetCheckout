@@ -131,3 +131,84 @@ export type TroubleshootingConfig = {
   /** False when the number is the XXXX placeholder. */
   supportPhoneConfigured: boolean;
 };
+
+///  +-----------------------------------------------------------------+
+///  |                   ADMIN EDITING (admin only)                    |
+///  +-----------------------------------------------------------------+
+//
+//  These are the shapes the editor works in, and they differ from the public
+//  ones in two ways worth stating.
+//
+//  THE TEXT IS RAW. Public responses have already had {device} substituted
+//  for the reader's own subject; these have not, because an editor has to see
+//  and keep the token. Editing substituted text would silently freeze a
+//  shared article to whichever subject it was opened under.
+//
+//  NOTHING IS FILTERED. Hidden symptoms and disabled categories are present,
+//  because they cannot be switched back on if the editor cannot see them.
+
+/** An article without its identity — what a draft actually contains. */
+export type ArticleBody = Omit<Article, "symptomId" | "subjectKeys">;
+
+export type EditableArticle = {
+  symptomId: string;
+  /** Every subject listing this article. More than one means an edit here
+   *  changes what readers of the others see. */
+  subjectKeys: SubjectKey[];
+  hidden: boolean;
+  published: ArticleBody;
+  /** Unpublished changes, or null when there are none. */
+  draft: ArticleBody | null;
+  publishedAt: string;
+  publishedBy: string | null;
+  draftUpdatedAt: string | null;
+  draftUpdatedBy: string | null;
+};
+
+export type EditableSymptom = {
+  id: string;
+  label: string;
+  hasArticle: boolean;
+  hidden: boolean;
+  hasDraft: boolean;
+};
+
+export type EditableCategory = {
+  id: string;
+  glyph: string;
+  name: string;
+  blurb: string;
+  disabled: boolean;
+  symptoms: EditableSymptom[];
+};
+
+/** What the publish gate refused, or what the server couldn't accept. */
+export type ContentIssue = { path: string; message: string };
+
+export type PublishResult = {
+  publishedAt: string;
+  hasDraft: false;
+  /** Published anyway — a missing screenshot degrades, it doesn't mislead. */
+  warnings: string[];
+};
+
+export type UploadedImage = {
+  src: string;
+  srcDark?: string;
+  width: number;
+  height: number;
+  bytes: number;
+};
+
+export type ContentHealth = {
+  missingImages: { subjectKey: string; symptomId: string; step: number; src: string }[];
+  orphanImages: string[];
+  danglingBranches: { from: string; step: number; to: string; label: string }[];
+  drafts: {
+    subjectKey: string;
+    symptomId: string;
+    draftUpdatedAt: string;
+    draftUpdatedBy: string | null;
+  }[];
+  imageProcessingAvailable: boolean;
+};

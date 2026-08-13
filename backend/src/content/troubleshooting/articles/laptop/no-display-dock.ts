@@ -31,7 +31,7 @@ const noDisplayDock: Article = {
   summary:
     "Nothing on your external screens when the computer is docked. Usually a loose dock cable, a dock without power, or a projection mode that has reset itself.",
   timeEstimate: "About 15 minutes",
-  appliesTo: "KSB Lenovo computers and docks",
+  appliesTo: "KSB Lenovo laptops and docks",
   updated: "2026-08-10",
   before: [
     "The computer is connected to the dock and the monitors are switched on",

@@ -19,7 +19,7 @@ const screenRotated: Article = {
   summary:
     "A screen showing everything sideways or upside down is a display setting, not damage. It takes about a minute to put right.",
   timeEstimate: "About 3 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: ["The screen is showing a picture — just at the wrong orientation"],
   steps: [

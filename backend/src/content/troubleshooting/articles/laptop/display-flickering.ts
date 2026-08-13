@@ -24,7 +24,7 @@ const displayFlickering: Article = {
   summary:
     "Flickering on an external screen is usually the cable or the refresh rate. Flickering on the computer's own screen is a different matter and needs looking at.",
   timeEstimate: "About 15 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: [
     "You can tell which screen is flickering — the computer's own, or an external one",

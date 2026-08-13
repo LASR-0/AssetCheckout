@@ -413,3 +413,142 @@ enum TroubleshootingEventType {
   ESCAPE_TAKEN
   SEARCH_NO_MATCH
 }
+
+/// ─────────────────────────────────────────────────────────────────────────
+///  TROUBLESHOOTING CONTENT
+/// ─────────────────────────────────────────────────────────────────────────
+///
+/// The article library, moved off disk so admins can edit it in the UI.
+///
+/// The `.ts` modules under src/content/troubleshooting stay in the tree as
+/// the SEED — a fresh database is built from them on first boot — but from
+/// that point the rows are the truth and editing a module does nothing.
+///
+/// THE SHAPE IS DELIBERATELY MIXED. The taxonomy is normalised because it is
+/// the part that gets ordered, filtered, counted and constrained. The article
+/// body is a single validated JSON column because a step is only ever read as
+/// part of its article and only ever written as part of one — normalising it
+/// into step/figure/image/branch tables would buy no query anyone needs and
+/// would turn publishing into a four-table duplication. `Setting.value` and
+/// `BackgroundJob.payload` are already JSON columns; this is that precedent.
+
+/// One row per subject in SUBJECT_KEYS. Names are NOT here — SUBJECT_LABELS
+/// must be able to name a subject that has no content at all (the picker
+/// renders those greyed), so a table of them would be a table of constants.
+model TroubleshootingSubject {
+  key        String   @id
+  /// "device" | "app" — splits the picker into two sections.
+  kind       String
+  /// SUBJECT_KEYS order, frozen at seed.
+  position   Int
+  updatedAt  DateTime @updatedAt
+
+  categories TroubleshootingCategory[]
+  symptoms   TroubleshootingSymptom[]
+}
+
+model TroubleshootingCategory {
+  id         Int      @id @default(autoincrement())
+  subjectKey String
+  /// URL-safe id, e.g. "power". Never edited — it is an analytics key.
+  slug       String
+  glyph      String
+  name       String
+  blurb      String
+  position   Int
+
+  /// Admin switch. A disabled category and its symptoms leave every listing,
+  /// but their articles still serve at their own URLs — see the repository.
+  /// Applied immediately, NOT through the article draft: disabling is almost
+  /// always "this is wrong, get it off the site now".
+  disabled   Boolean  @default(false)
+  disabledAt DateTime?
+  disabledBy String?
+
+  updatedAt  DateTime @updatedAt
+
+  subject    TroubleshootingSubject   @relation(fields: [subjectKey], references: [key], onDelete: Cascade)
+  symptoms   TroubleshootingSymptom[]
+
+  @@unique([subjectKey, slug])
+  @@index([subjectKey, position])
+}
+
+model TroubleshootingSymptom {
+  id         Int      @id @default(autoincrement())
+  /// Denormalised from the category ON PURPOSE. Symptom ids are unique within
+  /// a SUBJECT, not within a category — content.test.ts asserts exactly that
+  /// — and it is only expressible as a database constraint with the subject
+  /// key on this row. Prisma cannot declare a unique across a relation.
+  subjectKey String
+  categoryId Int
+  /// URL segment, branch target and analytics key. Never edited.
+  slug       String
+  /// The wording users read in the list and search against. Editable.
+  label      String
+  position   Int
+  updatedAt  DateTime @updatedAt
+
+  subject     TroubleshootingSubject          @relation(fields: [subjectKey], references: [key], onDelete: Cascade)
+  category    TroubleshootingCategory         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  memberships TroubleshootingArticleSubject[]
+
+  @@unique([subjectKey, slug])
+  @@index([categoryId, position])
+}
+
+/// One article, listed under one or more subjects.
+///
+/// DRAFT IS A SECOND COLUMN, NOT A SECOND ROW. With two rows and a `state`
+/// filter, forgetting the filter once serves unpublished text to a user,
+/// silently. Here the public path reads `body` and the editor reads
+/// `draftBody`, so leaking a draft is not a bug that can be written. Publish
+/// is `body = draftBody; draftBody = null`.
+model TroubleshootingArticle {
+  id             Int      @id @default(autoincrement())
+  /// The symptom this answers. Mirrored onto the membership rows so the
+  /// database can enforce one article per subject+symptom.
+  symptomSlug    String
+
+  /// The live document as JSON — everything in articleSchema except
+  /// symptomId and subjectKeys, which are relational. Validated by
+  /// articleBodySchema on write, on publish, and again when the snapshot
+  /// loads.
+  body           String
+
+  /// Unpublished edits, same shape. NULL means no pending changes.
+  draftBody      String?
+  draftUpdatedAt DateTime?
+  draftUpdatedBy String?
+
+  /// Unlisted, not retracted. Gone from every listing, still served at its
+  /// own URL — a link IT already sent somebody has to keep working. Applied
+  /// immediately, like the category switch.
+  hidden         Boolean  @default(false)
+  hiddenAt       DateTime?
+  hiddenBy       String?
+
+  publishedAt    DateTime @default(now())
+  publishedBy    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subjects       TroubleshootingArticleSubject[]
+}
+
+/// The article-to-subject join, carrying `symptomSlug` so two assertions that
+/// content.test.ts makes by hand become database constraints instead:
+/// the compound foreign key enforces "every article's symptom exists in every
+/// subject it claims", and the unique enforces "at most one article per
+/// subject and symptom" — the shadowing bug the test was written to catch.
+model TroubleshootingArticleSubject {
+  articleId   Int
+  subjectKey  String
+  symptomSlug String
+
+  article TroubleshootingArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  symptom TroubleshootingSymptom @relation(fields: [subjectKey, symptomSlug], references: [subjectKey, slug], onDelete: Cascade)
+
+  @@id([articleId, subjectKey])
+  @@unique([subjectKey, symptomSlug])
+}

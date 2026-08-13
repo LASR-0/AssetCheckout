@@ -28,7 +28,7 @@ const printersMissing: Article = {
   summary:
     "Your printers come from SAFEQ. When SAFEQ signs out they vanish from the printer list altogether — signing back in brings them all back.",
   timeEstimate: "About 5 minutes",
-  appliesTo: "KSB computers and desktops",
+  appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: [
     "You are signed in to the computer as yourself",

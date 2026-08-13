@@ -120,14 +120,20 @@ router.get("/subjects", async (_req: Request, res: Response, next: NextFunction)
 router.get("/subjects/:subjectKey", (req: Request, res: Response, next: NextFunction) => {
   try {
     const subjectKey = param(req.params.subjectKey);
-    const categories = troubleshootingRepository.getSubjectCategories(subjectKey);
 
-    // No taxonomy means no such device in the library. 404 rather than an
-    // empty 200, so a mistyped URL is distinguishable from a subject whose
-    // articles are all still to be written.
-    if (categories.length === 0) {
+    // 404 means NO SUCH SUBJECT, so a mistyped URL is distinguishable from a
+    // subject whose articles are all still to be written.
+    //
+    // Asked of the subject list rather than of the taxonomy. An earlier
+    // version 404'd when `getSubjectCategories` came back empty, which was
+    // the same thing until categories became disable-able — after that,
+    // disabling every category of a subject would have 404'd the subject
+    // itself, taking the picker tile with it.
+    if (!troubleshootingRepository.hasSubject(subjectKey)) {
       return res.status(404).json({ error: "Unknown subject" });
     }
+
+    const categories = troubleshootingRepository.getSubjectCategories(subjectKey);
 
     const subject = troubleshootingRepository
       .listSubjects()
@@ -153,22 +159,30 @@ router.get(
       const subjectKey = param(req.params.subjectKey);
       const symptomId = param(req.params.symptomId);
 
-      const category = troubleshootingRepository
-        .getSubjectCategories(subjectKey)
-        .find((c) => c.symptoms.some((s) => s.id === symptomId));
+      // findSymptom, NOT a search through getSubjectCategories.
+      //
+      // This decides whether the URL is real, and a hidden symptom still is
+      // one — hidden means unlisted, not retracted, and a link IT already
+      // sent somebody has to keep working. Looking it up through the listed
+      // taxonomy would 404 the moment an admin hid the article, which is the
+      // one thing hiding must never do.
+      const found = troubleshootingRepository.findSymptom(subjectKey, symptomId);
 
-      if (!category) {
+      if (!found) {
         return res.status(404).json({ error: "Unknown symptom" });
       }
 
-      const symptom = category.symptoms.find((s) => s.id === symptomId)!;
+      const { symptom, category } = found;
       const subject = troubleshootingRepository
         .listSubjects()
         .find((s) => s.key === subjectKey);
 
       res.json({
-        subject,
-        symptom,
+        subject: subject ?? null,
+        symptom: {
+          ...symptom,
+          hasArticle: troubleshootingRepository.getArticle(subjectKey, symptomId) !== null,
+        },
         category: { id: category.id, name: category.name, glyph: category.glyph },
         article: troubleshootingRepository.getArticle(subjectKey, symptomId),
         siblings: troubleshootingRepository.getSiblingSymptoms(subjectKey, symptomId),

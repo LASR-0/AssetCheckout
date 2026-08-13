@@ -8,10 +8,25 @@
 //  repository interface exists to prevent.
 ///  +-----------------------------------------------------------------+
 
-export { troubleshootingRepository, createDiskRepository, parseContent } from "./repository.js";
+export {
+  troubleshootingRepository,
+  createDiskRepository,
+  nameTheSubject,
+  fillTokens,
+  setRepositoryContent,
+  useDiskContent,
+  createRepositoryOver,
+  contentFromDisk,
+  parseContent,
+} from "./repository.js";
 
 export type {
   TroubleshootingRepository,
+  ContentSnapshot,
+  SubjectContent,
+  CategoryContent,
+  ArticleContent,
+  SymptomLocation,
   SymptomListing,
   SymptomCategoryListing,
   SymptomSearchResult,

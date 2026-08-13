@@ -295,6 +295,26 @@ export const subjectSchema = z.object({
   categories: z.array(symptomCategorySchema),
 });
 
+/**
+ * An article without its identity — everything except which symptom it
+ * answers and which subjects list it.
+ *
+ * This is what gets stored as JSON when content lives in a database. Derived
+ * from `articleSchema` rather than declared again so the stored document and
+ * the served one cannot drift: add a field to an article and it is
+ * automatically part of the body, validated by the same rules on write as on
+ * load.
+ *
+ * `symptomId` and `subjectKeys` are omitted because they are relational —
+ * they are the article's address, enforced by unique constraints and foreign
+ * keys rather than by whatever a JSON blob happens to say.
+ */
+export const articleBodySchema = articleSchema.omit({
+  symptomId: true,
+  subjectKeys: true,
+});
+
+export type ArticleBody = z.infer<typeof articleBodySchema>;
 export type FigureImage = z.infer<typeof figureImageSchema>;
 export type Figure = z.infer<typeof figureSchema>;
 export type Branch = z.infer<typeof branchSchema>;
