@@ -103,7 +103,16 @@ backend/cert/
 #-----------------------------------------------------------------------------
 # SCRIPTS - scripts excluded / dev only no use in production
 #-----------------------------------------------------------------------------
-backend/src/scripts
+# The contents are ignored, NOT the directory itself. Git cannot re-include a
+# file whose parent directory is excluded, so `backend/src/scripts` on its own
+# would make the exception below impossible.
+backend/src/scripts/*
+
+# ...except the troubleshooting content tooling, which is not a dev scratch
+# script. Reseeding and exporting the article library are the documented way to
+# manage content now that it lives in the database, and an untracked copy would
+# be missing for anyone else and gone on a fresh clone.
+!backend/src/scripts/*Troubleshooting*.ts
 
 #-----------------------------------------------------------------------------
 # PROTOTYPE - Phase 5 troubleshooting design mockup, reference only
