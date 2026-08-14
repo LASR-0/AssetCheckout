@@ -96,6 +96,15 @@ export type Step = {
   warn?: string;
   figure?: Figure;
   branch?: Branch;
+  /**
+   * The order to show the optional blocks in, when it is not the default.
+   *
+   * A display hint over four named fields rather than a content model — see
+   * lib/troubleshootingBlocks.ts, and use `orderedBlocks` rather than reading
+   * this directly. Absent means the default order, which is what every
+   * article written before it existed relies on.
+   */
+  blockOrder?: ("note" | "warn" | "figure" | "branch")[];
 };
 
 export type Article = {

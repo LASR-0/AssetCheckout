@@ -296,3 +296,55 @@ describe("an archived article", () => {
     expect(source).not.toContain(" by ");
   });
 });
+
+describe("block order", () => {
+  ///  A display hint over four named optional fields — see stepSchema. It has
+  ///  to emit inline and, above all, stay ABSENT when it is not needed, or all
+  ///  sixty existing modules would gain a line saying what they already do.
+
+  const base: Article = {
+    symptomId: "ordered",
+    subjectKeys: ["phone"],
+    summary: "s",
+    timeEstimate: "t",
+    appliesTo: "a",
+    updated: "2026-08-14",
+    before: [],
+    steps: [{ title: "x", body: "y", note: "n", figure: { caption: "c" } }],
+  };
+
+  it("is omitted entirely when absent", async () => {
+    expect(await serialiseArticle(base)).not.toContain("blockOrder");
+  });
+
+  it("emits inline, after the blocks it orders", async () => {
+    const source = await serialiseArticle({
+      ...base,
+      steps: [{ ...base.steps[0], blockOrder: ["figure", "note"] }],
+    });
+
+    expect(source).toContain('blockOrder: ["figure", "note"]');
+    // After, so the step still reads title → body → content → metadata.
+    expect(source.indexOf("blockOrder")).toBeGreaterThan(source.indexOf("figure:"));
+  });
+
+  it("round-trips through the schema", async () => {
+    const article: Article = {
+      ...base,
+      steps: [{ ...base.steps[0], blockOrder: ["figure", "note"] }],
+    };
+
+    expect(articleSchema.parse(evaluate(await serialiseArticle(article)))).toEqual(article);
+  });
+
+  it("counts as a real change to the comparator", async () => {
+    // Reordering blocks changes what the reader sees, so the exporter has to
+    // treat it as an edit rather than as noise.
+    const reordered: Article = {
+      ...base,
+      steps: [{ ...base.steps[0], blockOrder: ["figure", "note"] }],
+    };
+
+    expect(await articlesDiffer(base, reordered)).toBe(true);
+  });
+});

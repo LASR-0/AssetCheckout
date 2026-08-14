@@ -182,11 +182,15 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
       {categories.map((category, categoryIndex) => (
         <section
           key={category.id}
-          className={`rounded-lg border p-4 transition-opacity ${
+          // The same shell the reader sees: a bordered card on `bg-surface`
+          // with a slightly darker header. Edit mode used to be a flat
+          // transparent box, so turning it on redrew the page into something
+          // that no longer resembled what was being edited.
+          className={`overflow-hidden rounded-lg border bg-surface transition-opacity ${
             category.disabled ? "border-outline/40 opacity-60" : "border-outline"
           }`}
         >
-          <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 bg-surface-container-low/20 p-3">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-sm text-primary">
               {category.glyph}
             </span>
@@ -250,166 +254,167 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
             </label>
           </div>
 
-          <ul className="flex flex-col divide-y divide-outline/30">
-            {category.symptoms.map((symptom, symptomIndex) => (
-              <li
-                key={symptom.id}
-                className="flex flex-wrap items-center gap-3 py-2"
-              >
-                {editingLabel === `${category.id}/${symptom.id}` ? (
-                  <input
-                    autoFocus
-                    defaultValue={symptom.label}
-                    onBlur={(e) => {
-                      const label = e.target.value.trim();
-                      setEditingLabel(null);
-                      if (!label || label === symptom.label) return;
-                      const previous = symptom.label;
+          <div className="p-3">
+            <ul className="flex flex-col divide-y divide-outline/30">
+              {category.symptoms.map((symptom, symptomIndex) => (
+                <li
+                  key={symptom.id}
+                  className="flex flex-wrap items-center gap-3 py-2"
+                >
+                  {editingLabel === `${category.id}/${symptom.id}` ? (
+                    <input
+                      autoFocus
+                      defaultValue={symptom.label}
+                      onBlur={(e) => {
+                        const label = e.target.value.trim();
+                        setEditingLabel(null);
+                        if (!label || label === symptom.label) return;
+                        const previous = symptom.label;
+                        void optimistic(
+                          () => patchSymptom(category.id, symptom.id, { label }),
+                          () => patchSymptom(category.id, symptom.id, { label: previous }),
+                          () => setSymptomLabel(subjectKey, symptom.id, label)
+                        );
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") setEditingLabel(null);
+                      }}
+                      className="min-w-0 flex-1 rounded-md border border-primary bg-primary/5 px-2 py-1 text-sm outline-none"
+                      aria-label="Symptom wording"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditingLabel(`${category.id}/${symptom.id}`)}
+                      title="Click to reword"
+                      className={`min-w-0 flex-1 truncate rounded-md px-2 py-1 text-left text-sm hover:bg-surface-container-low/30 hover:cursor-pointer ${
+                        symptom.hidden ? "text-info-light line-through" : ""
+                      }`}
+                    >
+                      {symptom.label}
+                    </button>
+                  )}
+
+                  {symptom.hasDraft && (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                      Unpublished changes
+                    </span>
+                  )}
+                  {symptom.hasArticle && !symptom.published && (
+                    <span
+                      className="shrink-0 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning"
+                      title="Readers still see this as a gap. It appears when you publish it."
+                    >
+                      Not published yet
+                    </span>
+                  )}
+
+                  {!symptom.hasArticle && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        createArticleDraft(subjectKey, symptom.id)
+                          .then(refresh)
+                          .catch((err: Error) => setError(err.message));
+                      }}
+                      className="shrink-0 text-[11px] font-semibold text-primary hover:underline hover:cursor-pointer"
+                      title="Creates an empty article. Nobody sees it until you publish."
+                    >
+                      Write this one →
+                    </button>
+                  )}
+
+                  <Reorder
+                    what={symptom.label}
+                    first={symptomIndex === 0}
+                    last={symptomIndex === category.symptoms.length - 1}
+                    onMove={(direction) => {
                       void optimistic(
-                        () => patchSymptom(category.id, symptom.id, { label }),
-                        () => patchSymptom(category.id, symptom.id, { label: previous }),
-                        () => setSymptomLabel(subjectKey, symptom.id, label)
+                        () =>
+                          setCategories(
+                            (current) =>
+                              current?.map((c) =>
+                                c.id === category.id
+                                  ? { ...c, symptoms: moved(c.symptoms, symptom.id, direction) }
+                                  : c
+                              ) ?? current
+                          ),
+                        () => void refresh(),
+                        () => moveSymptom(subjectKey, category.id, symptom.id, direction)
                       );
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") setEditingLabel(null);
-                    }}
-                    className="min-w-0 flex-1 rounded-md border border-primary bg-primary/5 px-2 py-1 text-sm outline-none"
-                    aria-label="Symptom wording"
                   />
-                ) : (
+
                   <button
                     type="button"
-                    onClick={() => setEditingLabel(`${category.id}/${symptom.id}`)}
-                    title="Click to reword"
-                    className={`min-w-0 flex-1 truncate rounded-md px-2 py-1 text-left text-sm hover:bg-surface-container-low/30 hover:cursor-pointer ${
-                      symptom.hidden ? "text-info-light line-through" : ""
-                    }`}
+                    onClick={() =>
+                      setDeleting(
+                        deleting === `${category.id}/${symptom.id}`
+                          ? null
+                          : `${category.id}/${symptom.id}`
+                      )
+                    }
+                    aria-label={`Delete ${symptom.label}`}
+                    title="Delete this symptom. The article is archived, not destroyed."
+                    className="grid size-6 shrink-0 place-items-center rounded text-info-light hover:bg-error/10 hover:text-error hover:cursor-pointer"
                   >
-                    {symptom.label}
+                    <span className="material-symbols-outlined !text-[16px]">delete</span>
                   </button>
-                )}
 
-                {symptom.hasDraft && (
-                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                    Unpublished changes
-                  </span>
-                )}
-                {symptom.hasArticle && !symptom.published && (
-                  <span
-                    className="shrink-0 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning"
-                    title="Readers still see this as a gap. It appears when you publish it."
-                  >
-                    Not published yet
-                  </span>
-                )}
+                  {symptom.hasArticle && (
+                    <>
+                      <label
+                        className="flex shrink-0 items-center gap-2 text-xs text-info-light hover:cursor-pointer"
+                        title="Removes it from this list and from search. The link still works."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={symptom.hidden}
+                          onChange={(e) => {
+                            const hidden = e.target.checked;
+                            void optimistic(
+                              () => patchSymptom(category.id, symptom.id, { hidden }),
+                              () => patchSymptom(category.id, symptom.id, { hidden: !hidden }),
+                              () => setSymptomHidden(subjectKey, symptom.id, hidden)
+                            );
+                          }}
+                          className="hover:cursor-pointer"
+                        />
+                        Unlist
+                      </label>
 
-                {!symptom.hasArticle && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setError(null);
-                      createArticleDraft(subjectKey, symptom.id)
-                        .then(refresh)
-                        .catch((err: Error) => setError(err.message));
-                    }}
-                    className="shrink-0 text-[11px] font-semibold text-primary hover:underline hover:cursor-pointer"
-                    title="Creates an empty article. Nobody sees it until you publish."
-                  >
-                    Write this one →
-                  </button>
-                )}
+                      <Link
+                        to={troubleshootingArticlePath(subjectKey, symptom.id)}
+                        state={{ [FROM_SYMPTOM_LIST]: true }}
+                        className="shrink-0 text-xs font-semibold text-primary hover:underline"
+                      >
+                        Edit article →
+                      </Link>
+                    </>
+                  )}
 
-                <Reorder
-                  what={symptom.label}
-                  first={symptomIndex === 0}
-                  last={symptomIndex === category.symptoms.length - 1}
-                  onMove={(direction) => {
-                    void optimistic(
-                      () =>
-                        setCategories(
-                          (current) =>
-                            current?.map((c) =>
-                              c.id === category.id
-                                ? { ...c, symptoms: moved(c.symptoms, symptom.id, direction) }
-                                : c
-                            ) ?? current
-                        ),
-                      () => void refresh(),
-                      () => moveSymptom(subjectKey, category.id, symptom.id, direction)
-                    );
-                  }}
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDeleting(
-                      deleting === `${category.id}/${symptom.id}`
-                        ? null
-                        : `${category.id}/${symptom.id}`
-                    )
-                  }
-                  aria-label={`Delete ${symptom.label}`}
-                  title="Delete this symptom. The article is archived, not destroyed."
-                  className="grid size-6 shrink-0 place-items-center rounded text-info-light hover:bg-error/10 hover:text-error hover:cursor-pointer"
-                >
-                  <span className="material-symbols-outlined !text-[16px]">delete</span>
-                </button>
-
-                {symptom.hasArticle && (
-                  <>
-                    <label
-                      className="flex shrink-0 items-center gap-2 text-xs text-info-light hover:cursor-pointer"
-                      title="Removes it from this list and from search. The link still works."
-                    >
-                      <input
-                        type="checkbox"
-                        checked={symptom.hidden}
-                        onChange={(e) => {
-                          const hidden = e.target.checked;
-                          void optimistic(
-                            () => patchSymptom(category.id, symptom.id, { hidden }),
-                            () => patchSymptom(category.id, symptom.id, { hidden: !hidden }),
-                            () => setSymptomHidden(subjectKey, symptom.id, hidden)
-                          );
+                  {deleting === `${category.id}/${symptom.id}` && (
+                    <div className="w-full">
+                      <DeleteSymptomDialog
+                        subjectKey={subjectKey}
+                        symptomId={symptom.id}
+                        label={symptom.label}
+                        hasArticle={symptom.hasArticle}
+                        onCancel={() => setDeleting(null)}
+                        onDeleted={() => {
+                          setDeleting(null);
+                          void refresh();
                         }}
-                        className="hover:cursor-pointer"
                       />
-                      Unlist
-                    </label>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
 
-                    <Link
-                      to={troubleshootingArticlePath(subjectKey, symptom.id)}
-                      state={{ [FROM_SYMPTOM_LIST]: true }}
-                      className="shrink-0 text-xs font-semibold text-primary hover:underline"
-                    >
-                      Edit article →
-                    </Link>
-                  </>
-                )}
-
-                {deleting === `${category.id}/${symptom.id}` && (
-                  <div className="w-full">
-                    <DeleteSymptomDialog
-                      subjectKey={subjectKey}
-                      symptomId={symptom.id}
-                      label={symptom.label}
-                      hasArticle={symptom.hasArticle}
-                      onCancel={() => setDeleting(null)}
-                      onDeleted={() => {
-                        setDeleting(null);
-                        void refresh();
-                      }}
-                    />
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-
-          {addingTo === category.id ? (
+            {addingTo === category.id ? (
             <NewSymptomForm
               subjectKey={subjectKey}
               categoryName={category.name}
@@ -421,14 +426,15 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
               }}
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => setAddingTo(category.id)}
-              className="mt-2 text-xs font-semibold text-primary hover:underline hover:cursor-pointer"
-            >
-              + Add a symptom to {category.name}
-            </button>
-          )}
+              <button
+                type="button"
+                onClick={() => setAddingTo(category.id)}
+                className="mt-2 text-xs font-semibold text-primary hover:underline hover:cursor-pointer"
+              >
+                + Add a symptom to {category.name}
+              </button>
+            )}
+          </div>
         </section>
       ))}
 

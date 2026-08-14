@@ -1,5 +1,11 @@
-import { useRef, useState } from "react";
-import EditableText from "./EditableText";
+import { useId, useRef, useState, type ReactNode } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadTroubleshootingImage } from "@/api/troubleshooting";
 import type { Figure } from "@/types/troubleshootingType";
 
@@ -32,6 +38,15 @@ type Props = {
   symptomId: string;
   onChange: (figure: Figure) => void;
   onRemove: () => void;
+  /**
+   * Rendered inside a BlockRow, which already carries the type label, the
+   * colour and the remove action.
+   *
+   * So this drops its own header and border and renders only the fields —
+   * otherwise the row's label and the panel's label say the same thing twice,
+   * with two different remove buttons under them.
+   */
+  bare?: boolean;
 };
 
 /** Strip the data: prefix — the API wants raw base64. */
@@ -50,6 +65,7 @@ export default function FigureEditor({
   symptomId,
   onChange,
   onRemove,
+  bare = false,
 }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +85,7 @@ export default function FigureEditor({
   }
 
   const images = figure.images ?? [];
+  const captionId = useId();
 
   async function upload() {
     const light = lightRef.current?.files?.[0];
@@ -116,8 +133,14 @@ export default function FigureEditor({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-outline bg-surface-container-low/10 p-3">
-      <div className="flex items-center gap-2">
+    <div
+      className={
+        bare
+          ? "flex flex-col gap-3"
+          : "flex flex-col gap-3 rounded-lg border border-outline bg-surface-container-low/10 p-3"
+      }
+    >
+      <div className={bare ? "hidden" : "flex items-center gap-2"}>
         <span className="material-symbols-outlined !text-[16px] text-info-light">image</span>
         <span className="text-xs font-semibold text-info-light">Figure</span>
         <button
@@ -130,16 +153,90 @@ export default function FigureEditor({
         </button>
       </div>
 
-      <EditableText
-        value={figure.caption}
-        onChange={(caption) => onChange({ ...figure, caption })}
-        ariaLabel="Figure caption"
-        className="text-[13px]"
-        placeholder="The path in words — “Settings › Wi-Fi › Forget This Network”"
-      />
+      {/* A label column and a field column, so the four things a figure has
+          read as one form rather than four unrelated controls. Matches the
+          rail above it: the labels line up, the fields line up. */}
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+        <FieldLabel htmlFor={captionId}>Caption path</FieldLabel>
+        <input
+          id={captionId}
+          value={figure.caption}
+          onChange={(e) => onChange({ ...figure, caption: e.target.value })}
+          placeholder="Settings › Wi-Fi › Forget This Network"
+          className="w-full rounded-md border border-outline bg-surface px-2.5 py-1.5 font-mono text-[12.5px] text-on-surface outline-none focus:border-primary"
+        />
 
+        <FieldLabel>Light image</FieldLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={lightRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="Light image"
+            className="text-[12px] file:mr-2 file:rounded-md file:border file:border-outline file:bg-surface file:px-2.5 file:py-1 file:text-[12px] hover:file:cursor-pointer"
+          />
+        </div>
+
+        <FieldLabel>Dark image</FieldLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={darkRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="Dark image"
+            className="text-[12px] file:mr-2 file:rounded-md file:border file:border-outline file:bg-surface file:px-2.5 file:py-1 file:text-[12px] hover:file:cursor-pointer"
+          />
+          {/* Said here rather than in the label, because it is a fact about
+              this field and not part of its name. */}
+          <span className="text-[11.5px] text-info-light">
+            Optional — only when the screenshot changes with the theme
+          </span>
+        </div>
+
+        <FieldLabel>Size</FieldLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={figure.size ?? "flyout"}
+            onValueChange={(value) => {
+              const next = { ...figure };
+              // "flyout" is the absence of a size, not a value — the schema
+              // only knows window and full.
+              if (value === "flyout") delete next.size;
+              else next.size = value as "window" | "full";
+              onChange(next);
+            }}
+          >
+            <SelectTrigger
+              aria-label="Figure size"
+              className="h-8 w-[19rem] border-outline bg-surface text-[12.5px]"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-surface-container-lowest border border-outline text-on-surface">
+              <SelectItem value="flyout">Flyout — a menu or small panel</SelectItem>
+              <SelectItem value="window">Window — an application window</SelectItem>
+              <SelectItem value="full">Full — a whole-screen capture</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <button
+            type="button"
+            onClick={() => void upload()}
+            disabled={uploading}
+            className="rounded-md border border-outline bg-surface px-2.5 py-1.5 text-[12.5px] font-semibold text-info-light hover:bg-surface-container-low/40 hover:cursor-pointer disabled:opacity-50 transition-colors"
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+        </div>
+      </div>
+
+      {/* PREVIEWS LAST. They are the only part that varies in height, and with
+          them above the fields every figure's controls sat at a different
+          place down the page — so nothing could be found by muscle memory.
+          They are also the output rather than the input: you upload, then you
+          check what you got. */}
       {images.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-outline/40 pt-2.5">
           {images.map((image, i) => (
             <div
               key={image.src}
@@ -187,57 +284,22 @@ export default function FigureEditor({
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-[11px] text-info-light">
-          Light image
-          <input
-            ref={lightRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="text-[11px] file:mr-2 file:rounded file:border file:border-outline file:bg-surface file:px-2 file:py-1 file:text-[11px] hover:file:cursor-pointer"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[11px] text-info-light">
-          Dark image (optional)
-          <input
-            ref={darkRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="text-[11px] file:mr-2 file:rounded file:border file:border-outline file:bg-surface file:px-2 file:py-1 file:text-[11px] hover:file:cursor-pointer"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => void upload()}
-          disabled={uploading}
-          className="rounded-lg border border-outline px-2.5 py-1 text-xs font-semibold text-info-light hover:bg-surface-container-low/30 hover:cursor-pointer disabled:opacity-50 transition-colors"
-        >
-          {uploading ? "Uploading…" : "Upload"}
-        </button>
-
-        <label className="ml-auto flex items-center gap-2 text-[11px] text-info-light">
-          Size
-          <select
-            value={figure.size ?? "flyout"}
-            onChange={(e) => {
-              const value = e.target.value;
-              const next = { ...figure };
-              // "flyout" is the absence of a size, not a value — the schema
-              // only knows window and full.
-              if (value === "flyout") delete next.size;
-              else next.size = value as "window" | "full";
-              onChange(next);
-            }}
-            className="rounded-md border border-outline bg-surface px-2 py-1 text-[11px] hover:cursor-pointer"
-          >
-            <option value="flyout">Flyout — a menu or small panel</option>
-            <option value="window">Window — an application window</option>
-            <option value="full">Full — a whole-screen capture</option>
-          </select>
-        </label>
-      </div>
-
       {error && <p className="text-[13px] text-error">{error}</p>}
     </div>
+  );
+}
+
+/** A right-aligned label in the figure's own two-column grid. */
+function FieldLabel({
+  children,
+  htmlFor,
+}: {
+  children: ReactNode;
+  htmlFor?: string;
+}) {
+  return (
+    <label htmlFor={htmlFor} className="text-[12px] text-info-light">
+      {children}
+    </label>
   );
 }

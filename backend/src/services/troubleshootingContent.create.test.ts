@@ -462,3 +462,47 @@ describe("discarding a draft that was never published", () => {
     expect(after!.published).not.toBeNull();
   });
 });
+
+describe("the updated date", () => {
+  ///  Stamped on publish rather than authored. The date a reader trusts has to
+  ///  track the deliberate act of publishing — not a whitespace fix, and not
+  ///  whatever somebody last typed into a date field by hand.
+
+  it("is set to today when the article is published", async () => {
+    const symptom = await newSymptom("audio", "dated");
+    await createArticleDraft(SUBJECT, symptom.symptomId, "admin@ksb.com");
+
+    const editable = await getEditableArticle(SUBJECT, symptom.symptomId);
+    await saveDraft(
+      SUBJECT,
+      symptom.symptomId,
+      { ...editable!.draft!, appliesTo: "All phones", updated: "2020-01-01" },
+      "admin@ksb.com"
+    );
+
+    await publishDraft(SUBJECT, symptom.symptomId, "admin@ksb.com");
+
+    const published = await getEditableArticle(SUBJECT, symptom.symptomId);
+    expect(published!.published!.updated).toBe(new Date().toISOString().slice(0, 10));
+  });
+
+  it("overrides whatever the draft said, rather than trusting it", async () => {
+    // The draft carries a date because the schema requires one; publishing is
+    // what decides its value.
+    const symptom = await newSymptom("audio", "dateoverride");
+    await createArticleDraft(SUBJECT, symptom.symptomId, "admin@ksb.com");
+
+    const editable = await getEditableArticle(SUBJECT, symptom.symptomId);
+    await saveDraft(
+      SUBJECT,
+      symptom.symptomId,
+      { ...editable!.draft!, appliesTo: "All phones", updated: "2099-12-31" },
+      "admin@ksb.com"
+    );
+
+    await publishDraft(SUBJECT, symptom.symptomId, "admin@ksb.com");
+
+    const published = await getEditableArticle(SUBJECT, symptom.symptomId);
+    expect(published!.published!.updated).not.toBe("2099-12-31");
+  });
+});

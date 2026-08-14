@@ -30,6 +30,15 @@ type Props = {
   currentSymptomId: string;
   onChange: (branch: Branch) => void;
   onRemove: () => void;
+  /**
+   * Rendered inside a BlockRow, which already carries the type label, the
+   * colour and the remove action.
+   *
+   * So this drops its own header and border and renders only the fields —
+   * otherwise the row's label and the panel's label say the same thing twice,
+   * with two different remove buttons under them.
+   */
+  bare?: boolean;
 };
 
 export default function BranchEditor({
@@ -38,6 +47,7 @@ export default function BranchEditor({
   currentSymptomId,
   onChange,
   onRemove,
+  bare = false,
 }: Props) {
   if (!branch) {
     return (
@@ -63,8 +73,14 @@ export default function BranchEditor({
   const crossSubject = Boolean(branch.targetSubjectKey);
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-outline bg-surface-container-low/10 p-3">
-      <div className="flex items-center gap-2">
+    <div
+      className={
+        bare
+          ? "flex flex-col gap-2"
+          : "flex flex-col gap-2 rounded-lg border border-outline bg-surface-container-low/10 p-3"
+      }
+    >
+      <div className={bare ? "hidden" : "flex items-center gap-2"}>
         <span className="material-symbols-outlined !text-[16px] text-info-light">
           alt_route
         </span>

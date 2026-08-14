@@ -57,7 +57,16 @@ const ARTICLE_KEYS = [
   "source",
 ] as const;
 
-const STEP_KEYS = ["title", "body", "note", "warn", "figure", "branch"] as const;
+const STEP_KEYS = [
+  "title",
+  "body",
+  "note",
+  "warn",
+  "figure",
+  "branch",
+  // Last, so every module written before it existed emits unchanged.
+  "blockOrder",
+] as const;
 const FIGURE_KEYS = ["images", "size", "caption"] as const;
 const IMAGE_KEYS = ["src", "srcDark"] as const;
 const BRANCH_KEYS = ["label", "targetSymptomId", "targetSubjectKey"] as const;
@@ -163,6 +172,9 @@ function emitFigure(figure: Record<string, unknown>, path: string, ctx: Emit): s
 
 function emitStep(step: Record<string, unknown>, path: string, ctx: Emit): string {
   return obj(step, STEP_KEYS, path, ctx, (key, v, childPath) => {
+    // Inline, like `before` and `subjectKeys`: it is a short list of short
+    // strings and expanding it would push the step's actual content down.
+    if (key === "blockOrder") return `[${(v as string[]).map(str).join(", ")}]`;
     if (key === "figure") return emitFigure(v as Record<string, unknown>, childPath, ctx);
     if (key === "branch")
       return obj(v as Record<string, unknown>, BRANCH_KEYS, childPath, ctx, (_, x) =>

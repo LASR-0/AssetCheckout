@@ -11,6 +11,7 @@ import {
   getTroubleshootingConfig,
   createArticleDraft,
 } from "@/api/troubleshooting";
+import { orderedBlocks } from "@/lib/troubleshootingBlocks";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useViewState } from "@/hooks/useViewState";
 import { useAuth } from "@/hooks/useAuth";
@@ -242,22 +243,41 @@ function StepBlock({
           {step.body}
         </p>
 
-        {step.note && <Callout variant="note">{step.note}</Callout>}
-        {step.warn && <Callout variant="warn">{step.warn}</Callout>}
-
-        {step.figure && <StepFigure figure={step.figure} />}
-
-        {/* The exit for when this step reveals the real problem is a
-            different symptom. Branches may point at another device, so the
-            target's own key wins when it carries one. */}
-        {step.branch && (
-          <SymptomLink
-            variant="branch"
-            subjectKey={step.branch.targetSubjectKey ?? subjectKey}
-            symptomId={step.branch.targetSymptomId}
-            label={step.branch.label}
-          />
-        )}
+        {/* Driven by `orderedBlocks` rather than written out in a fixed
+            order, so that reordering blocks in the editor changes what a
+            reader actually sees. It returns what the step HAS, sorted by the
+            hint — a stale hint can reorder, never hide. */}
+        {orderedBlocks(step).map((kind) => {
+          switch (kind) {
+            case "note":
+              return (
+                <Callout key="note" variant="note">
+                  {step.note}
+                </Callout>
+              );
+            case "warn":
+              return (
+                <Callout key="warn" variant="warn">
+                  {step.warn}
+                </Callout>
+              );
+            case "figure":
+              return <StepFigure key="figure" figure={step.figure!} />;
+            case "branch":
+              // The exit for when this step reveals the real problem is a
+              // different symptom. Branches may point at another device, so
+              // the target's own key wins when it carries one.
+              return (
+                <SymptomLink
+                  key="branch"
+                  variant="branch"
+                  subjectKey={step.branch!.targetSubjectKey ?? subjectKey}
+                  symptomId={step.branch!.targetSymptomId}
+                  label={step.branch!.label}
+                />
+              );
+          }
+        })}
       </div>
     </section>
   );
@@ -540,25 +560,86 @@ export default function TroubleshootingArticlePage() {
                     ariaLabel="Article summary"
                     className="max-w-[66ch] text-[15px] text-info-light"
                     rows={2}
+                    tone="muted"
                   />
                 ) : (
                   <p className="max-w-[66ch] text-[15px] text-info-light">
                     {shown.summary}
                   </p>
                 )}
-                <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-info-light">
-                  <span className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined !text-[16px]">schedule</span>
-                    {shown.timeEstimate}
+                <div
+                  className={`flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-info-light ${
+                    editing ? "items-start" : "items-center"
+                  }`}
+                >
+                  <span
+                    className={`flex gap-1.5 ${editing ? "items-start" : "items-center"}`}
+                  >
+                    <span
+                      className={`material-symbols-outlined !text-[16px] ${editing ? "pt-1" : ""}`}
+                    >
+                      schedule
+                    </span>
+                    {editing && editor.working ? (
+                      <EditableText
+                        value={editor.working.timeEstimate}
+                        onChange={(timeEstimate) =>
+                          editor.update((body) => ({ ...body, timeEstimate }))
+                        }
+                        ariaLabel="Time estimate"
+                        className="w-[13rem] text-[13px]"
+                        placeholder="About 10 minutes"
+                        tone="muted"
+                      />
+                    ) : (
+                      shown.timeEstimate
+                    )}
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined !text-[16px]">devices</span>
-                    Applies to {shown.appliesTo}
+
+                  {/* Stays on the same row as the time estimate, and is sized
+                      by its own text — NOT `flex-1`. A flex-1 wrapper claims
+                      the whole remaining row whatever the field inside it
+                      measures, which pushed the updated date onto a line of
+                      its own and left it looking stranded. `max-w-full` is
+                      what stops the growth at the container edge.
+                      The value is usually a sentence ("Windows laptops and
+                      desktops on the KSB domain"), so the field wraps inside
+                      itself and grows downward rather than pushing the row
+                      wider. The label is held to one line so the field starts
+                      in the same place on every article. */}
+                  <span
+                    className={`flex min-w-0 max-w-full gap-1.5 ${
+                      editing ? "items-start" : "items-center"
+                    }`}
+                  >
+                    <span
+                      className={`material-symbols-outlined !text-[16px] ${editing ? "pt-1" : ""}`}
+                    >
+                      devices
+                    </span>
+                    <span className={`whitespace-nowrap ${editing ? "pt-1" : ""}`}>
+                      Applies to
+                    </span>{" "}
+                    {editing && editor.working ? (
+                      <EditableText
+                        value={editor.working.appliesTo}
+                        onChange={(appliesTo) =>
+                          editor.update((body) => ({ ...body, appliesTo }))
+                        }
+                        ariaLabel="Applies to"
+                        className="text-[13px]"
+                        placeholder="iOS 16 and later"
+                        tone="muted"
+                        autoWidth
+                      />
+                    ) : (
+                      shown.appliesTo
+                    )}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined !text-[16px]">update</span>
-                    {/* Authored, not derived from git — a whitespace fix must
-                        not bump the date a reader trusts. */}
+                    {/* Stamped on publish, not derived from git — a whitespace
+                        fix must not bump the date a reader trusts. */}
                     Updated{" "}
                     {new Date(shown.updated).toLocaleDateString(undefined, {
                       day: "numeric",
@@ -573,20 +654,77 @@ export default function TroubleshootingArticlePage() {
 
           {!shown && <DraftNotice />}
 
-          {shown && shown.before.length > 0 && (
+          {/* Shown to a reader only when there is something to say, but always
+              present while editing — otherwise the only way to add the first
+              prerequisite would be a control that appears once one exists. */}
+          {editing && editor.working ? (
             <section className="rounded-lg border border-outline bg-surface p-5">
               <strong className="mb-2 block text-sm font-bold">Before you start</strong>
-              <ul className="flex flex-col gap-1.5">
-                {shown.before.map((item) => (
-                  <li key={item} className="flex gap-2 text-sm text-info-light">
-                    <span aria-hidden className="text-info-light">
+              <p className="mb-3 text-[13px] text-info-light">
+                What they need in hand before step 1 — a cable, a password, ten
+                minutes. Leave it empty if there is nothing.
+              </p>
+              <ul className="flex flex-col gap-2">
+                {editor.working.before.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span aria-hidden className="pt-1.5 text-info-light">
                       —
                     </span>
-                    <span>{item}</span>
+                    <EditableText
+                      value={item}
+                      onChange={(value) =>
+                        editor.update((body) => ({
+                          ...body,
+                          before: body.before.map((b, j) => (j === i ? value : b)),
+                        }))
+                      }
+                      ariaLabel={`Prerequisite ${i + 1}`}
+                      className="text-sm"
+                      placeholder="Something they need before starting"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        editor.update((body) => ({
+                          ...body,
+                          before: body.before.filter((_, j) => j !== i),
+                        }))
+                      }
+                      aria-label={`Remove prerequisite ${i + 1}`}
+                      className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md text-info-light transition-colors hover:bg-error-background hover:text-error hover:cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined !text-[16px]">close</span>
+                    </button>
                   </li>
                 ))}
               </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  editor.update((body) => ({ ...body, before: [...body.before, ""] }))
+                }
+                className="mt-3 rounded-md border border-dashed border-outline px-2.5 py-1.5 text-xs font-semibold text-info-light transition-colors hover:bg-surface-container-low/40 hover:cursor-pointer"
+              >
+                + Add a prerequisite
+              </button>
             </section>
+          ) : (
+            shown &&
+            shown.before.length > 0 && (
+              <section className="rounded-lg border border-outline bg-surface p-5">
+                <strong className="mb-2 block text-sm font-bold">Before you start</strong>
+                <ul className="flex flex-col gap-1.5">
+                  {shown.before.map((item) => (
+                    <li key={item} className="flex gap-2 text-sm text-info-light">
+                      <span aria-hidden className="text-info-light">
+                        —
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )
           )}
 
           {editing && editor.working ? (

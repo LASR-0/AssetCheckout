@@ -44,6 +44,33 @@
     --requester-text: 74 69 82;
     --not-found-text: 196 160 233;
 
+    /* The colour a button's own label sits in. Defined because half a dozen
+       places already say `text-on-primary` and it resolved to NOTHING — the
+       label was inheriting whatever the parent happened to be, which on a
+       purple button is close to unreadable. */
+    --on-primary: 255 255 255;
+
+    /* Same story: `text-warning` and `bg-warning/15` were in use with no token
+       behind them. It is the amber already used for "your attention, nothing
+       is wrong" — the info boxes and the in-progress rows — because that is
+       exactly what an unpublished article is. */
+    --warning: 217 119 6;
+
+    /* ── Article blocks ──────────────────────────────────────────────────
+       The four things a step can carry besides its own text, each with one
+       accent used for the icon, the type label and the left spine, and the
+       same value at low opacity for the panel tint.
+       ONE TOKEN EACH, not the prototype's three (fg / spine / tint): a mid
+       tone reads correctly as both text and rule, and three tokens per type
+       would be twelve values to keep in agreement across two themes.
+       Bound to hues the app already uses rather than new ones — a note is the
+       same amber as every other "read this" box, a warning the same red as
+       every other stop, a link the brand purple it navigates with. */
+    --block-note: 217 119 6;
+    --block-warn: 220 38 38;
+    --block-figure: 92 86 104;
+    --block-link: 137 37 177;
+
     /* Borders */
     --outline: 223 224 226;
     --underline: 98 116 142;
@@ -176,6 +203,17 @@
     --requester-text: 255 241 219;
     --not-found-text: 230 0 38;
 
+    --on-primary: 255 241 219;
+    --warning: 226 152 112;
+
+    /* The Miramare set the status colours already use on dark, for the same
+       reason they were chosen there: evenness across hues rather than maximum
+       contrast, so no one block type shouts over the others. */
+    --block-note: 226 152 112;
+    --block-warn: 230 129 131;
+    --block-figure: 158 134 124;
+    --block-link: 167 139 222;
+
     --outline: 64 58 34;
     --underline: 255 241 219;
     --info-light: 158 134 124;
@@ -286,6 +324,14 @@
   --color-approver-text: rgb(var(--approver-text));
   --color-requester-text: rgb(var(--requester-text));
   --color-not-found-text: rgb(var(--not-found-text));
+
+  --color-on-primary: rgb(var(--on-primary));
+  --color-warning: rgb(var(--warning));
+
+  --color-block-note: rgb(var(--block-note));
+  --color-block-warn: rgb(var(--block-warn));
+  --color-block-figure: rgb(var(--block-figure));
+  --color-block-link: rgb(var(--block-link));
 
   --color-outline: rgb(var(--outline));
   --color-underline: rgb(var(--underline));

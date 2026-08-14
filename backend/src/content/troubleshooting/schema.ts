@@ -210,7 +210,34 @@ export const stepSchema = z.object({
   warn: z.string().min(1).optional(),
   figure: figureSchema.optional(),
   branch: branchSchema.optional(),
+  /**
+   * The order the optional blocks are shown in, when it is not the default.
+   *
+   * A DISPLAY HINT OVER A FIXED SET, not a content model. The blocks are still
+   * four named optional fields; this only says which order to read them in.
+   * The alternative — an ordered array of typed blocks — is what you would
+   * design from scratch, and it would mean rewriting the schema, all sixty
+   * modules and the export path to let somebody move a note below a
+   * screenshot. Not worth it.
+   *
+   * ABSENT MEANS THE DEFAULT, which is the order the reader hardcoded before
+   * this existed, so every article written up to now is unaffected and stays
+   * byte-identical on export.
+   *
+   * Deliberately NOT validated against which blocks are present. A step whose
+   * order names a block it does not have is not broken, it is stale — and
+   * `orderedBlocks` treats it as a hint precisely so that a wrong entry can
+   * never make content vanish.
+   */
+  blockOrder: z.array(z.enum(["note", "warn", "figure", "branch"])).optional(),
 });
+
+/** The blocks a step can carry, in the order they are shown unless told
+ *  otherwise. Exported so the reader, the editor and the schema cannot
+ *  disagree about what "default" means. */
+export const DEFAULT_BLOCK_ORDER = ["note", "warn", "figure", "branch"] as const;
+
+export type BlockKind = (typeof DEFAULT_BLOCK_ORDER)[number];
 
 /// ── Article ──────────────────────────────────────────────────────────────
 //
@@ -240,7 +267,16 @@ export const articleSchema = z.object({
   timeEstimate: z.string().min(1),
   /** "iOS 16 and later", "Windows laptops and desktops". */
   appliesTo: z.string().min(1),
-  /** ISO 8601 date, authored. */
+  /**
+   * ISO 8601 date. STAMPED WHEN THE ARTICLE IS PUBLISHED.
+   *
+   * Not derived from git, which would bump it on a whitespace fix and show a
+   * reader a fresh date on stale content. Publishing is the deliberate act
+   * that means "this text is ready", so that is what it tracks. It was
+   * authored by hand while the corpus was written in an editor; expecting
+   * somebody to type an ISO date into a browser would only guarantee it went
+   * stale. See publishDraft.
+   */
   updated: z.iso.date(),
   /** Prerequisites shown before step 1. Empty is allowed; absent is not. */
   before: z.array(z.string().min(1)),

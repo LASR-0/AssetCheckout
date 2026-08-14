@@ -371,10 +371,23 @@ export async function publishDraft(
     throw new ContentError("This can't be published yet", 409, errors);
   }
 
+  // STAMPED ON PUBLISH, not authored by hand and not derived from git.
+  //
+  // The schema calls this an authored date, and the reasoning was sound: a
+  // git-derived date would bump on a whitespace fix, and a reader who sees a
+  // fresh date on stale content has been misled. But publishing is not a
+  // whitespace fix — it is somebody deciding this text is ready — so it is
+  // exactly the event the date should track. Asking an admin to hand-edit an
+  // ISO date in a browser would guarantee it goes stale instead.
+  const dated: ArticleBody = {
+    ...parsed.data,
+    updated: new Date().toISOString().slice(0, 10),
+  };
+
   const published = await prisma.troubleshootingArticle.update({
     where: { id: article.id },
     data: {
-      body: article.draftBody,
+      body: JSON.stringify(dated),
       draftBody: null,
       draftUpdatedAt: null,
       draftUpdatedBy: null,
