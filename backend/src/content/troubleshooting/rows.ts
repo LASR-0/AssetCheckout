@@ -54,8 +54,17 @@ export type SymptomRow = {
 
 export type ArticleRow = {
   symptomSlug: string;
-  /** The article body, JSON-encoded. Validated by articleBodySchema. */
-  body: string;
+  /**
+   * The article body, JSON-encoded. Validated by articleBodySchema.
+   *
+   * NULL MEANS NEVER PUBLISHED — created in the UI and still being written.
+   * Declared nullable so the shape says so, but note that `strict` is off in
+   * this package's tsconfig, so the compiler will NOT find the places that
+   * assume a string. The skip in `fromRows` is deliberate rather than
+   * defensive: it is the only thing standing between a draft and a validation
+   * error logged on every snapshot load.
+   */
+  body: string | null;
   hidden: boolean;
   /** Every subject that lists it — becomes the membership rows. */
   subjectKeys: string[];
@@ -180,6 +189,13 @@ export function fromRows(
 
   const articles: ContentSnapshot["articles"] = [];
   for (const row of rows.articles) {
+    // Never published: an article being written in the UI. It is NOT invalid,
+    // so it must not go through onInvalid — that path logs an error and would
+    // report every work in progress as corrupt content on every reload. It
+    // simply isn't in the library yet, which is the same state a symptom with
+    // no article at all is in, and renders the same way: as Draft.
+    if (row.body === null || row.body === undefined) continue;
+
     try {
       const article = articleSchema.parse({
         symptomId: row.symptomSlug,

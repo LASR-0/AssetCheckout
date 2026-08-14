@@ -5,6 +5,9 @@ import type {
   ContentIssue,
   EditableArticle,
   EditableCategory,
+  SlugPreview,
+  SymptomLink,
+  DeletedSymptom,
   PublishResult,
   UploadedImage,
   SubjectCategoriesResponse,
@@ -206,11 +209,19 @@ export async function saveArticleDraft(
   );
 }
 
+/**
+ * Throw away unpublished changes.
+ *
+ * `articleRemoved` comes back true when the article had never been published:
+ * the server removes it entirely rather than leaving a row with no body and no
+ * draft, which nothing could open again. The caller has to stop showing an
+ * editor for something that no longer exists.
+ */
 export async function discardArticleDraft(
   subjectKey: string,
   symptomId: string
-): Promise<void> {
-  await adminFetch(
+): Promise<{ articleRemoved: boolean }> {
+  return adminFetch(
     `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms/${encodeURIComponent(symptomId)}/draft`,
     { method: "DELETE" }
   );
@@ -296,4 +307,147 @@ export async function uploadTroubleshootingImage(
 
 export async function getContentHealth(): Promise<ContentHealth> {
   return adminFetch(`${ADMIN}/health`);
+}
+
+/// ── Creating ─────────────────────────────────────────────────────────────
+//
+//  A symptom and its article are created separately, because a symptom with
+//  no article is a real and deliberate state: it renders as Draft, which makes
+//  a gap in the library visible rather than silent. Ten shipped symptoms are
+//  exactly that today, and this is how one of them gets written.
+
+/**
+ * What the address for this label would be, before anything is created.
+ *
+ * The slug is a URL, a branch target and an analytics key, and it can never be
+ * changed afterwards. Showing it while the label is still being typed is the
+ * whole reason this endpoint exists.
+ */
+export async function previewSymptomSlug(
+  subjectKey: string,
+  label: string
+): Promise<SlugPreview> {
+  return adminFetch(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/slug-preview` +
+      `?label=${encodeURIComponent(label)}`
+  );
+}
+
+export async function createSymptom(
+  subjectKey: string,
+  categoryId: string,
+  label: string
+): Promise<{ symptomId: string; label: string }> {
+  return adminFetch(`${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms`, {
+    method: "POST",
+    body: { categoryId, label },
+  });
+}
+
+/** Start an article for a symptom that has none. Created unpublished. */
+export async function createArticleDraft(
+  subjectKey: string,
+  symptomId: string
+): Promise<{ symptomId: string; draftUpdatedAt: string }> {
+  return adminFetch(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms/` +
+      `${encodeURIComponent(symptomId)}/article`,
+    { method: "POST" }
+  );
+}
+
+export async function createCategory(
+  subjectKey: string,
+  input: { name: string; glyph: string; blurb: string }
+): Promise<{ categoryId: string; name: string }> {
+  return adminFetch(`${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/categories`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+/// ── Reordering ───────────────────────────────────────────────────────────
+//
+//  Both return the full new order rather than an acknowledgement, so the list
+//  re-renders from what the server actually did instead of from what the UI
+//  assumed it would do. At the ends of a list that is the unchanged order,
+//  which is why neither of these is an error.
+
+export async function moveCategory(
+  subjectKey: string,
+  categoryId: string,
+  direction: "up" | "down"
+): Promise<{ order: string[] }> {
+  return adminFetch(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/categories/` +
+      `${encodeURIComponent(categoryId)}/move`,
+    { method: "POST", body: { direction } }
+  );
+}
+
+export async function moveSymptom(
+  subjectKey: string,
+  categoryId: string,
+  symptomId: string,
+  direction: "up" | "down"
+): Promise<{ order: string[] }> {
+  return adminFetch(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/categories/` +
+      `${encodeURIComponent(categoryId)}/symptoms/${encodeURIComponent(symptomId)}/move`,
+    { method: "POST", body: { direction } }
+  );
+}
+
+/// ── Deleting ─────────────────────────────────────────────────────────────
+//
+//  Asked BEFORE offering to delete, so the consequences are on screen while
+//  the decision is being made. The server checks again on the way through —
+//  a UI that asks nicely is not a constraint, and content changes underneath.
+
+/** Every branch button pointing at this symptom, published or draft. */
+export async function getSymptomLinks(
+  subjectKey: string,
+  symptomId: string
+): Promise<SymptomLink[]> {
+  const res = await adminFetch<{ links: SymptomLink[] }>(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms/` +
+      `${encodeURIComponent(symptomId)}/links`
+  );
+  return res.links;
+}
+
+/**
+ * Delete a symptom and its article.
+ *
+ * Throws a 409 listing what would break unless `force` is set. The article is
+ * archived first — it can be recovered from `backend/content-archive/` after
+ * the next export.
+ */
+export async function deleteSymptom(
+  subjectKey: string,
+  symptomId: string,
+  options: { force?: boolean; reason?: string } = {}
+): Promise<DeletedSymptom> {
+  return adminFetch(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms/${encodeURIComponent(symptomId)}`,
+    { method: "DELETE", body: { force: options.force ?? false, reason: options.reason } }
+  );
+}
+
+/**
+ * Remove an empty category.
+ *
+ * Refuses with a 409 listing what is still inside. Emptying it first is
+ * deliberate: removing each symptom runs its own link check, so branch buttons
+ * pointing into the category surface one at a time rather than breaking all at
+ * once. To take a populated category off the site, disable it instead.
+ */
+export async function deleteCategory(
+  subjectKey: string,
+  categoryId: string
+): Promise<{ categoryId: string; name: string }> {
+  return adminFetch(
+    `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/categories/${encodeURIComponent(categoryId)}`,
+    { method: "DELETE" }
+  );
 }

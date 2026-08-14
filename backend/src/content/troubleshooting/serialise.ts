@@ -276,6 +276,47 @@ export async function serialiseArticleModule(
 }
 
 /**
+ * A complete module for an article that has never had one.
+ *
+ * The banner is a STUB, and deliberately says so. Every hand-written module
+ * opens with several paragraphs explaining why the article is shaped the way
+ * it is — which platform diverges, what the vendor documents, what was
+ * deliberately left out. None of that is in the database and none of it can be
+ * inferred, so writing a confident-sounding banner here would be inventing
+ * rationale nobody had. A line asking for one is more honest and gets noticed
+ * in review.
+ */
+export async function newArticleModule(
+  constName: string,
+  article: Article,
+  heading: string
+): Promise<string> {
+  const rule = "///  +-----------------------------------------------------------------+";
+
+  return [
+    `import type { Article } from "../../schema.js";`,
+    "",
+    rule,
+    // 63, not 62: the rule above is 72 characters wide and this line is
+    // "///  |" + two spaces + the text + "|".
+    `///  |  ${heading.toUpperCase().padEnd(63)}|`,
+    rule,
+    "//",
+    "//  Written in the admin editor and exported here. THIS BANNER IS A STUB:",
+    "//  replace it with why this article is shaped the way it is — what splits",
+    "//  the platforms, where the steps came from, what was deliberately left",
+    "//  out. Every other module in this folder carries that, and it is the part",
+    "//  a future reader needs most.",
+    rule,
+    "",
+    await serialiseArticleModule(constName, article),
+    "",
+    `export default ${constName};`,
+    "",
+  ].join("\n");
+}
+
+/**
  * Whether two articles would produce identical source.
  *
  * The definition of "changed" for the exporter. Not a deep compare — see the
@@ -341,4 +382,67 @@ export async function moduleNeedsRewrite(
   article: Article
 ): Promise<boolean> {
   return (await rewriteArticleModule(source, article)) !== source;
+}
+
+/// ── Archived articles ────────────────────────────────────────────────────
+
+/**
+ * A deleted article as a module, with a header saying what it was.
+ *
+ * Written to `backend/content-archive/`, which is OUTSIDE `src/` and that is
+ * the whole point: an archived article whose symptom no longer exists in the
+ * taxonomy cannot satisfy content.test.ts, which asserts that every article's
+ * symptom exists in every subject it claims. Under `src/` it would also be
+ * type-checked and emitted into `dist/`. Out here it is never compiled, never
+ * tested and never shipped — and moving the file back into `src/` makes it a
+ * working module again, which is the recovery path.
+ *
+ * The header is generated from what the archive recorded, so it says who
+ * deleted it, when, where it sat, and what was pointing at it — the questions
+ * somebody finding this file in a year will actually have.
+ */
+export async function archivedArticleModule(
+  article: Article,
+  context: {
+    label: string;
+    categoryName: string;
+    position: number;
+    deletedAt: string;
+    deletedBy: string | null;
+    reason: string | null;
+    linksAtDeletion: number;
+    wasPublished: boolean;
+  }
+): Promise<string> {
+  const rule = "//  " + "-".repeat(66);
+
+  const lines = [
+    `//  DELETED ${context.deletedAt.slice(0, 10)}` +
+      (context.deletedBy ? ` by ${context.deletedBy}` : ""),
+    `//  Was: ${article.subjectKeys.join(", ")} › ${context.categoryName} › "${context.label}"`,
+    `//  position ${context.position} · ` +
+      (context.wasPublished ? "was published" : "never published") +
+      ` · ${context.linksAtDeletion} article(s) linked to it`,
+  ];
+
+  if (context.reason) lines.push(`//  Reason given: ${context.reason}`);
+
+  lines.push(
+    "//",
+    "//  NOT COMPILED, NOT TESTED, NOT SHIPPED — this folder is outside src/.",
+    "//  To bring it back: move this file into",
+    `//  src/content/troubleshooting/articles/${article.subjectKeys[0]}/, register it in`,
+    "//  repository.ts, restore the symptom to its subject module, and reseed."
+  );
+
+  return [
+    rule,
+    ...lines,
+    rule,
+    "",
+    `const archived = ${await serialiseArticle(article)};`,
+    "",
+    "export default archived;",
+    "",
+  ].join("\n");
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { contentFromDisk } from "./repository.js";
-import { toRows, fromRows } from "./rows.js";
+import { toRows, fromRows, type ContentRows } from "./rows.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |            THE SEED MAPPING SURVIVES A ROUND TRIP               |
@@ -117,5 +117,67 @@ describe("toRows / fromRows", () => {
     const result = fromRows(rows, (slug) => skipped.push(slug));
     expect(skipped).toHaveLength(1);
     expect(result.articles).toHaveLength(original.articles.length - 1);
+  });
+});
+
+describe("an article that was never published", () => {
+  ///  +-----------------------------------------------------------------+
+  //  `body` is null for an article created in the UI and still being written.
+  //
+  //  These tests carry more weight than usual: this package compiles with
+  //  `strict: false`, so `string | null` assigns to `string` without complaint
+  //  and NOTHING in the type system will find a place that assumed otherwise.
+  //  The behaviour is only pinned here.
+  ///  +-----------------------------------------------------------------+
+
+  const draftRow = (rows: ContentRows): ContentRows => ({
+    ...rows,
+    articles: rows.articles.map((article, index) =>
+      index === 0 ? { ...article, body: null } : article
+    ),
+  });
+
+  it("is left out of the library rather than reported as corrupt", () => {
+    const rows = toRows(original);
+    const invalid: string[] = [];
+
+    const { articles } = fromRows(draftRow(rows), (slug) => invalid.push(slug));
+
+    // Absent, and — the point — absent silently.
+    expect(articles).toHaveLength(original.articles.length - 1);
+    expect(invalid).toEqual([]);
+  });
+
+  it("is skipped even when nothing is listening for invalid rows", () => {
+    // The seed and the round-trip test call fromRows with no handler, so a
+    // draft must not throw there either.
+    expect(() => fromRows(draftRow(toRows(original)))).not.toThrow();
+  });
+
+  it("leaves every other article untouched", () => {
+    const rows = toRows(original);
+    const skipped = rows.articles[0].symptomSlug;
+
+    const { articles } = fromRows(draftRow(rows));
+
+    expect(articles.some((a) => a.symptomId === skipped)).toBe(false);
+    expect(articles.length).toBeGreaterThan(50);
+  });
+
+  it("still reports a genuinely malformed body as invalid", () => {
+    // The skip must be for null specifically. A body that is present but
+    // broken is real corruption and has to keep being reported.
+    const rows = toRows(original);
+    const broken: ContentRows = {
+      ...rows,
+      articles: rows.articles.map((article, index) =>
+        index === 0 ? { ...article, body: '{"steps":"not an array"}' } : article
+      ),
+    };
+
+    const invalid: string[] = [];
+    fromRows(broken, (slug) => invalid.push(slug));
+
+    expect(invalid).toEqual([rows.articles[0].symptomSlug]);
   });
 });

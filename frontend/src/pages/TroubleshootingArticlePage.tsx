@@ -6,7 +6,11 @@ import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape
 import SymptomLink from "@/components/troubleshooting/SymptomLink";
 import { Callout } from "@/components/ui/callout";
 import { Badge } from "@/components/ui/statusbadge";
-import { getSymptom, getTroubleshootingConfig } from "@/api/troubleshooting";
+import {
+  getSymptom,
+  getTroubleshootingConfig,
+  createArticleDraft,
+} from "@/api/troubleshooting";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useViewState } from "@/hooks/useViewState";
 import { useAuth } from "@/hooks/useAuth";
@@ -273,7 +277,16 @@ export default function TroubleshootingArticlePage() {
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
   const [editing, setEditing] = useState(false);
-  const editor = useArticleEditor(subjectKey, symptomId, editing && isAdmin);
+
+  // Loaded for ANY admin viewing the page, not only once editing has started.
+  //
+  // The public endpoint returns nothing for an article that has never been
+  // published, so deciding the Edit button from it hid the button on exactly
+  // the articles that most needed it — an admin could create an article and
+  // then have no way to open it. This is the only thing that knows an
+  // unpublished article exists.
+  const editor = useArticleEditor(subjectKey, symptomId, isAdmin);
+  const [starting, setStarting] = useState(false);
 
   const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
   const [data, setData] = useState<SymptomResponse | null>(null);
@@ -310,6 +323,14 @@ export default function TroubleshootingArticlePage() {
   }, [subjectKey, symptomId]);
 
   const article = data?.article ?? null;
+
+  // What this page is DISPLAYING, which is not always what readers see.
+  //
+  // Out of edit mode it is the published article, or nothing. In edit mode it
+  // is the working copy — and for an article that has never been published
+  // the working copy is the only copy there is, so gating the body on the
+  // public article left edit mode open with nothing in it.
+  const shown = editing && editor.working ? editor.working : article;
 
   // "Articles opened" — which articles anyone actually reads.
   //
@@ -417,6 +438,7 @@ export default function TroubleshootingArticlePage() {
           warnings={editor.warnings}
           subjectKeys={editor.article?.subjectKeys ?? []}
           currentSubjectKey={subjectKey ?? ""}
+          published={editor.article?.published !== null}
           onPublish={() => {
             void editor.publish().then((ok) => {
               // Republish means the page's own copy is stale — reload it so
@@ -424,7 +446,17 @@ export default function TroubleshootingArticlePage() {
               if (ok) void getSymptom(subjectKey!, symptomId!).then(setData);
             });
           }}
-          onDiscard={() => void editor.discard()}
+          onDiscard={() => {
+            void editor.discard().then((result) => {
+              // The article was removed, not reverted — there is nothing left
+              // to edit, so drop out of edit mode and refetch. The page then
+              // renders the "not written yet" state, which is the truth.
+              if (result.articleRemoved) {
+                setEditing(false);
+                void getSymptom(subjectKey!, symptomId!).then(setData);
+              }
+            });
+          }}
           onDone={() => setEditing(false)}
         />
       )}
@@ -446,15 +478,50 @@ export default function TroubleshootingArticlePage() {
                 text="text-primary"
                 size="compact"
               />
-              {isAdmin && !editing && article && (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="ml-auto flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 hover:cursor-pointer transition-colors"
-                >
-                  <span className="material-symbols-outlined !text-[16px]">edit</span>
-                  Edit
-                </button>
+              {/* Three states, not two. An admin can be looking at a
+                  published article, an article that exists but has never been
+                  published, or a symptom with nothing written at all — and
+                  each needs a different offer. Keyed off the editor rather
+                  than the public article, which cannot see the middle one. */}
+              {isAdmin && !editing && !editor.loading && (
+                <div className="ml-auto flex items-center gap-2">
+                  {!editor.article && (
+                    <span className="text-[11px] text-info-light">Nothing written yet</span>
+                  )}
+                  {editor.article && !editor.article.published && (
+                    <span
+                      className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning"
+                      title="Readers still see the “not written yet” page. It appears when you publish it."
+                    >
+                      Not published yet
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={starting}
+                    onClick={() => {
+                      if (editor.article) {
+                        setEditing(true);
+                        return;
+                      }
+
+                      // No article at all: create the empty one first, then
+                      // open it. Two clicks for one intention would be a
+                      // worse version of the same thing.
+                      setStarting(true);
+                      createArticleDraft(subjectKey!, symptomId!)
+                        .then(() => editor.reload())
+                        .then(() => setEditing(true))
+                        .catch((err: Error) => setError(err.message))
+                        .finally(() => setStarting(false));
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed transition-colors"
+                  >
+                    <span className="material-symbols-outlined !text-[16px]">edit</span>
+                    {editor.article ? "Edit" : starting ? "Starting…" : "Write this article"}
+                  </button>
+                </div>
               )}
             </div>
 
@@ -462,7 +529,7 @@ export default function TroubleshootingArticlePage() {
               {data.symptom.label}
             </h2>
 
-            {article && (
+            {shown && (
               <>
                 {editing && editor.working ? (
                   <EditableText
@@ -476,24 +543,24 @@ export default function TroubleshootingArticlePage() {
                   />
                 ) : (
                   <p className="max-w-[66ch] text-[15px] text-info-light">
-                    {article.summary}
+                    {shown.summary}
                   </p>
                 )}
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-info-light">
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined !text-[16px]">schedule</span>
-                    {article.timeEstimate}
+                    {shown.timeEstimate}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined !text-[16px]">devices</span>
-                    Applies to {article.appliesTo}
+                    Applies to {shown.appliesTo}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined !text-[16px]">update</span>
                     {/* Authored, not derived from git — a whitespace fix must
                         not bump the date a reader trusts. */}
                     Updated{" "}
-                    {new Date(article.updated).toLocaleDateString(undefined, {
+                    {new Date(shown.updated).toLocaleDateString(undefined, {
                       day: "numeric",
                       month: "long",
                       year: "numeric",
@@ -504,13 +571,13 @@ export default function TroubleshootingArticlePage() {
             )}
           </div>
 
-          {!article && <DraftNotice />}
+          {!shown && <DraftNotice />}
 
-          {article && article.before.length > 0 && (
+          {shown && shown.before.length > 0 && (
             <section className="rounded-lg border border-outline bg-surface p-5">
               <strong className="mb-2 block text-sm font-bold">Before you start</strong>
               <ul className="flex flex-col gap-1.5">
-                {article.before.map((item) => (
+                {shown.before.map((item) => (
                   <li key={item} className="flex gap-2 text-sm text-info-light">
                     <span aria-hidden className="text-info-light">
                       —
@@ -522,7 +589,7 @@ export default function TroubleshootingArticlePage() {
             </section>
           )}
 
-          {article && editing && editor.working ? (
+          {editing && editor.working ? (
             <div className="flex flex-col">
               {editor.working.steps.map((step, i) => (
                 <StepEditor
@@ -576,9 +643,9 @@ export default function TroubleshootingArticlePage() {
                 + Add step
               </button>
             </div>
-          ) : article ? (
+          ) : shown ? (
             <div className="flex flex-col">
-              {article.steps.map((step, i) => (
+              {shown.steps.map((step, i) => (
                 <StepBlock
                   key={stepAnchorId(i)}
                   step={step}
@@ -602,17 +669,17 @@ export default function TroubleshootingArticlePage() {
               end for the person who wants to check our working, and for a
               reviewer who needs to know which page to re-check when Apple
               moves a setting. */}
-          {article?.source && (
+          {shown?.source && (
             <p className="flex items-center gap-1.5 text-[13px] text-info-light">
               <span className="material-symbols-outlined !text-[16px]">link</span>
               Adapted from{" "}
               <a
-                href={article.source.url}
+                href={shown.source.url}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="font-semibold text-primary hover:underline"
               >
-                {article.source.name}
+                {shown.source.name}
               </a>
             </p>
           )}

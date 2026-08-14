@@ -156,7 +156,12 @@ export type EditableArticle = {
    *  changes what readers of the others see. */
   subjectKeys: SubjectKey[];
   hidden: boolean;
-  published: ArticleBody;
+  /**
+   * The live text, or NULL for an article that has never been published —
+   * created here and still being written. The editor shows the draft in that
+   * case, because there is nothing else to show.
+   */
+  published: ArticleBody | null;
   /** Unpublished changes, or null when there are none. */
   draft: ArticleBody | null;
   publishedAt: string;
@@ -171,6 +176,14 @@ export type EditableSymptom = {
   hasArticle: boolean;
   hidden: boolean;
   hasDraft: boolean;
+  /**
+   * Whether readers can see it at all.
+   *
+   * False with `hasArticle` true means started but never published — the
+   * article exists here and nowhere else, and the reader still sees Draft.
+   * Without this the editor would show a started article as finished.
+   */
+  published: boolean;
 };
 
 export type EditableCategory = {
@@ -180,6 +193,35 @@ export type EditableCategory = {
   blurb: string;
   disabled: boolean;
   symptoms: EditableSymptom[];
+};
+
+/** What a new symptom's permanent address will be, checked before creating it. */
+export type SlugPreview = {
+  slug: string;
+  available: boolean;
+  /** Why not, when it isn't. Written for a person. */
+  reason?: string;
+};
+
+/** A branch button in another article pointing at a symptom. */
+export type SymptomLink = {
+  /** Where it is — `laptop/print-cloud-error`. */
+  from: string;
+  subjectKey: string;
+  symptomId: string;
+  /** 1-based, as the reader sees it. */
+  step: number;
+  label: string;
+  /** True when the branch is in unpublished text rather than live. */
+  inDraft: boolean;
+};
+
+export type DeletedSymptom = {
+  subjectKey: string;
+  symptomId: string;
+  label: string;
+  archived: boolean;
+  brokenLinks: SymptomLink[];
 };
 
 /** What the publish gate refused, or what the server couldn't accept. */

@@ -19,6 +19,16 @@ import {
   setSymptomLabel,
   setCategoryText,
   getContentHealth,
+  previewSymptomSlug,
+  createSymptom,
+  createArticleDraft,
+  createCategory,
+  moveCategory,
+  moveSymptom,
+  findLinksTo,
+  deleteSymptom,
+  listArchivedArticles,
+  deleteCategory,
 } from "../services/troubleshootingContent.js";
 import { getActorEmail } from "../config/auth.js";
 
@@ -384,6 +394,244 @@ router.post(
     }
   }
 );
+
+/// ── Creating ─────────────────────────────────────────────────────────────
+//
+//  Slug preview is its own endpoint because the slug is PERMANENT. The UI
+//  shows what the address will be before anything exists, so the one decision
+//  that cannot be undone is made with the answer on screen rather than
+//  discovered afterwards.
+
+const newSymptomSchema = z.object({
+  categoryId: z.string().min(1),
+  label: z.string().min(1).max(200),
+});
+
+const newCategorySchema = z.object({
+  name: z.string().min(1).max(120),
+  glyph: z.string().min(1).max(8),
+  blurb: z.string().max(200).default(""),
+});
+
+const moveSchema = z.object({ direction: z.enum(["up", "down"]) });
+
+router.get(
+  "/subjects/:subjectKey/slug-preview",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const label = param(req.query.label as string | string[] | undefined);
+      if (!label) {
+        return res.status(400).json({ error: "A label is required" });
+      }
+
+      res.json(await previewSymptomSlug(param(req.params.subjectKey), label));
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+router.post(
+  "/subjects/:subjectKey/symptoms",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = read(res, newSymptomSchema, req.body);
+      if (!input) return;
+
+      res
+        .status(201)
+        .json(
+          await createSymptom(param(req.params.subjectKey), input.categoryId, input.label)
+        );
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+router.post(
+  "/subjects/:subjectKey/symptoms/:symptomId/article",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res
+        .status(201)
+        .json(
+          await createArticleDraft(
+            param(req.params.subjectKey),
+            param(req.params.symptomId),
+            getActorEmail(req)
+          )
+        );
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+router.post(
+  "/subjects/:subjectKey/categories",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = read(res, newCategorySchema, req.body);
+      if (!input) return;
+
+      res.status(201).json(await createCategory(param(req.params.subjectKey), input));
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+/// ── Reordering ───────────────────────────────────────────────────────────
+
+router.post(
+  "/subjects/:subjectKey/categories/:categoryId/move",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = read(res, moveSchema, req.body);
+      if (!input) return;
+
+      res.json(
+        await moveCategory(
+          param(req.params.subjectKey),
+          param(req.params.categoryId),
+          input.direction
+        )
+      );
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+router.post(
+  "/subjects/:subjectKey/categories/:categoryId/symptoms/:symptomId/move",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = read(res, moveSchema, req.body);
+      if (!input) return;
+
+      res.json(
+        await moveSymptom(
+          param(req.params.subjectKey),
+          param(req.params.categoryId),
+          param(req.params.symptomId),
+          input.direction
+        )
+      );
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+/// ── Deleting ─────────────────────────────────────────────────────────────
+//
+//  The link check is its OWN endpoint as well as a guard inside the delete.
+//  The UI asks first so it can show what would break before anybody commits to
+//  anything; the service checks again because a UI that asks nicely is not a
+//  constraint, and the two calls are seconds apart in a system where content
+//  changes under you.
+
+router.get(
+  "/subjects/:subjectKey/symptoms/:symptomId/links",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({
+        links: await findLinksTo(
+          param(req.params.subjectKey),
+          param(req.params.symptomId)
+        ),
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+const deleteSymptomSchema = z.object({
+  /** Required only when something branches here — see deleteSymptom. */
+  force: z.boolean().default(false),
+  reason: z.string().max(500).optional(),
+});
+
+router.delete(
+  "/subjects/:subjectKey/symptoms/:symptomId",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // DELETE with a body is unusual but right here: `force` and `reason` are
+      // about the deletion itself, and putting a destructive flag in a query
+      // string invites it into somebody's shell history and a browser's
+      // address bar.
+      const input = read(res, deleteSymptomSchema, req.body ?? {});
+      if (!input) return;
+
+      res.json(
+        await deleteSymptom(
+          param(req.params.subjectKey),
+          param(req.params.symptomId),
+          getActorEmail(req),
+          { force: input.force, reason: input.reason }
+        )
+      );
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+router.delete(
+  "/subjects/:subjectKey/categories/:categoryId",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json(
+        await deleteCategory(param(req.params.subjectKey), param(req.params.categoryId))
+      );
+    } catch (err) {
+      try {
+        sendContentError(res, err);
+      } catch (rethrown) {
+        next(rethrown);
+      }
+    }
+  }
+);
+
+router.get("/archive", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ archived: await listArchivedArticles() });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /// ── Health ───────────────────────────────────────────────────────────────
 

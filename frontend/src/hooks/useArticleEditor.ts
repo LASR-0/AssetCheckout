@@ -58,7 +58,14 @@ export type ArticleEditor = {
   warnings: string[];
   update: (mutate: (body: ArticleBody) => ArticleBody) => void;
   publish: () => Promise<boolean>;
-  discard: () => Promise<void>;
+  /**
+   * Throw away unpublished changes.
+   *
+   * Resolves with `articleRemoved: true` when the article had never been
+   * published — the server removes it outright, so the caller must leave edit
+   * mode rather than reload something that no longer exists.
+   */
+  discard: () => Promise<{ articleRemoved: boolean }>;
   reload: () => Promise<void>;
 };
 
@@ -208,14 +215,29 @@ export function useArticleEditor(
     }
   }, [subjectKey, symptomId, flush, load]);
 
-  const discard = useCallback(async () => {
-    if (!subjectKey || !symptomId) return;
+  const discard = useCallback(async (): Promise<{ articleRemoved: boolean }> => {
+    if (!subjectKey || !symptomId) return { articleRemoved: false };
 
     if (timer.current) window.clearTimeout(timer.current);
     pending.current = null;
 
-    await discardArticleDraft(subjectKey, symptomId);
+    const { articleRemoved } = await discardArticleDraft(subjectKey, symptomId);
+
+    // An article that was never published is removed outright rather than
+    // emptied, so there is nothing left to reload — reloading would show the
+    // "not written yet" state under an editor that is still open.
+    if (articleRemoved) {
+      setArticle(null);
+      setWorking(null);
+      setHasDraft(false);
+      setSaveState({ kind: "clean" });
+      setIssues([]);
+      setWarnings([]);
+      return { articleRemoved: true };
+    }
+
     await load();
+    return { articleRemoved: false };
   }, [subjectKey, symptomId, load]);
 
   return {

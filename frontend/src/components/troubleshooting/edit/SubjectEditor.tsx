@@ -5,7 +5,16 @@ import {
   setCategoryDisabled,
   setSymptomHidden,
   setSymptomLabel,
+  createSymptom,
+  createCategory,
+  createArticleDraft,
+  moveCategory,
+  moveSymptom,
+  deleteCategory,
 } from "@/api/troubleshooting";
+import NewSymptomForm from "./NewSymptomForm";
+import NewCategoryForm from "./NewCategoryForm";
+import DeleteSymptomDialog from "./DeleteSymptomDialog";
 import { FROM_SYMPTOM_LIST, troubleshootingArticlePath } from "@/lib/troubleshootingRoutes";
 import type { EditableCategory } from "@/types/troubleshootingType";
 
@@ -29,6 +38,12 @@ import type { EditableCategory } from "@/types/troubleshootingType";
 //  Everything is optimistic with a rollback: these are two-field writes to a
 //  local database, and waiting on a spinner to see a checkbox move would be
 //  worse than the rare case of putting it back.
+//
+//  CREATING IS NOT OPTIMISTIC, and that is the one exception. A new symptom
+//  gets a permanent address the server derives, and a new category gets an id
+//  the same way — inventing either locally and reconciling afterwards would
+//  mean rendering an address that might not be the one it ends up with. These
+//  wait, then refetch.
 ///  +-----------------------------------------------------------------+
 
 type Props = { subjectKey: string; onClose: () => void };
@@ -37,6 +52,16 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
   const [categories, setCategories] = useState<EditableCategory[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  /** Which category is showing its "add symptom" form, if any. */
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  /** Which symptom is showing its delete confirmation, if any. */
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const refresh = () =>
+    getEditableSubject(subjectKey)
+      .then(setCategories)
+      .catch((err: Error) => setError(err.message));
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +108,48 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
       ) ?? current
     );
 
+  /**
+   * Up/down arrows.
+   *
+   * Disabled at the ends rather than hidden: a control that appears and
+   * disappears as things move makes the row jump under the pointer, and the
+   * server treats an end-of-list move as a no-op anyway.
+   */
+  function Reorder({
+    onMove,
+    first,
+    last,
+    what,
+  }: {
+    onMove: (direction: "up" | "down") => void;
+    first: boolean;
+    last: boolean;
+    what: string;
+  }) {
+    return (
+      <span className="flex shrink-0 items-center">
+        <button
+          type="button"
+          disabled={first}
+          onClick={() => onMove("up")}
+          aria-label={`Move ${what} up`}
+          className="grid size-6 place-items-center rounded text-info-light hover:bg-surface-container-low/40 disabled:opacity-25 hover:cursor-pointer disabled:hover:cursor-default"
+        >
+          <span className="material-symbols-outlined !text-[16px]">arrow_upward</span>
+        </button>
+        <button
+          type="button"
+          disabled={last}
+          onClick={() => onMove("down")}
+          aria-label={`Move ${what} down`}
+          className="grid size-6 place-items-center rounded text-info-light hover:bg-surface-container-low/40 disabled:opacity-25 hover:cursor-pointer disabled:hover:cursor-default"
+        >
+          <span className="material-symbols-outlined !text-[16px]">arrow_downward</span>
+        </button>
+      </span>
+    );
+  }
+
   if (error && !categories) {
     return <p className="py-6 text-sm text-error">{error}</p>;
   }
@@ -112,7 +179,7 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
 
       {error && <p className="text-sm text-error">{error}</p>}
 
-      {categories.map((category) => (
+      {categories.map((category, categoryIndex) => (
         <section
           key={category.id}
           className={`rounded-lg border p-4 transition-opacity ${
@@ -128,7 +195,44 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
               <p className="text-[13px] text-info-light">{category.blurb}</p>
             </div>
 
-            <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-info-light hover:cursor-pointer">
+            <span className="ml-auto">
+              <Reorder
+                what={category.name}
+                first={categoryIndex === 0}
+                last={categoryIndex === categories.length - 1}
+                onMove={(direction) => {
+                  void optimistic(
+                    () => reorderLocally(categories, category.id, direction, setCategories),
+                    () => void refresh(),
+                    () => moveCategory(subjectKey, category.id, direction)
+                  );
+                }}
+              />
+            </span>
+
+            {/* Only when empty, and that is the design rather than a caveat.
+                Deleting a populated category would have to either destroy the
+                articles inside it or orphan them; disabling already takes it
+                off the site, so this exists purely to tidy up something
+                created by mistake. */}
+            {category.symptoms.length === 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  deleteCategory(subjectKey, category.id)
+                    .then(refresh)
+                    .catch((err: Error) => setError(err.message));
+                }}
+                title="Delete this empty category"
+                className="flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-xs font-semibold text-info-light hover:bg-error/10 hover:text-error hover:cursor-pointer"
+              >
+                <span className="material-symbols-outlined !text-[16px]">delete</span>
+                Delete
+              </button>
+            )}
+
+            <label className="flex items-center gap-2 text-xs font-semibold text-info-light hover:cursor-pointer">
               <input
                 type="checkbox"
                 checked={category.disabled}
@@ -147,7 +251,7 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
           </div>
 
           <ul className="flex flex-col divide-y divide-outline/30">
-            {category.symptoms.map((symptom) => (
+            {category.symptoms.map((symptom, symptomIndex) => (
               <li
                 key={symptom.id}
                 className="flex flex-wrap items-center gap-3 py-2"
@@ -192,9 +296,67 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
                     Unpublished changes
                   </span>
                 )}
-                {!symptom.hasArticle && (
-                  <span className="shrink-0 text-[11px] text-info-light">Not written</span>
+                {symptom.hasArticle && !symptom.published && (
+                  <span
+                    className="shrink-0 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning"
+                    title="Readers still see this as a gap. It appears when you publish it."
+                  >
+                    Not published yet
+                  </span>
                 )}
+
+                {!symptom.hasArticle && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      createArticleDraft(subjectKey, symptom.id)
+                        .then(refresh)
+                        .catch((err: Error) => setError(err.message));
+                    }}
+                    className="shrink-0 text-[11px] font-semibold text-primary hover:underline hover:cursor-pointer"
+                    title="Creates an empty article. Nobody sees it until you publish."
+                  >
+                    Write this one →
+                  </button>
+                )}
+
+                <Reorder
+                  what={symptom.label}
+                  first={symptomIndex === 0}
+                  last={symptomIndex === category.symptoms.length - 1}
+                  onMove={(direction) => {
+                    void optimistic(
+                      () =>
+                        setCategories(
+                          (current) =>
+                            current?.map((c) =>
+                              c.id === category.id
+                                ? { ...c, symptoms: moved(c.symptoms, symptom.id, direction) }
+                                : c
+                            ) ?? current
+                        ),
+                      () => void refresh(),
+                      () => moveSymptom(subjectKey, category.id, symptom.id, direction)
+                    );
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDeleting(
+                      deleting === `${category.id}/${symptom.id}`
+                        ? null
+                        : `${category.id}/${symptom.id}`
+                    )
+                  }
+                  aria-label={`Delete ${symptom.label}`}
+                  title="Delete this symptom. The article is archived, not destroyed."
+                  className="grid size-6 shrink-0 place-items-center rounded text-info-light hover:bg-error/10 hover:text-error hover:cursor-pointer"
+                >
+                  <span className="material-symbols-outlined !text-[16px]">delete</span>
+                </button>
 
                 {symptom.hasArticle && (
                   <>
@@ -227,16 +389,124 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
                     </Link>
                   </>
                 )}
+
+                {deleting === `${category.id}/${symptom.id}` && (
+                  <div className="w-full">
+                    <DeleteSymptomDialog
+                      subjectKey={subjectKey}
+                      symptomId={symptom.id}
+                      label={symptom.label}
+                      hasArticle={symptom.hasArticle}
+                      onCancel={() => setDeleting(null)}
+                      onDeleted={() => {
+                        setDeleting(null);
+                        void refresh();
+                      }}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
+
+          {addingTo === category.id ? (
+            <NewSymptomForm
+              subjectKey={subjectKey}
+              categoryName={category.name}
+              onCancel={() => setAddingTo(null)}
+              onCreate={async (label) => {
+                await createSymptom(subjectKey, category.id, label);
+                setAddingTo(null);
+                await refresh();
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingTo(category.id)}
+              className="mt-2 text-xs font-semibold text-primary hover:underline hover:cursor-pointer"
+            >
+              + Add a symptom to {category.name}
+            </button>
+          )}
         </section>
       ))}
 
-      <p className="text-[13px] text-info-light">
-        “Unlist” takes a symptom out of this list and out of search. Anyone who
-        already has the link can still open it — nothing is deleted.
-      </p>
+      {addingCategory ? (
+        <NewCategoryForm
+          onCancel={() => setAddingCategory(false)}
+          onCreate={async (input) => {
+            await createCategory(subjectKey, input);
+            setAddingCategory(false);
+            await refresh();
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingCategory(true)}
+          className="self-start rounded-lg border border-outline px-3 py-1.5 text-xs font-semibold text-primary hover:bg-surface-container-low/30 hover:cursor-pointer"
+        >
+          + Add a category
+        </button>
+      )}
+
+      <div className="flex flex-col gap-1 text-[13px] text-info-light">
+        <p>
+          “Unlist” takes a symptom out of this list and out of search. Anyone who
+          already has the link can still open it — nothing is deleted.
+        </p>
+        <p>
+          A symptom with no article shows readers a “not written yet” page, which
+          is how a gap stays visible. “Not published yet” means somebody has
+          started writing one and readers still see that same page.
+        </p>
+        <p>
+          A category can only be deleted once it is empty — hide it instead if
+          you want it off the site with its symptoms intact.
+        </p>
+        <p>
+          Deleting a symptom archives its article rather than destroying it —
+          text, unpublished changes and all. If anything links to it you will
+          be told what breaks before it goes.
+        </p>
+        <p>
+          Wording and order can be changed whenever. A symptom’s web address is
+          set from its wording when it is created and cannot be changed
+          afterwards, because links and buttons elsewhere point at it.
+        </p>
+      </div>
     </div>
   );
+}
+
+/// ── Local reordering ─────────────────────────────────────────────────────
+//
+//  Applied locally so the row moves under the pointer immediately, then
+//  reconciled: the server returns the order it actually stored, and a failure
+//  refetches rather than trying to invert the move. Swapping back would be
+//  wrong if the failure was a stale list rather than a rejected write.
+
+/** A list with one item swapped with its neighbour. */
+function moved<T extends { id: string }>(
+  items: T[],
+  id: string,
+  direction: "up" | "down"
+): T[] {
+  const index = items.findIndex((item) => item.id === id);
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || target < 0 || target >= items.length) return items;
+
+  const next = [...items];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
+function reorderLocally(
+  categories: EditableCategory[],
+  id: string,
+  direction: "up" | "down",
+  set: (value: EditableCategory[]) => void
+): void {
+  set(moved(categories, id, direction));
 }

@@ -4,6 +4,8 @@ import {
   serialiseArticle,
   articlesDiffer,
   rewriteArticleModule,
+  newArticleModule,
+  archivedArticleModule,
   NotAnArticleModuleError,
 } from "./serialise.js";
 import { loadArticleModules, moduleKey } from "./articleModules.js";
@@ -201,5 +203,96 @@ describe("the seed is already canonical", () => {
       true
     );
     expect(rewritten).toContain("a summary nobody wrote");
+  });
+});
+
+describe("a module for a brand new article", () => {
+  it("is a complete, valid module", async () => {
+    const source = await newArticleModule("phoneSpeakerCrackle", authored(articles[0]), "phone — speaker crackle");
+
+    expect(source).toContain('import type { Article } from "../../schema.js";');
+    expect(source).toContain("const phoneSpeakerCrackle: Article = {");
+    expect(source.trimEnd().endsWith("export default phoneSpeakerCrackle;")).toBe(true);
+  });
+
+  it("holds the article it was given", async () => {
+    const article = authored(articles[0]);
+    const source = await newArticleModule("x", article, "heading");
+
+    const literal = source.slice(source.indexOf("= {") + 2, source.lastIndexOf("};") + 1);
+    expect(articleSchema.parse(evaluate(literal))).toEqual(article);
+  });
+
+  it("says its banner is a stub rather than inventing rationale", async () => {
+    // Every hand-written module explains why the article is shaped as it is.
+    // None of that is in the database, so a confident-sounding banner here
+    // would be fabricated reasoning that reads exactly like the real thing.
+    const source = await newArticleModule("x", authored(articles[0]), "heading");
+
+    expect(source).toContain("THIS BANNER IS A STUB");
+  });
+
+  it("is formatted the same way the corpus is", async () => {
+    // Round-trips through the same emitter, so a new file and an edited one
+    // cannot drift apart in layout.
+    const article = authored(articles[0]);
+    const source = await newArticleModule("x", article, "heading");
+    const literal = source.slice(source.indexOf("= {") + 2, source.lastIndexOf("};") + 1);
+
+    expect(literal).toBe(await serialiseArticle(article));
+  });
+});
+
+describe("an archived article", () => {
+  const context = {
+    label: "Camera won't open or photos are blurry",
+    categoryName: "Audio & camera",
+    position: 3,
+    deletedAt: "2026-08-14T09:00:00.000Z",
+    deletedBy: "admin@ksb.com",
+    reason: "superseded by the combined article",
+    linksAtDeletion: 2,
+    wasPublished: true,
+  };
+
+  it("says who deleted it, when, and where it sat", async () => {
+    // The questions somebody finding this file in a year actually has.
+    const source = await archivedArticleModule(authored(articles[0]), context);
+
+    expect(source).toContain("DELETED 2026-08-14 by admin@ksb.com");
+    expect(source).toContain("Audio & camera");
+    expect(source).toContain("position 3");
+    expect(source).toContain("2 article(s) linked to it");
+    expect(source).toContain("superseded by the combined article");
+  });
+
+  it("says how to bring it back", async () => {
+    // The archive is only useful if the recovery path is written down where
+    // the file is, not in a document nobody finds.
+    const source = await archivedArticleModule(authored(articles[0]), context);
+
+    expect(source).toContain("To bring it back");
+    expect(source).toContain("NOT COMPILED, NOT TESTED, NOT SHIPPED");
+  });
+
+  it("keeps the article intact", async () => {
+    const article = authored(articles[0]);
+    const source = await archivedArticleModule(article, context);
+
+    const literal = source.slice(source.indexOf("= {") + 2, source.lastIndexOf("};") + 1);
+    expect(articleSchema.parse(evaluate(literal))).toEqual(article);
+  });
+
+  it("records that it was never published, when it wasn't", async () => {
+    const source = await archivedArticleModule(authored(articles[0]), {
+      ...context,
+      wasPublished: false,
+      reason: null,
+      deletedBy: null,
+    });
+
+    expect(source).toContain("never published");
+    expect(source).not.toContain("Reason given");
+    expect(source).not.toContain(" by ");
   });
 });

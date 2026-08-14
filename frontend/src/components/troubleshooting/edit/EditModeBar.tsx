@@ -49,6 +49,14 @@ type Props = {
   warnings: string[];
   /** Every subject listing this article — an edit changes all of them. */
   subjectKeys: string[];
+  /**
+   * False for an article that has never been published.
+   *
+   * Changes what two controls MEAN. There is no published version for readers
+   * to still be seeing, and "discard" removes the article outright rather than
+   * reverting it — so both say something different.
+   */
+  published: boolean;
   currentSubjectKey: string;
   onPublish: () => void;
   onDiscard: () => void;
@@ -63,6 +71,7 @@ export default function EditModeBar({
   warnings,
   subjectKeys,
   currentSubjectKey,
+  published,
   onPublish,
   onDiscard,
   onDone,
@@ -79,9 +88,11 @@ export default function EditModeBar({
 
         {/* Said plainly rather than implied by a badge colour. */}
         <span className="text-[13px] text-info-light">
-          {hasDraft
-            ? "Unpublished changes — readers still see the published version."
-            : "No unpublished changes."}
+          {!published
+            ? "Not published yet — nobody can see this but you."
+            : hasDraft
+              ? "Unpublished changes — readers still see the published version."
+              : "No unpublished changes."}
         </span>
 
         <SaveIndicator state={saveState} />
@@ -92,9 +103,14 @@ export default function EditModeBar({
               type="button"
               onClick={onDiscard}
               disabled={publishing}
+              title={
+                published
+                  ? "Throws away the unpublished changes and goes back to what readers see."
+                  : "Removes this article. The symptom stays in the list, with nothing written for it."
+              }
               className="rounded-lg border border-outline px-3 py-1.5 text-xs font-semibold text-info-light hover:bg-surface-container-low/30 hover:cursor-pointer disabled:opacity-50 transition-colors"
             >
-              Discard changes
+              {published ? "Discard changes" : "Discard this article"}
             </button>
           )}
           <button

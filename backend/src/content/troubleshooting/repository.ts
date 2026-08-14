@@ -1,4 +1,9 @@
 import {
+  readVisibility,
+  visibilityKey,
+  type Visibility,
+} from "./visibility.js";
+import {
   articleSchema,
   subjectSchema,
   DEVICE_KEYS,
@@ -431,11 +436,18 @@ const DEVICE_KEY_SET: Set<string> = new Set(DEVICE_KEYS);
 //  because it is what the SEED reads and what the content tests validate —
 //  the corpus has to stay valid, because a fresh database is built from it.
 //
-//  Disk content carries no visibility switches; there is nowhere in a `.ts`
-//  module to write one, and nor should there be. Both default to false, so a
-//  repository built over disk behaves exactly as it always has.
+//  A `.ts` module has nowhere to write a visibility switch, and nor should it
+//  — so those come from the visibility.json sidecar beside them. Without it,
+//  exporting a hidden article and rebuilding from the seed would bring it back
+//  VISIBLE, silently reversing somebody's decision to pull it. See
+//  visibility.ts.
+//
+//  This is also the SEED path (`toRows(contentFromDisk())`), which is what
+//  makes the round trip close: hide in the UI, export, reseed, still hidden.
 
-export function contentFromDisk(): ContentSnapshot {
+export function contentFromDisk(
+  visibility: Visibility = readVisibility()
+): ContentSnapshot {
   const { subjects, articles } = parseContent();
 
   return {
@@ -443,10 +455,17 @@ export function contentFromDisk(): ContentSnapshot {
       ...subject,
       categories: subject.categories.map((category) => ({
         ...category,
-        disabled: false,
+        disabled: visibilityKey(subject.key, category.id) in visibility.disabledCategories,
       })),
     })),
-    articles: articles.map((article) => ({ ...article, hidden: false })),
+    articles: articles.map((article) => ({
+      ...article,
+      // Keyed on the FIRST subject, matching where the module sits in the
+      // tree. An article listed under several subjects is one article with one
+      // switch, not one per listing.
+      hidden: visibilityKey(article.subjectKeys[0], article.symptomId) in
+        visibility.hiddenArticles,
+    })),
   };
 }
 
