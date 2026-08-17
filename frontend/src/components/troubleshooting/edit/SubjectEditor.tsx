@@ -15,7 +15,11 @@ import {
 import NewSymptomForm from "./NewSymptomForm";
 import NewCategoryForm from "./NewCategoryForm";
 import DeleteSymptomDialog from "./DeleteSymptomDialog";
-import { FROM_SYMPTOM_LIST, troubleshootingArticlePath } from "@/lib/troubleshootingRoutes";
+import {
+  FROM_SYMPTOM_LIST,
+  START_EDITING,
+  troubleshootingArticlePath,
+} from "@/lib/troubleshootingRoutes";
 import type { EditableCategory } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -387,7 +391,9 @@ export default function SubjectEditor({ subjectKey, onClose }: Props) {
 
                       <Link
                         to={troubleshootingArticlePath(subjectKey, symptom.id)}
-                        state={{ [FROM_SYMPTOM_LIST]: true }}
+                        // Straight into edit mode: this link is only in the
+                        // list EDITOR, so wanting to edit is already established.
+                        state={{ [FROM_SYMPTOM_LIST]: true, [START_EDITING]: true }}
                         className="shrink-0 text-xs font-semibold text-primary hover:underline"
                       >
                         Edit article →

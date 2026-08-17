@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SupportMessageDialog from "./SupportMessageDialog";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import type { TroubleshootingConfig } from "@/types/troubleshootingType";
 
@@ -109,6 +110,7 @@ export function SupportEscapeSection({
   context?: EscapeContext;
 }) {
   const [acknowledged, setAcknowledged] = useState(false);
+  const [messaging, setMessaging] = useState(false);
 
   function escape(detail: string) {
     trackTroubleshooting({
@@ -143,11 +145,25 @@ export function SupportEscapeSection({
           <a
             href={callHref(config.supportPhone)}
             onClick={() => escape("called")}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:brightness-110 transition-all"
+            className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 active:scale-95 transition-all"
           >
             <span className="material-symbols-outlined !text-[18px]">call</span>
             Call IT support
           </a>
+        )}
+
+        {/* For a problem that can wait for a reply. Only shown when a channel
+            is configured — see supportChannelConfigured for why there is no
+            placeholder version of this the way there is for the number. */}
+        {config.supportChannelConfigured && context?.subjectKey && context?.symptomId && (
+          <button
+            type="button"
+            onClick={() => setMessaging(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 px-3.5 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 hover:cursor-pointer"
+          >
+            <span className="material-symbols-outlined !text-[18px]">forum</span>
+            Message IT instead
+          </button>
         )}
 
         {/* Catches the people the call button doesn't: anyone about to ring
@@ -170,6 +186,19 @@ export function SupportEscapeSection({
           {acknowledged ? "Thanks — noted" : "Nothing here worked"}
         </button>
       </div>
+
+      {context?.subjectKey && context?.symptomId && (
+        <SupportMessageDialog
+          open={messaging}
+          onOpenChange={setMessaging}
+          subjectKey={context.subjectKey}
+          symptomId={context.symptomId}
+          channelName={config.supportChannelName}
+          // Recorded on the same event as the call, told apart by `detail`, so
+          // the mix of how people escape stays visible rather than averaged.
+          onSent={() => escape("messaged")}
+        />
+      )}
     </section>
   );
 }

@@ -31,8 +31,12 @@ export default async function provision(): Promise<void> {
   const { ensureTroubleshootingContent } = await import(
     "../src/services/troubleshootingContentSeed.js"
   );
+  const { ensureDefaults } = await import("../src/services/settings.js");
   const { prisma } = await import("../src/db/prisma.js");
 
+  // Settings defaults as well as content: server.ts runs both at startup, and
+  // a test database missing them behaves like a deployment nobody booted.
+  await ensureDefaults();
   await ensureTroubleshootingContent();
   await prisma.$disconnect();
 

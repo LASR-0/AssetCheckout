@@ -139,6 +139,26 @@ export type TroubleshootingConfig = {
   supportPhone: string;
   /** False when the number is the XXXX placeholder. */
   supportPhoneConfigured: boolean;
+  /**
+   * False hides the messaging option entirely.
+   *
+   * No placeholder equivalent to the phone number's "XXXX XXX XXX": a number
+   * shaped like a number is honestly unconfigured, but a button that opens
+   * nothing just looks broken.
+   */
+  supportChannelConfigured: boolean;
+  /** For the button and the modal — "post it in #it-support". */
+  supportChannelName: string;
+};
+
+/** A composed support message, and where it is meant to go. */
+export type SupportMessageDraft = {
+  /** The finished text, ready to paste. Composed server-side. */
+  text: string;
+  channelUrl: string | null;
+  channelName: string;
+  /** The article's steps, to tick off. */
+  steps: { index: number; title: string }[];
 };
 
 ///  +-----------------------------------------------------------------+

@@ -195,6 +195,38 @@ function normalizeStandardAccessoriesEnv(raw: string): string | null {
   }
 }
 
+/**
+ * The starting wording for a support message.
+ *
+ * WRITTEN AS THE USER, not as the app, because the user is the one sending
+ * it — it lands in a public channel under their name, and a message that
+ * reads like a form submission invites a form-shaped reply.
+ *
+ * It leads with what they have already tried. Somebody reaching this point
+ * has exhausted the article, so the single most useful thing for whoever picks
+ * it up is knowing which ground is already covered — that is the round-trip
+ * this whole feature exists to save.
+ *
+ * `{stepsTried}` and `{notes}` expand to nothing when empty, and the composer
+ * collapses the blank lines, so a message with neither still reads properly.
+ *
+ * EXPORTED because it is also the fallback, not only the seed. A setting that
+ * is missing — never seeded, deleted, a fresh database somebody forgot to run
+ * defaults on — must degrade to the shipped wording. Falling back to "" hands
+ * somebody a blank message to post under their own name, which is worse than
+ * any wording could be.
+ */
+export const DEFAULT_MESSAGE_TEMPLATE = `Hi team — I need a hand with {symptom} on my {subject}.
+
+I followed {article} and it hasn't fixed it.
+
+{stepsTried}
+
+{notes}
+
+Article: {url}
+— {name} ({email})`;
+
 const SETTING_DEFAULTS: SettingDefault[] = [
   // ---- Existing settings ----
   {
@@ -367,6 +399,12 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "true",
     description:
       "Whether troubleshooting usage events are recorded (articles opened, steps reached, escapes taken, searches with no match). Events are anonymous and grouped only by a per-visit session id."
+  },
+  { key: "troubleshooting.messageTemplate",
+    envVar: "TROUBLESHOOTING_MESSAGE_TEMPLATE",
+    defaultValue: DEFAULT_MESSAGE_TEMPLATE,
+    description:
+      "The message somebody sends to the IT support channel when the article did not fix it. A setting rather than code because the wording is the organisation's, not the app's — the tone IT wants, the details they need first. Placeholders: {name}, {email}, {subject}, {symptom}, {article}, {url}, {stepsTried}, {notes}."
   },
   { key: "troubleshooting.retentionDays",
     envVar: "TROUBLESHOOTING_RETENTION_DAYS",

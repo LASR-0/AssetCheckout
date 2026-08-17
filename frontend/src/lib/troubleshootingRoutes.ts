@@ -30,7 +30,28 @@
  */
 export const FROM_SYMPTOM_LIST = "fromSymptomList";
 
-export type TroubleshootingLinkState = { [FROM_SYMPTOM_LIST]?: boolean };
+/**
+ * Marks a navigation as "open this article ready to edit".
+ *
+ * Set by the "Edit article" link in the list editor, where the admin has
+ * already said what they want to do. Landing on the reading view and asking
+ * them to press Edit again is a second click that answers a question they
+ * just answered.
+ *
+ * Carried in history state rather than the URL: it is about how somebody
+ * arrived, not about which article this is, and an `?edit=1` in the address
+ * bar would be shared, bookmarked and pasted into tickets — all of them
+ * places where it means nothing and 403s for most readers.
+ *
+ * Lives here for the same reason FROM_SYMPTOM_LIST does: the link that sets
+ * it and the page that reads it are in different files.
+ */
+export const START_EDITING = "startEditing";
+
+export type TroubleshootingLinkState = {
+  [FROM_SYMPTOM_LIST]?: boolean;
+  [START_EDITING]?: boolean;
+};
 
 /** Route patterns — these are what App.tsx registers. */
 export const TROUBLESHOOTING_ROUTES = {

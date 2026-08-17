@@ -117,7 +117,7 @@ export default function EditModeBar({
             type="button"
             onClick={onPublish}
             disabled={!hasDraft || publishing}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary hover:opacity-90 hover:cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            className="rounded-lg px-3 py-1.5 text-xs font-bold twilight-gradient text-white shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 active:scale-95 transition-all hover:cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
           >
             {publishing ? "Publishing…" : "Publish"}
           </button>

@@ -6,6 +6,7 @@ import type {
   EditableArticle,
   EditableCategory,
   SlugPreview,
+  SupportMessageDraft,
   SymptomLink,
   DeletedSymptom,
   PublishResult,
@@ -449,5 +450,26 @@ export async function deleteCategory(
   return adminFetch(
     `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/categories/${encodeURIComponent(categoryId)}`,
     { method: "DELETE" }
+  );
+}
+
+/**
+ * Compose the message somebody sends when the article did not fix it.
+ *
+ * Server-side because the template is a database setting and the step titles
+ * carry {device} tokens the repository resolves at serve time. Nothing is
+ * stored and nothing is sent — the user posts it themselves from Teams.
+ */
+export async function composeSupportMessage(
+  subjectKey: string,
+  symptomId: string,
+  input: { stepsTried: number[]; notes: string }
+): Promise<SupportMessageDraft> {
+  return apiFetch(
+    `/api/troubleshooting/subjects/${encodeURIComponent(subjectKey)}/symptoms/` +
+      `${encodeURIComponent(symptomId)}/support-message`,
+    // `body` is stringified by apiFetch — passing a string here would
+    // send a JSON-encoded JSON string and the server would reject it.
+    { method: "POST", body: input }
   );
 }

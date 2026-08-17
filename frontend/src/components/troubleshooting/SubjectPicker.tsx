@@ -61,7 +61,12 @@ function Tile({
           ? "border-outline/40 bg-surface-container-low/10 cursor-not-allowed opacity-55"
           : selected
           ? "border-primary bg-primary/10 cursor-pointer"
-          : "border-outline bg-surface hover:bg-surface-container-low/30 hover:cursor-pointer"
+          // `surface-container-lowest`, not `surface`: it is pure white in the
+          // light theme and the darkest value in the dark one, so the tile
+          // reads as a raised card against the page in both rather than
+          // dissolving into it — `--surface` and `--background` are the same
+          // value, so a tile on `bg-surface` has no edge but its border.
+          : "border-outline bg-surface-container-lowest hover:bg-surface-container-low/30 hover:cursor-pointer"
       }`}
     >
       <span

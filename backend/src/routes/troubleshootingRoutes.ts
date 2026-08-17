@@ -6,7 +6,21 @@ import {
   type DeviceKey,
   type SubjectKey,
 } from "../content/troubleshooting/index.js";
-import { getSupportPhone, isSupportPhoneConfigured } from "../config/support.js";
+import { z } from "zod";
+import {
+  getSupportPhone,
+  isSupportPhoneConfigured,
+  isSupportChannelConfigured,
+  getSupportChannelName,
+} from "../config/support.js";
+import {
+  composeSupportMessage,
+  getStepChoices,
+} from "../services/supportMessage.js";
+// The existing accessor, which already knows the dev fallback and validates
+// the value — rebuilding the URL here would be a second answer to the same
+// question that could disagree in development.
+import { appLink } from "../jobs/handlers/appLinks.js";
 import { getRequestableAssetCategories } from "../services/snipeitassets.js";
 import { getRequestableAccessoryCategories } from "../services/snipeitaccessories.js";
 import {
@@ -15,7 +29,7 @@ import {
   isEventType,
   recordEvent,
 } from "../services/troubleshootingAnalytics.js";
-import { getActorEmail } from "../config/auth.js";
+import { getActorEmail, getActorName } from "../config/auth.js";
 import { isAdminEmail } from "../config/auth.js";
 import { getSetting, setSetting } from "../services/settings.js";
 
@@ -48,6 +62,10 @@ router.get("/config", (_req: Request, res: Response) => {
     // Lets the UI soften the call-to-action rather than inviting somebody to
     // dial a row of X's.
     supportPhoneConfigured: isSupportPhoneConfigured(),
+    // No placeholder equivalent: a button that opens nothing is worse than no
+    // button, so an unconfigured channel hides the messaging option outright.
+    supportChannelConfigured: isSupportChannelConfigured(),
+    supportChannelName: getSupportChannelName(),
   });
 });
 
@@ -227,6 +245,53 @@ router.post("/events", async (req: Request, res: Response) => {
     console.error("[troubleshooting] failed to record event:", err);
   }
 });
+
+/// ── Composing a support message ──────────────────────────────────────────
+//
+//  A POST because it takes a body, not because it changes anything: nothing is
+//  stored and nothing is sent. The user posts the result themselves from
+//  Teams, which is what keeps the message in their own identity so IT's reply
+//  reaches them.
+
+const supportMessageSchema = z.object({
+  stepsTried: z.array(z.number().int()).max(50).default([]),
+  notes: z.string().max(2000).default(""),
+});
+
+router.post(
+  "/subjects/:subjectKey/symptoms/:symptomId/support-message",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!isSupportChannelConfigured()) {
+        return res.status(404).json({
+          success: false,
+          message: "Messaging isn't set up for this deployment",
+        });
+      }
+
+      const parsed = supportMessageSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: "That request isn't valid" });
+      }
+
+      const subjectKey = param(req.params.subjectKey);
+      const symptomId = param(req.params.symptomId);
+
+      const [message, steps] = await Promise.all([
+        composeSupportMessage(
+          { subjectKey, symptomId, ...parsed.data },
+          { name: getActorName(req), email: getActorEmail(req) },
+          appLink()
+        ),
+        getStepChoices(subjectKey, symptomId),
+      ]);
+
+      res.json({ ...message, steps });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 /// ── Admin: the settings card ─────────────────────────────────────────────
 

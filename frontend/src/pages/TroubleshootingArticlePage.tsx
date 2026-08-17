@@ -20,7 +20,12 @@ import EditModeBar from "@/components/troubleshooting/edit/EditModeBar";
 import EditableText from "@/components/troubleshooting/edit/EditableText";
 import StepEditor from "@/components/troubleshooting/edit/StepEditor";
 import { useSubjectBackNav } from "@/hooks/useSubjectBackNav";
-import { stepAnchorId, troubleshootingIndexPath } from "@/lib/troubleshootingRoutes";
+import {
+  stepAnchorId,
+  troubleshootingIndexPath,
+  START_EDITING,
+  type TroubleshootingLinkState,
+} from "@/lib/troubleshootingRoutes";
 import type {
   Figure,
   FigureImage,
@@ -294,9 +299,30 @@ export default function TroubleshootingArticlePage() {
   // Edit mode is OFF by default, so an admin reads the page exactly as a user
   // does until they ask to change it. The button is a courtesy — the real
   // guard is server-side, and every admin route 403s without it.
+  //
+  // UNLESS THEY ARRIVED FROM THE LIST EDITOR, which sets START_EDITING. They
+  // pressed "Edit article" there; landing on the reading view and asking them
+  // to press Edit again answers a question they have already answered.
+  //
+  // Read once, in the initialiser, rather than in an effect: an effect would
+  // paint the reading view first and then swap it, which is a visible flash of
+  // the wrong thing on every arrival.
+  //
+  // AND DELIBERATELY NOT GATED ON isAdmin HERE. `role` arrives from a fetch,
+  // so it is null on the first render — which is the only render an initialiser
+  // ever sees. Checking it here meant this was always false and the flag never
+  // did anything.
+  //
+  // It is safe to leave out because `editing` alone renders nothing: every
+  // editable field is behind `editing && editor.working`, and `editor.working`
+  // is null unless useArticleEditor was enabled — which takes isAdmin. So a
+  // forged history state gets the ordinary reading view with slightly
+  // different padding, and the server remains the actual guard.
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() =>
+    Boolean((location.state as TroubleshootingLinkState | null)?.[START_EDITING])
+  );
 
   // Loaded for ANY admin viewing the page, not only once editing has started.
   //
@@ -728,7 +754,7 @@ export default function TroubleshootingArticlePage() {
           )}
 
           {editing && editor.working ? (
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-[5px]">
               {editor.working.steps.map((step, i) => (
                 <StepEditor
                   key={i}

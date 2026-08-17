@@ -36,10 +36,10 @@ export default function Navbar() {
     <header className="fixed top-0 z-50 w-full">
 
       {/* PRIMARY BAR */}
-      <div className="bg-footer-bg shadow-md flex justify-between items-center w-full px-8 h-16">
+      <div className="bg-footer-bg shadow-md border-b border-outline flex justify-between items-center w-full px-8 h-16">
 
         {/* Left side */}
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-8 self-stretch">
           <Link to="/">
           <div className="flex items-center gap-3">
             {/* Logo — hidden until mounted (to avoid flashing wrong theme),
@@ -66,14 +66,17 @@ export default function Navbar() {
           </div>
           </Link>
 
-          <nav className="hidden md:flex  gap-6">
+          {/* `self-stretch` + `items-stretch`: the bar centres its children, so a
+              full-height link inside it is still only as tall as its text and the
+              underline goes on floating mid-bar. */}
+          <nav className="hidden md:flex gap-6 self-stretch items-stretch">
 
             <Link
               to="/assets"
-              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/assets")
-                  ? "text-nav-tab-selected border-b-2 border-underline"
-                  : "text-nav-tab hover:text-nav-tab-selected"
+                  ? "text-nav-tab-selected after:bg-underline"
+                  : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
               }`}
             >
               <span
@@ -86,10 +89,10 @@ export default function Navbar() {
 
             <Link
               to="/accessories"
-              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/accessories")
-                  ? "text-nav-tab-selected border-b-2 border-underline"
-                  : "text-nav-tab hover:text-nav-tab-selected"
+                  ? "text-nav-tab-selected after:bg-underline"
+                  : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
               }`}
             >
               <span
@@ -102,10 +105,10 @@ export default function Navbar() {
 
             <Link
               to="/requests"
-              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/requests")
-                  ? "text-nav-tab-selected border-b-2 border-underline"
-                  : "text-nav-tab hover:text-nav-tab-selected"
+                  ? "text-nav-tab-selected after:bg-underline"
+                  : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
               }`}
             >
               <span
@@ -119,10 +122,10 @@ export default function Navbar() {
 
             <Link
               to="/troubleshooting"
-              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/troubleshooting")
-                  ? "text-nav-tab-selected border-b-2 border-underline"
-                  : "text-nav-tab hover:text-nav-tab-selected"
+                  ? "text-nav-tab-selected after:bg-underline"
+                  : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
               }`}
             >
               <span className="material-symbols-outlined !text-xl">
@@ -232,7 +235,7 @@ export default function Navbar() {
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
               isActive("/assets")
-                ? "text-nav-tab-selected border-b-2 border-underline"
+                ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
           >
@@ -250,7 +253,7 @@ export default function Navbar() {
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
               isActive("/accessories")
-                ? "text-nav-tab-selected border-b-2 border-underline"
+                ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
           >
@@ -268,7 +271,7 @@ export default function Navbar() {
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
               isActive("/requests")
-                ? "text-nav-tab-selected border-b-2 border-underline"
+                ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
           >
@@ -286,7 +289,7 @@ export default function Navbar() {
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
               isActive("/troubleshooting")
-                ? "text-nav-tab-selected border-b-2 border-underline"
+                ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
           >
