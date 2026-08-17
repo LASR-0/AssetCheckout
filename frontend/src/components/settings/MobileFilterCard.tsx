@@ -19,7 +19,7 @@ import { DEFAULT_MOBILE_CONFIG } from "@/lib/mobileNumber";
 ///  +-----------------------------------------------------------------+
 
 const INPUT_CLASS =
-  "text-on-surface-variant bg-surface-container/40 rounded-lg p-2 h-11 border-1 border-outline focus:outline-none focus:ring-1 focus:ring-purple-900 w-full";
+  "text-on-surface-variant bg-surface-container/40 rounded-lg p-2 h-11 border-1 border-outline focus:outline-none focus:ring-1 focus:ring-primary w-full";
 
 export default function MobileFilterCard() {
   const [countryCode, setCountryCode] = useState(DEFAULT_MOBILE_CONFIG.countryCode);

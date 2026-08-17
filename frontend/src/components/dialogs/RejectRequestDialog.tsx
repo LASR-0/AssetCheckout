@@ -139,7 +139,7 @@ export default function RejectionReasonDialog({
               text-white
               font-bold text-sm
               twilight-gradient
-              shadow-[0_4px_12px_rgba(80,37,186,0.3)]
+              shadow-brand
               hover:opacity-90
               hover:cursor-pointer
               active:scale-95

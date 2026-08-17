@@ -330,7 +330,7 @@ export default function ReviewQuoteDialog({
   }
 
   const primaryButton =
-    "w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
+    "w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-brand hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
   const dangerButton =
     "w-full sm:w-auto px-8 py-3.5 rounded-lg border border-status-error/40 text-status-error font-bold text-sm hover:bg-status-error/10 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
   const secondaryButton =

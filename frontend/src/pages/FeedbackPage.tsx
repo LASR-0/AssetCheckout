@@ -186,7 +186,7 @@ export default function FeedbackPage() {
                     onChange={(e) => setComments(e.target.value)}
                     rows={5}
                     placeholder={commentsPlaceholder}
-                    className="w-full text-on-surface-variant bg-surface-container/40 ring-purple-900 p-3 border-1 border-outline rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-900/30 resize-y"
+                    className="w-full text-on-surface-variant bg-surface-container/40 ring-primary p-3 border-1 border-outline rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
                   />
                 </div>
 

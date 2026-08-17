@@ -1,0 +1,649 @@
+/*  +-----------------------------------------------------------------+
+ *  |                     THEME PRESETS                                |
+ *  +-----------------------------------------------------------------+
+ *
+ *  Alternative palettes, selected by `data-preset` on <html>. See
+ *  lib/presets.ts for the catalogue and hooks/usePreset.ts for how it is
+ *  applied.
+ *
+ *  A PRESET DECLARES ONLY WHAT IT CHANGES. Everything it leaves out falls
+ *  through to the `:root` and `.dark` blocks in index.css by ordinary cascade,
+ *  so a re-brand is a couple of dozen lines rather than all 76 tokens. That is
+ *  also why there is no `[data-preset="default"]` block: the default IS
+ *  index.css, and the picker simply removes the attribute.
+ *
+ *  THESE RULES ARE DELIBERATELY UNLAYERED. index.css puts `:root` and `.dark`
+ *  inside `@layer base`, and an unlayered rule beats any layered one whatever
+ *  its specificity — which matters because `[data-preset="x"]` and `:root`
+ *  have IDENTICAL specificity, so without the layer difference this would come
+ *  down to source order and break the day somebody reordered an import.
+ *
+ *  TWO BLOCKS PER PRESET, always. The dark palette here is not derived from
+ *  the light one — same reason index.css hand-tunes both — so a preset that
+ *  only overrides the light theme will look broken the moment somebody
+ *  toggles the switch.
+ *
+ *  ONLY OVERRIDE TOKENS THAT ALREADY EXIST. The cross-fade discovers which
+ *  custom properties are "themed" by reading the `.dark` rule in index.css
+ *  (collectThemedVarNames in lib/theme-transition.ts). A token invented here
+ *  and found nowhere else would not be collected, so it would jump rather
+ *  than fade while everything around it moved.
+ *  +-----------------------------------------------------------------+ */
+
+/* ── KSB ──────────────────────────────────────────────────────────────
+   Deep blue brand on cool surfaces.
+
+   COVERS THE WHOLE PALETTE, and that is the lesson from the first draft: it
+   overrode 19 of 76 tokens, which left purple status pills, warm cream nav
+   text and a lilac landing page sitting inside a blue app. A preset that
+   changes only the brand does not read as a theme, it reads as a bug.
+
+   The three intent hues keep their meaning — green is still done, red is
+   still stop, amber is still attention, because those readings are not ours
+   to reassign. What moves is everything that was brand-adjacent: approved,
+   awaiting IT and ready-to-collect were purple because the brand was, and
+   they are blue here for the same reason. */
+
+[data-preset="ksb"] {
+  /* Brand */
+  --twilight-purple: 14 116 190;
+  --primary: 14 116 190;
+  --check: 11 94 155;
+  --loading: 21 94 148;
+  --underline: 14 116 190;
+
+  --twilight-gradient: linear-gradient(145deg, rgb(112, 178, 222) 0%, rgb(11, 74, 140) 100%);
+  --not-found: linear-gradient(145deg, rgb(16, 160, 250) 0%, rgb(11, 74, 140) 100%);
+  --shadow-brand: 0 4px 12px rgba(11, 74, 140, 0.3);
+  --shadow-md: 0 4px 6px rgba(15, 45, 75, 0.12);
+
+  /* Ground */
+  --background: 247 250 252;
+  --surface: 247 250 252;
+  --surface-container: 234 241 246;
+  --surface-container-low: 228 238 245;
+  --surface-container-lowest: 255 255 255;
+  --nav: 243 248 251;
+  --filter: 203 219 230;
+  --success-form: 255 255 255;
+  --outline: 214 226 235;
+
+  /* Text */
+  --foreground: 30 41 59;
+  --on-background: 30 41 59;
+  --on-surface: 30 41 59;
+  --on-surface-variant: 44 56 74;
+  --on-primary: 255 255 255;
+  --info-light: 90 104 116;
+  --nav-tab: 148 163 184;
+  --nav-tab-selected: 15 42 68;
+  --not-found-text: 150 190 225;
+
+  /* Landing page */
+  --landing-bg: 240 247 251;
+  --landing-card: 255 255 255;
+  --landing-raised: 249 252 254;
+  --landing-border: 217 231 241;
+
+  /* Avatar pills — neutral by decision in the base palette, kept neutral. */
+  --approver-bg: 219 231 240;
+  --requester-bg: 219 231 240;
+  --approver-text: 40 62 84;
+  --requester-text: 40 62 84;
+  --kind-indicator: #55677a;
+
+  /* Tooltips */
+  --tooltip-bg: 15 35 55;
+  --tooltip-text: 255 255 255;
+
+  /* Lifecycle. Green/amber/red keep their meaning; the ones that were purple
+     because the BRAND was purple move to blue. */
+  --status-success: #15803d;
+  --status-error: #dc2626;
+  --status-pending: #c2740a;
+  --status-approved: #0e74be;
+  --status-awaiting-it: #3f9ad6;
+  --status-collect: #0b5e9b;
+  --status-ship: #d99411;
+  --status-shipped: #0ea5c4;
+  --status-assigned: #4f76c4;
+  --status-model: #c2870a;
+  --status-correction: #c2740a;
+  --status-standard: #15803d;
+  --status-nonstandard: #dc2626;
+
+  /* Callouts and article blocks */
+  --error: 190 24 24;
+  --error-background: 254 226 226;
+  --warning: 194 116 10;
+  --block-note: 194 116 10;
+  --block-warn: 220 38 38;
+  --block-figure: 82 96 112;
+  --block-link: 14 116 190;
+
+  /* Modals */
+  --shadcn-background: 240 248 255;
+  --shadcn-text: 12 74 122;
+  --modal-brand: 122 172 214;
+  --modal-brand-secondary: 11 74 140;
+  --modal-surface: 247 250 252;
+  --modal-surface-elevated: 255 255 255;
+  --modal-surface-accent: 219 236 248;
+  --modal-border: 176 196 212;
+  --modal-border-light: 200 216 228;
+  --modal-text-primary: 30 41 59;
+  --modal-text-secondary: 74 92 110;
+  --modal-text-accent: 60 90 120;
+  --modal-error: 150 60 74;
+
+  /* The theme toggle draws itself from these. */
+  --theme-bg: 214 228 238;
+  --theme-text: 64 84 104;
+  --theme-sun: 217 148 26;
+  --theme-moon: 214 228 238;
+}
+
+[data-preset="ksb"].dark {
+  /* Brand */
+  --twilight-purple: 18 40 66;
+  --primary: 56 150 220;
+  --check: 138 194 232;
+  --loading: 183 214 235;
+  --underline: 226 240 250;
+
+  --twilight-gradient: linear-gradient(145deg, rgb(16, 160, 250) 0%, rgb(11, 74, 140) 100%);
+  --not-found: linear-gradient(145deg, rgb(16, 200, 250) 0%, rgb(37, 96, 186) 100%);
+  --shadow-brand: 0 4px 12px rgba(11, 74, 140, 0.45);
+  --shadow-md: 0 0 0 2px rgba(56, 150, 220, 0.14), 0 4px 18px rgba(56, 150, 220, 0.2);
+
+  /* Ground */
+  --background: 8 16 28;
+  --surface: 8 16 28;
+  --surface-container: 14 26 44;
+  --surface-container-low: 22 40 62;
+  --surface-container-lowest: 4 10 20;
+  --nav: 10 20 34;
+  --filter: 4 10 20;
+  --success-form: 4 10 20;
+  --outline: 34 52 72;
+
+  /* Text */
+  --foreground: 226 240 250;
+  --on-background: 226 240 250;
+  --on-surface: 226 240 250;
+  --on-surface-variant: 214 232 245;
+  --on-primary: 240 249 255;
+  --info-light: 124 148 170;
+  --nav-tab: 148 178 205;
+  --nav-tab-selected: 226 240 250;
+  --not-found-text: 230 90 110;
+
+  /* Landing page */
+  --landing-bg: 8 18 32;
+  --landing-card: 16 30 48;
+  --landing-raised: 12 24 40;
+  --landing-border: 32 54 78;
+
+  /* Avatar pills. The base dark theme uses a warm brown here; a cool ground
+     needs a cool pill or it reads as a stain. */
+  --approver-bg: 92 140 184;
+  --requester-bg: 92 140 184;
+  --approver-text: 226 240 250;
+  --requester-text: 226 240 250;
+  --kind-indicator: #7c94aa;
+
+  /* Tooltips */
+  --tooltip-bg: 10 22 38;
+  --tooltip-text: 226 240 250;
+
+  /* Lifecycle. The base dark set is Miramare's, chosen for EVENNESS of
+     contrast rather than for hue — these keep that intent, moving only the
+     brand-adjacent ones into blue. */
+  --status-success: #87af87;
+  --status-error: #e68183;
+  --status-pending: #e0a173;
+  --status-approved: #6cb6e8;
+  --status-awaiting-it: #6cb6e8;
+  --status-collect: #4a9fe0;
+  --status-ship: #e6b877;
+  --status-shipped: #4fd0e0;
+  --status-assigned: #8fb4e8;
+  --status-model: #e6c86a;
+  --status-correction: #e0a173;
+  --status-standard: #87af87;
+  --status-nonstandard: #e68183;
+
+  /* Callouts and article blocks */
+  --error: 230 100 120;
+  --error-background: 40 12 20;
+  --warning: 224 161 115;
+  --block-note: 224 161 115;
+  --block-warn: 230 129 131;
+  --block-figure: 138 160 180;
+  --block-link: 108 182 232;
+
+  /* Modals */
+  --shadcn-background: 6 22 40;
+  --shadcn-text: 226 240 250;
+  --modal-brand: 56 150 220;
+  --modal-brand-secondary: 56 150 220;
+  --modal-surface: 8 16 28;
+  --modal-surface-elevated: 14 28 46;
+  --modal-surface-accent: 16 38 62;
+  --modal-border: 40 62 86;
+  --modal-border-light: 52 76 100;
+  --modal-text-primary: 226 240 250;
+  --modal-text-secondary: 170 195 215;
+  --modal-text-accent: 150 190 220;
+  --modal-error: 200 90 110;
+
+  /* The theme toggle */
+  --theme-bg: 104 128 150;
+  --theme-text: 214 232 245;
+  --theme-sun: 30 50 70;
+  --theme-moon: 255 204 30;
+}
+
+/* ── Grayscale ───────────────────────────────────────────────────────────
+   Low-chroma neutral with a slate-teal accent.
+
+   The restrained option: nearly monochrome chrome so the only saturated
+   things on screen are the ones carrying meaning — a status pill, a warning,
+   a primary action. Worth having as a counterweight to two strongly branded
+   palettes, and it is the one that suits a company whose own brand colour
+   would fight ours.
+
+   Because the chrome is quiet, the lifecycle colours are left close to the
+   base values: they are doing more work here than in either other preset and
+   muting them would take away the only signal on the page. */
+
+[data-preset="grayscale"] {
+  --twilight-purple: 55 90 96;
+  --primary: 55 90 96;
+  --check: 38 70 76;
+  --loading: 70 104 110;
+  --underline: 55 90 96;
+
+  --twilight-gradient: linear-gradient(145deg, rgb(126, 160, 164) 0%, rgb(38, 66, 72) 100%);
+  --not-found: linear-gradient(145deg, rgb(90, 132, 138) 0%, rgb(38, 66, 72) 100%);
+  --shadow-brand: 0 4px 12px rgba(38, 66, 72, 0.28);
+  --shadow-md: 0 4px 6px rgba(20, 24, 26, 0.12);
+
+  --background: 250 250 249;
+  --surface: 250 250 249;
+  --surface-container: 240 240 238;
+  --surface-container-low: 234 235 233;
+  --surface-container-lowest: 255 255 255;
+  --nav: 246 246 245;
+  --filter: 214 218 218;
+  --success-form: 255 255 255;
+  --outline: 220 221 219;
+
+  --foreground: 38 41 42;
+  --on-background: 38 41 42;
+  --on-surface: 38 41 42;
+  --on-surface-variant: 52 56 57;
+  --on-primary: 255 255 255;
+  --info-light: 100 106 108;
+  --nav-tab: 160 166 167;
+  --nav-tab-selected: 28 34 36;
+  --not-found-text: 150 168 170;
+
+  --landing-bg: 246 247 246;
+  --landing-card: 255 255 255;
+  --landing-raised: 251 251 250;
+  --landing-border: 226 228 226;
+
+  --approver-bg: 226 229 228;
+  --requester-bg: 226 229 228;
+  --approver-text: 56 62 63;
+  --requester-text: 56 62 63;
+  --kind-indicator: #5f6668;
+
+  --tooltip-bg: 32 36 37;
+  --tooltip-text: 255 255 255;
+
+  --status-success: #15803d;
+  --status-error: #dc2626;
+  --status-pending: #c2740a;
+  --status-approved: #37585e;
+  --status-awaiting-it: #5c848a;
+  --status-collect: #26424a;
+  --status-ship: #d99411;
+  --status-shipped: #2f8f9c;
+  --status-assigned: #5b7076;
+  --status-model: #c2870a;
+  --status-correction: #c2740a;
+  --status-standard: #15803d;
+  --status-nonstandard: #dc2626;
+
+  --error: 190 24 24;
+  --error-background: 253 228 228;
+  --warning: 194 116 10;
+  --block-note: 194 116 10;
+  --block-warn: 220 38 38;
+  --block-figure: 92 98 100;
+  --block-link: 55 90 96;
+
+  --shadcn-background: 244 246 246;
+  --shadcn-text: 38 66 72;
+  --modal-brand: 126 160 164;
+  --modal-brand-secondary: 38 66 72;
+  --modal-surface: 250 250 249;
+  --modal-surface-elevated: 255 255 255;
+  --modal-surface-accent: 228 236 236;
+  --modal-border: 190 194 194;
+  --modal-border-light: 212 216 216;
+  --modal-text-primary: 38 41 42;
+  --modal-text-secondary: 84 90 92;
+  --modal-text-accent: 64 88 92;
+  --modal-error: 150 60 74;
+
+  --theme-bg: 222 224 223;
+  --theme-text: 72 78 80;
+  --theme-sun: 217 148 26;
+  --theme-moon: 222 224 223;
+}
+
+[data-preset="grayscale"].dark {
+  --twilight-purple: 26 34 36;
+  --primary: 122 168 174;
+  --check: 158 196 200;
+  --loading: 198 214 216;
+  --underline: 232 236 236;
+
+  --twilight-gradient: linear-gradient(145deg, rgb(146, 190, 196) 0%, rgb(40, 70, 76) 100%);
+  --not-found: linear-gradient(145deg, rgb(160, 200, 204) 0%, rgb(40, 70, 76) 100%);
+  --shadow-brand: 0 4px 12px rgba(20, 40, 44, 0.5);
+  --shadow-md: 0 0 0 2px rgba(122, 168, 174, 0.12), 0 4px 18px rgba(122, 168, 174, 0.18);
+
+  --background: 16 18 19;
+  --surface: 16 18 19;
+  --surface-container: 24 27 28;
+  --surface-container-low: 34 38 39;
+  --surface-container-lowest: 10 12 13;
+  --nav: 20 23 24;
+  --filter: 10 12 13;
+  --success-form: 10 12 13;
+  --outline: 46 51 52;
+
+  --foreground: 232 236 236;
+  --on-background: 232 236 236;
+  --on-surface: 232 236 236;
+  --on-surface-variant: 220 226 226;
+  --on-primary: 12 18 20;
+  --info-light: 140 148 150;
+  --nav-tab: 150 158 160;
+  --nav-tab-selected: 232 236 236;
+  --not-found-text: 210 120 130;
+
+  --landing-bg: 18 20 21;
+  --landing-card: 28 32 33;
+  --landing-raised: 23 26 27;
+  --landing-border: 48 53 54;
+
+  --approver-bg: 108 132 136;
+  --requester-bg: 108 132 136;
+  --approver-text: 232 236 236;
+  --requester-text: 232 236 236;
+  --kind-indicator: #8e9698;
+
+  --tooltip-bg: 24 28 29;
+  --tooltip-text: 232 236 236;
+
+  --status-success: #87af87;
+  --status-error: #e68183;
+  --status-pending: #e0a173;
+  --status-approved: #8fc2c8;
+  --status-awaiting-it: #8fc2c8;
+  --status-collect: #6ba8b0;
+  --status-ship: #e6b877;
+  --status-shipped: #6fc8d0;
+  --status-assigned: #9db2b6;
+  --status-model: #e6c86a;
+  --status-correction: #e0a173;
+  --status-standard: #87af87;
+  --status-nonstandard: #e68183;
+
+  --error: 226 110 120;
+  --error-background: 40 18 20;
+  --warning: 224 161 115;
+  --block-note: 224 161 115;
+  --block-warn: 230 129 131;
+  --block-figure: 150 158 160;
+  --block-link: 146 190 196;
+
+  --shadcn-background: 20 26 27;
+  --shadcn-text: 232 236 236;
+  --modal-brand: 122 168 174;
+  --modal-brand-secondary: 122 168 174;
+  --modal-surface: 16 18 19;
+  --modal-surface-elevated: 26 30 31;
+  --modal-surface-accent: 32 44 46;
+  --modal-border: 54 60 61;
+  --modal-border-light: 68 74 76;
+  --modal-text-primary: 232 236 236;
+  --modal-text-secondary: 176 184 186;
+  --modal-text-accent: 158 196 200;
+  --modal-error: 200 90 110;
+
+  --theme-bg: 112 120 122;
+  --theme-text: 220 226 226;
+  --theme-sun: 40 46 48;
+  --theme-moon: 255 204 30;
+}
+
+/* ── Miramare ───────────────────────────────────────────────────────────
+   franbach's scheme — sage brand on a warm brown ground.
+
+   ALREADY HALF HERE: index.css takes its dark intent hues from Miramare and
+   says so — "sage / orange / red instead of emerald / amber / rose", chosen
+   for evenness of contrast rather than for hue. The sage that is the brand
+   below is the same #87af87 that block already uses for "done", which is why
+   this reads as one scheme rather than a green bolted onto a brown.
+
+   Miramare is a dark theme with no published light variant, so the light half
+   is a complement rather than a port: the same warm ground taken up to cream,
+   with the accents deepened enough to read on it. Stated plainly because
+   somebody comparing against the original will only find the dark one. */
+
+[data-preset="miramare"] {
+  /* Brand — sage, deepened for a light ground. */
+  --twilight-purple: 78 122 78;
+  --primary: 78 122 78;
+  --check: 62 100 62;
+  --loading: 148 118 60;
+  --underline: 78 122 78;
+
+  --twilight-gradient: linear-gradient(145deg, rgb(135, 175, 135) 0%, rgb(62, 100, 62) 100%);
+  --not-found: linear-gradient(145deg, rgb(200, 120, 90) 0%, rgb(176, 72, 74) 100%);
+  --shadow-brand: 0 4px 12px rgba(62, 100, 62, 0.3);
+  --shadow-md: 0 4px 6px rgba(60, 50, 46, 0.14);
+
+  --background: 245 237 222;
+  --surface: 245 237 222;
+  --surface-container: 235 225 208;
+  --surface-container-low: 228 216 198;
+  --surface-container-lowest: 252 246 236;
+  --nav: 250 243 232;
+  --filter: 228 216 198;
+  --success-form: 252 246 236;
+  --outline: 214 200 182;
+
+  --foreground: 60 50 46;
+  --on-background: 60 50 46;
+  --on-surface: 60 50 46;
+  --on-surface-variant: 78 66 60;
+  --on-primary: 255 255 255;
+  --info-light: 122 106 99;
+  --nav-tab: 160 145 134;
+  --nav-tab-selected: 46 38 35;
+  --not-found-text: 200 184 166;
+
+  --landing-bg: 250 243 232;
+  --landing-card: 252 246 236;
+  --landing-raised: 251 245 234;
+  --landing-border: 228 216 198;
+
+  --approver-bg: 228 216 198;
+  --requester-bg: 228 216 198;
+  --approver-text: 60 50 46;
+  --requester-text: 60 50 46;
+  --kind-indicator: #7a6a63;
+
+  --tooltip-bg: 46 38 35;
+  --tooltip-text: 245 237 222;
+
+  --status-success: #4e7a4e;
+  --status-error: #b04a4c;
+  --status-pending: #b07a3e;
+  --status-approved: #4e7a4e;
+  --status-awaiting-it: #6a9a6a;
+  --status-collect: #3e643e;
+  --status-ship: #b07a3e;
+  --status-shipped: #4a8a5e;
+  --status-assigned: #9a5f78;
+  --status-model: #a8802e;
+  --status-correction: #b0663e;
+  --status-standard: #4e7a4e;
+  --status-nonstandard: #b04a4c;
+
+  --error: 176 74 76;
+  --error-background: 244 222 216;
+  --warning: 176 122 62;
+  --block-note: 176 122 62;
+  --block-warn: 176 74 76;
+  --block-figure: 122 106 99;
+  --block-link: 78 122 78;
+
+  --shadcn-background: 250 243 232;
+  --shadcn-text: 62 100 62;
+  --modal-brand: 135 175 135;
+  --modal-brand-secondary: 62 100 62;
+  --modal-surface: 245 237 222;
+  --modal-surface-elevated: 252 246 236;
+  --modal-surface-accent: 230 238 228;
+  --modal-border: 200 184 166;
+  --modal-border-light: 218 205 188;
+  --modal-text-primary: 60 50 46;
+  --modal-text-secondary: 88 76 68;
+  --modal-text-accent: 62 100 62;
+  --modal-error: 176 74 76;
+
+  --theme-bg: 228 216 198;
+  --theme-text: 78 66 60;
+  --theme-sun: 200 150 40;
+  --theme-moon: 228 216 198;
+}
+
+[data-preset="miramare"].dark {
+  /* Sage brand — the same #87af87 the base dark palette already uses. */
+  --twilight-purple: 44 56 44;
+  --primary: 135 175 135;
+  --check: 135 192 149;
+  --loading: 217 187 128;
+  /* Dark text on a light sage button. */
+  --on-primary: 42 33 32;
+  --underline: 230 214 172;
+
+  --twilight-gradient: linear-gradient(145deg, rgb(167, 201, 167) 0%, rgb(78, 122, 78) 100%);
+  --not-found: linear-gradient(145deg, rgb(227, 155, 123) 0%, rgb(230, 129, 131) 100%);
+  --shadow-brand: 0 4px 12px rgba(46, 62, 46, 0.5);
+  --shadow-md: 0 0 0 2px rgba(135, 175, 135, 0.14), 0 4px 18px rgba(90, 60, 55, 0.3);
+
+  /* Ground — warmer and browner than the published #2a2426, which reads grey
+     beside a sage brand. Enough red in it to sit as maroon-brown rather than
+     as a neutral that happens to be dark. */
+  --background: 50 38 37;
+  --surface: 50 38 37;
+  --surface-container: 62 47 45;
+  --surface-container-low: 72 55 52;
+  --surface-container-lowest: 38 28 28;
+  --nav: 44 33 32;
+  --filter: 38 28 28;
+  --success-form: 38 28 28;
+  --outline: 84 64 61;
+
+  --foreground: 230 214 172;
+  --on-background: 230 214 172;
+  --on-surface: 230 214 172;
+  --on-surface-variant: 220 205 165;
+  --info-light: 160 140 128;
+  --nav-tab: 156 136 120;
+  --nav-tab-selected: 230 214 172;
+  --not-found-text: 230 129 131;
+
+  --landing-bg: 38 28 28;
+  --landing-card: 58 44 42;
+  --landing-raised: 48 36 34;
+  --landing-border: 84 64 61;
+
+  --approver-bg: 122 106 99;
+  --requester-bg: 122 106 99;
+  --approver-text: 230 214 172;
+  --requester-text: 230 214 172;
+  --kind-indicator: #9e867c;
+
+  --tooltip-bg: 38 28 28;
+  --tooltip-text: 230 214 172;
+
+  /* The base dark theme's intent hues are already these three — see the note
+     in index.css. The brand-adjacent ones join the sage. */
+  --status-success: #87af87;
+  --status-error: #e68183;
+  --status-pending: #e29870;
+  --status-approved: #87af87;
+  --status-awaiting-it: #a7c9a7;
+  --status-collect: #6a9a6a;
+  --status-ship: #d9bb80;
+  --status-shipped: #87c095;
+  --status-assigned: #d3a0bc;
+  --status-model: #d9bb80;
+  --status-correction: #e29870;
+  --status-standard: #87af87;
+  --status-nonstandard: #e68183;
+
+  --error: 230 129 131;
+  --error-background: 58 36 34;
+  --warning: 217 187 128;
+  --block-note: 217 187 128;
+  --block-warn: 230 129 131;
+  --block-figure: 158 134 124;
+  --block-link: 135 175 135;
+
+  --shadcn-background: 38 28 28;
+  --shadcn-text: 230 214 172;
+  --modal-brand: 135 175 135;
+  --modal-brand-secondary: 135 175 135;
+  --modal-surface: 50 38 37;
+  --modal-surface-elevated: 62 47 45;
+  --modal-surface-accent: 72 55 52;
+  --modal-border: 106 81 77;
+  --modal-border-light: 125 96 91;
+  --modal-text-primary: 230 214 172;
+  --modal-text-secondary: 200 184 150;
+  --modal-text-accent: 135 175 135;
+  --modal-error: 230 129 131;
+
+  --theme-bg: 106 81 77;
+  --theme-text: 230 214 172;
+  --theme-sun: 62 47 45;
+  --theme-moon: 217 187 128;
+}
+
+/* ── Swapping ───────────────────────────────────────────────────────────
+   Set for a single frame while the preset attribute changes. Without it the
+   elements that carry `transition-colors` animate to the new palette while
+   everything else jumps, so the page arrives in two waves and reads as a
+   glitch. Suppressing transitions makes the swap instantaneous and whole.
+
+   Not a cross-fade: theme-transition.ts interpolates between the LIGHT and
+   DARK palettes, which is a different journey from one preset to another.
+   Extending it to presets is possible and is not what this needs. */
+
+html.preset-swapping,
+html.preset-swapping *,
+html.preset-swapping *::before,
+html.preset-swapping *::after {
+  transition: none !important;
+}

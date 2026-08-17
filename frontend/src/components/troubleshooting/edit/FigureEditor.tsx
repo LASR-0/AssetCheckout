@@ -6,6 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SELECT_TRIGGER, SELECT_CONTENT, SELECT_ITEM } from "./BlockRow";
 import { uploadTroubleshootingImage } from "@/api/troubleshooting";
 import type { Figure } from "@/types/troubleshootingType";
 
@@ -208,14 +209,14 @@ export default function FigureEditor({
           >
             <SelectTrigger
               aria-label="Figure size"
-              className="h-8 w-[19rem] border-outline bg-surface text-[12.5px]"
+              className={`h-8 w-[19rem] text-[12.5px] ${SELECT_TRIGGER}`}
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-surface-container-lowest border border-outline text-on-surface">
-              <SelectItem value="flyout">Flyout — a menu or small panel</SelectItem>
-              <SelectItem value="window">Window — an application window</SelectItem>
-              <SelectItem value="full">Full — a whole-screen capture</SelectItem>
+            <SelectContent className={SELECT_CONTENT}>
+              <SelectItem className={SELECT_ITEM} value="flyout">Flyout — a menu or small panel</SelectItem>
+              <SelectItem className={SELECT_ITEM} value="window">Window — an application window</SelectItem>
+              <SelectItem className={SELECT_ITEM} value="full">Full — a whole-screen capture</SelectItem>
             </SelectContent>
           </Select>
 

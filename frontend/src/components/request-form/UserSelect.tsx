@@ -82,12 +82,12 @@ export default function UserSelect({
       disabled={disabled}
     >
       <ComboboxInput
-        className="text-on-surface-variant bg-surface-container/40 !ring-purple-900 p-2 h-12 border-1 !border-outline"
+        className="text-on-surface-variant bg-surface-container/40 !ring-primary p-2 h-12 border-1 !border-outline"
         placeholder={placeholder}
         disabled={disabled}
       />
 
-      <ComboboxContent className="bg-surface !outline-0 !ring-0 !border-1 !border-gray-200 !text-gray-400 mt-3 hover:cursor-pointer">
+      <ComboboxContent className="bg-surface !outline-0 !ring-0 !border-1 !border-outline !text-info-light mt-3 hover:cursor-pointer">
         <ComboboxEmpty>No users found</ComboboxEmpty>
 
         <ComboboxList>

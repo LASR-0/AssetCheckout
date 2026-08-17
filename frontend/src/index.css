@@ -85,6 +85,13 @@
     /* Misc */
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.144);
 
+    /* The glow under a primary button. A token because the brand colour was
+       otherwise baked into a literal in 26 components — under any preset that
+       is not purple, those would keep a purple halo under a differently
+       coloured button. Written as a full shadow rather than a colour so a
+       preset can change the spread and opacity too, not only the hue. */
+    --shadow-brand: 0 4px 12px rgba(80, 37, 186, 0.3);
+
     --status-success:     #16a34a; /* green-600  — completed/collected/received/approve */
     --status-error:       #dc2626; /* red-600    — rejected/reject */
     /* The notice/info colour — "read this before you click" boxes, the live
@@ -195,8 +202,8 @@
     --on-background: 255 241 219;
     --on-surface: 248 250 252;
     --on-surface-variant: 255 241 219;
-    --nav-tab-selected: 255 241 219;
-    --nav-tab: 255 228 189 ;
+    --nav-tab-selected: 255 238 208;
+    --nav-tab: 255 227 178 ;
     --error: 220 1 80;
     --shadcn-text: 250 245 255;
     --approver-text: 255 241 219;
@@ -225,6 +232,7 @@
     --loading: 235 218 183;
 
     --shadow-md: 0 0 0 2px rgba(161, 138, 222, 0.14), 0 4px 18px rgba(238, 181, 255, 0.231);
+    --shadow-brand: 0 4px 12px rgba(80, 37, 186, 0.3);
 
     /* The three intent hues are Miramare's (the VS Code theme), kept after
        trying its full palette: sage / orange / red instead of emerald / amber /
@@ -352,7 +360,7 @@
   --color-modal-border: rgb(var(--modal-border));
   --color-modal-border-light: rgb(var(--modal-border-light));
   --color-modal-brand: rgb(var(--modal-brand));
-  --color-modal-brand-sencondary: rgb(var(--modal-brand-sencondary));
+  --color-modal-brand-secondary: rgb(var(--modal-brand-secondary));
   --color-modal-error: rgb(var(--modal-error));
   --color-twilight-gradient: rgb(var(--twilight-gradient));
   --color-not-found: rgb(var(--not-found));
@@ -459,6 +467,10 @@
 @layer utilities {
   .shadow-md {
     box-shadow: var(--shadow-md);
+  }
+
+  .shadow-brand {
+    box-shadow: var(--shadow-brand);
   }
 
 }

@@ -122,6 +122,24 @@ function getPalettes() {
   return palettes;
 }
 
+/**
+ * Forget the cached palettes.
+ *
+ * MUST be called whenever anything changes what the custom properties resolve
+ * to while the page is open — which today means switching theme preset. The
+ * cache above is read once and kept forever, so without this the next
+ * cross-fade animates toward the palette of the preset you just left and then
+ * snaps to the real one at the end.
+ *
+ * That failure reads as a rendering glitch rather than a stale cache, and
+ * nothing points back here, which is why it is exported rather than left as an
+ * internal detail for a caller to rediscover.
+ */
+export function resetPalettes(): void {
+  palettes = null;
+  paletteLookupFailed = false;
+}
+
 ///  +-----------------------------------------------------------------+
 ///  |                  PARSING / INTERPOLATION                         |
 ///  +-----------------------------------------------------------------+

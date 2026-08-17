@@ -13,6 +13,36 @@
       rel="stylesheet"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Applies the theme preset BEFORE the first paint.
+
+      next-themes does exactly this for the light/dark class; presets need
+      their own because they are a different attribute and the palette lives
+      in CSS keyed on it. Without this the page renders in the built-in palette
+      and repaints once React mounts — a visible flash on every single load,
+      not just the first.
+
+      Kept deliberately tiny and dependency-free: it runs before the bundle
+      exists. The keys match lib/presets.ts, and the try/catch is because
+      localStorage throws outright in some privacy modes rather than returning
+      null.
+    -->
+    <script>
+      (function () {
+        try {
+          var chosen = localStorage.getItem("ui-preset");
+          var preset = chosen || localStorage.getItem("ui-preset-default");
+          // "default" is the absence of an attribute — the base palette in
+          // index.css — so there is nothing to set for it.
+          if (preset && preset !== "default") {
+            document.documentElement.setAttribute("data-preset", preset);
+          }
+        } catch (e) {
+          /* No storage: the built-in palette is a correct answer. */
+        }
+      })();
+    </script>
     <title>KSB Checkout Central</title>
   </head>
   <body>

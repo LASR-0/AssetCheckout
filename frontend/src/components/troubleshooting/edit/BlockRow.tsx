@@ -124,6 +124,25 @@ export const MENU_PANEL =
 export const MENU_ITEM =
   "focus:bg-surface-container-low focus:text-on-background data-[highlighted]:bg-surface-container-low";
 
+/**
+ * The two selects in the rail — the figure's size, the link's target.
+ *
+ * `hover:bg-input` is what SelectTrigger ships with, and it renders nothing
+ * here, so a select was the one control in the editor that gave no sign it
+ * could be clicked. The items are covered too: an open list with no highlight
+ * is the same complaint one click later.
+ */
+export const SELECT_TRIGGER =
+  "border-outline bg-surface transition-colors hover:bg-primary/10 " +
+  "hover:text-primary hover:cursor-pointer";
+
+export const SELECT_CONTENT =
+  "bg-surface-container-lowest border border-outline text-on-surface";
+
+export const SELECT_ITEM =
+  "focus:bg-primary/10 focus:text-primary data-[highlighted]:bg-primary/10 " +
+  "data-[highlighted]:text-primary hover:cursor-pointer";
+
 export const MENU_ITEM_DANGER =
   "text-error focus:bg-error-background focus:text-error data-[highlighted]:bg-error-background";
 

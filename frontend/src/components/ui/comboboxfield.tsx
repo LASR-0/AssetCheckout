@@ -49,9 +49,9 @@ const INPUT_CLASS_COMPACT =
   "text-on-surface-variant bg-surface-container-low/30 border border-outline px-2 py-1.5 text-sm w-full";
 
 const CONTENT_CLASS_NORMAL =
-  "bg-surface !border-1 !border-gray-200 !text-gray-400 mt-3 hover:cursor-pointer";
+  "bg-surface !border-1 !border-outline !text-info-light mt-3 hover:cursor-pointer";
 const CONTENT_CLASS_COMPACT =
-  "bg-surface !border-1 !border-gray-200 mt-2 hover:cursor-pointer";
+  "bg-surface !border-1 !border-outline mt-2 hover:cursor-pointer";
 
 const ITEM_CLASS_NORMAL =
   "hover:cursor-pointer hover:text-shadcn-text hover:bg-shadcn-background";

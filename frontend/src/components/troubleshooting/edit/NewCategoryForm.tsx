@@ -100,7 +100,7 @@ export default function NewCategoryForm({ onCreate, onCancel }: Props) {
           type="button"
           disabled={!name.trim() || saving}
           onClick={() => void submit()}
-          className="rounded-lg px-3 py-1.5 text-xs font-bold twilight-gradient text-white shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+          className="rounded-lg px-3 py-1.5 text-xs font-bold twilight-gradient text-white shadow-brand hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 hover:cursor-pointer disabled:hover:cursor-not-allowed"
         >
           {saving ? "Adding…" : "Add category"}
         </button>

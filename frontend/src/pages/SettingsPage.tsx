@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ThemeSwitch from "@/components/nav/ThemeSwitch";
+import ThemePresetPicker from "@/components/settings/ThemePresetPicker";
 import DevAuthToggle from "@/components/nav/DevAuthToggle";
 import AssetConfigurationSettings from "@/components/settings/AssetConfiguration";
 import AccessoryConfigurationSettings from "@/components/settings/AccessoryConfiguration";
@@ -30,12 +31,24 @@ export default function SettingsPage() {
     <div className="space-y-8">
       {/* Appearance -- visible to everyone */}
       <SettingsSection icon="palette" title="Appearance">
+        <div className="space-y-6">
         <SettingsRow
           title="Theme"
           description="Switch between light and dark visual interfaces."
         >
           <ThemeSwitch />
         </SettingsRow>
+
+        {/* Below the toggle, not instead of it: a preset defines BOTH a light
+            and a dark palette, so the two settings compose. */}
+        <SettingsRow
+          stacked
+          title="Palette"
+          description="The colours used across the app. Each has its own light and dark version."
+        >
+          <ThemePresetPicker />
+        </SettingsRow>
+        </div>
       </SettingsSection>
 
       {/* Asset Configuration -- admin-only */}
@@ -249,9 +262,30 @@ type RowProps = {
   title: string;
   description?: string;
   children: React.ReactNode;
+  /**
+   * Put the control BELOW the text rather than beside it.
+   *
+   * The side-by-side layout gives its control a `shrink-0` column, which is
+   * right for a toggle or a single select but squeezes the description into a
+   * narrow strip once the control is wide. Anything that is a row of options
+   * wants the full width, and the text wants it back.
+   */
+  stacked?: boolean;
 };
 
-function SettingsRow({ title, description, children }: RowProps) {
+function SettingsRow({ title, description, children, stacked = false }: RowProps) {
+  if (stacked) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div>
+          <h3 className="font-semibold text-on-background">{title}</h3>
+          {description && <p className="text-sm text-info-light">{description}</p>}
+        </div>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-between gap-4">
       <div>

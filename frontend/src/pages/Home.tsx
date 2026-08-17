@@ -362,7 +362,7 @@ function Stat({
     return (
       <Link
         to={to}
-        className={`${className} hover:border-purple-500 hover:-translate-y-px transition-all`}
+        className={`${className} hover:border-primary hover:-translate-y-px transition-all`}
       >
         <StatBody
           num={num}
@@ -678,7 +678,7 @@ function QuickStart({
                   // rounded corners. Tiles stay level with each other — grid
                   // rows stretch to the tallest — so the band reads as a
                   // difference in surface, not a difference in height.
-                  className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                  className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-primary hover:-translate-y-px transition-all`}
                 >
                   <TileBody
                     icon={iconForCategory(cat.name)}
@@ -875,7 +875,7 @@ function QuickLinks() {
           <Link
             key={l.title}
             to={l.to}
-            className={`${RAISED} group flex items-center gap-4 px-5 py-4 hover:border-purple-500 transition-all`}
+            className={`${RAISED} group flex items-center gap-4 px-5 py-4 hover:border-primary transition-all`}
           >
             <span className="w-10 h-10 rounded-lg grid place-items-center shrink-0 bg-modal-surface-accent text-modal-text-accent">
               <span className="material-symbols-outlined !text-[20px]">
@@ -982,7 +982,7 @@ function AccessoryQuickStart({
               <Link
                 key={cat.id}
                 to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-purple-500 hover:-translate-y-px transition-all`}
+                className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-primary hover:-translate-y-px transition-all`}
               >
                 <TileBody
                   icon={iconForCategory(cat.name)}
@@ -1172,7 +1172,7 @@ function MyStuff({
                 type="button"
                 onClick={() => setOpenFor(item)}
                 title={`Report a problem with ${item.title}`}
-                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-3 text-left hover:border-purple-500 hover:-translate-y-px transition-all hover:cursor-pointer`}
+                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-3 text-left hover:border-primary hover:-translate-y-px transition-all hover:cursor-pointer`}
               >
                 <div className="flex flex-1 flex-col items-center my-4 justify-center gap-2 text-center">
                   <span className="material-symbols-outlined !text-[26px]">

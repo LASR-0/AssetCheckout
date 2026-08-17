@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { isAdminEmail, getActorEmail } from "../config/auth.js";
+import { getThemePreset } from "../config/theme.js";
 import {
   getRequestableCategoryIds,
   setRequestableCategoryIds,
@@ -25,6 +26,19 @@ function requireAdmin(req: Request, res: Response): boolean {
   }
   return true;
 }
+
+///  +-----------------------------------------------------------------+
+///  |                       APPEARANCE                                |
+///  +-----------------------------------------------------------------+
+//
+//  Public on purpose: everyone renders the UI, so everyone needs to know which
+//  palette the organisation defaults to. It reveals nothing — the preset names
+//  are in the client bundle already.
+///  +-----------------------------------------------------------------+
+
+router.get("/appearance", (_req: Request, res: Response) => {
+  res.json({ preset: getThemePreset() });
+});
 
 ///  +-----------------------------------------------------------------+
 ///  |                  REQUESTABLE CATEGORIES                         |

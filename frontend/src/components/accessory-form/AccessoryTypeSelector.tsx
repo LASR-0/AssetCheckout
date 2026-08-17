@@ -98,7 +98,7 @@ export default function AccessoryTypeSelector({
                 className={`
                   relative flex hover:cursor-pointer flex-col items-center justify-center p-6 rounded-lg border border-outline transition-all
                   ${isSelected
-                    ? "border-purple-500 border-2 bg-surface-container-lowest"
+                    ? "border-primary border-2 bg-surface-container-lowest"
                     : "border-outline-variant/20 hover:bg-surface-container hover:border-outline"}
                 `}
               >

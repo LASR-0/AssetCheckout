@@ -243,7 +243,7 @@ export default function SupportMessageDialog({
             type="button"
             disabled={!draft}
             onClick={() => void copyAndOpen()}
-            className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-brand hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 hover:cursor-pointer disabled:hover:cursor-not-allowed"
           >
             <span className="material-symbols-outlined !text-[18px]">content_copy</span>
             Copy and open Teams

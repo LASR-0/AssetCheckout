@@ -535,8 +535,8 @@ export default function MyHoldingsDialog({
                     onClick={() => setReason(r.value)}
                     className={`w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm text-left hover:cursor-pointer transition-all ${
                       reason === r.value
-                        ? "border-purple-500 bg-surface-container-low/40 text-on-background"
-                        : "border-outline text-on-surface-variant hover:border-purple-500/50"
+                        ? "border-primary bg-surface-container-low/40 text-on-background"
+                        : "border-outline text-on-surface-variant hover:border-primary/50"
                     }`}
                   >
                     <span className="material-symbols-outlined !text-[18px] text-info-light">
@@ -577,8 +577,8 @@ export default function MyHoldingsDialog({
                           onClick={() => setUnloggedCategoryId(c.id)}
                           className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border px-2 py-3 text-center hover:cursor-pointer transition-all ${
                             active
-                              ? "border-purple-500 bg-surface-container-low/40"
-                              : "border-outline hover:border-purple-500/50"
+                              ? "border-primary bg-surface-container-low/40"
+                              : "border-outline hover:border-primary/50"
                           }`}
                         >
                           <span
@@ -784,7 +784,7 @@ function Choice({
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-lg border border-outline bg-surface px-4 py-3 hover:border-purple-500 hover:cursor-pointer transition-all"
+      className="w-full text-left rounded-lg border border-outline bg-surface px-4 py-3 hover:border-primary hover:cursor-pointer transition-all"
     >
       <span className="flex items-center gap-2 text-sm font-semibold text-on-surface-variant">
         <span className="material-symbols-outlined !text-[18px] text-info-light">
@@ -871,7 +871,7 @@ function Primary({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2"
+      className="w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-brand hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2"
     >
       {busy && (
         <span className="animate-spin h-4 w-4 border-2 border-white/40 border-t-white rounded-full" />

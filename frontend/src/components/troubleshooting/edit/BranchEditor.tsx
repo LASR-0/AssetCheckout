@@ -1,4 +1,12 @@
 import EditableText from "./EditableText";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SELECT_TRIGGER, SELECT_CONTENT, SELECT_ITEM } from "./BlockRow";
 import type { Branch, SymptomListing } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -72,6 +80,9 @@ export default function BranchEditor({
   // something in this list.
   const crossSubject = Boolean(branch.targetSubjectKey);
 
+  // An article never links to itself, so it is never an option.
+  const options = symptoms.filter((s) => s.id !== currentSymptomId);
+
   return (
     <div
       className={
@@ -97,41 +108,56 @@ export default function BranchEditor({
         </button>
       </div>
 
-      <EditableText
-        value={branch.label}
-        onChange={(label) => onChange({ ...branch, label })}
-        ariaLabel="Link label"
-        className="text-sm"
-        placeholder="The reader's situation — “It charges from some cables but not others”"
-      />
+      {/* The same label grid the figure block uses — they are siblings in the
+          rail now, and the prototype lays both out this way. */}
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+        <span className="text-[12px] text-info-light">Reads as</span>
+        <EditableText
+          value={branch.label}
+          onChange={(label) => onChange({ ...branch, label })}
+          ariaLabel="Link label"
+          className="text-[13px]"
+          placeholder="The reader's situation — “It charges from some cables but not others”"
+        />
 
-      {crossSubject ? (
-        <p className="text-[13px] text-info-light">
-          Points at{" "}
-          <code className="rounded bg-surface-container-low/40 px-1">
-            {branch.targetSubjectKey}/{branch.targetSymptomId}
-          </code>{" "}
-          in another subject. Remove and re-add the link to change it.
-        </p>
-      ) : (
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-info-light">Goes to</span>
-          <select
+        <span className="text-[12px] text-info-light">Goes to</span>
+        {crossSubject ? (
+          <p className="text-[13px] text-info-light">
+            Points at{" "}
+            <code className="rounded bg-surface-container-low/40 px-1">
+              {branch.targetSubjectKey}/{branch.targetSymptomId}
+            </code>{" "}
+            in another subject. Remove and re-add the link to change it.
+          </p>
+        ) : options.length === 0 ? (
+          // A Select with nothing in it is a control that opens onto nothing.
+          // Says why instead.
+          <p className="text-[13px] text-info-light">
+            There is nothing else in this subject to link to yet.
+          </p>
+        ) : (
+          <Select
             value={branch.targetSymptomId}
-            onChange={(e) => onChange({ ...branch, targetSymptomId: e.target.value })}
-            className="rounded-lg border border-outline bg-surface px-2 py-1.5 text-sm hover:cursor-pointer"
+            onValueChange={(targetSymptomId) => onChange({ ...branch, targetSymptomId })}
           >
-            {symptoms
-              .filter((s) => s.id !== currentSymptomId)
-              .map((symptom) => (
-                <option key={symptom.id} value={symptom.id}>
+            <SelectTrigger
+              aria-label="Goes to"
+              className={`h-8 w-full text-[12.5px] ${SELECT_TRIGGER}`}
+            >
+              <SelectValue placeholder="Pick a symptom" />
+            </SelectTrigger>
+            <SelectContent className={SELECT_CONTENT}>
+              {options.map((symptom) => (
+                <SelectItem key={symptom.id} className={SELECT_ITEM} value={symptom.id}>
                   {symptom.label}
                   {symptom.hasArticle ? "" : " (not written yet)"}
-                </option>
+                </SelectItem>
               ))}
-          </select>
-        </label>
-      )}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
     </div>
   );
 }

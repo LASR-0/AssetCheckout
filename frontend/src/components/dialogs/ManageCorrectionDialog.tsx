@@ -944,7 +944,7 @@ const INPUT =
   "w-full rounded-lg border border-modal-border bg-modal-surface px-3 py-2 text-sm text-modal-text-primary placeholder:text-info-light/60 focus:outline-none focus:border-status-correction";
 
 const PRIMARY_BTN =
-  "w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
+  "w-full sm:w-auto px-8 py-3.5 rounded-lg text-white font-bold text-sm twilight-gradient shadow-brand hover:opacity-90 hover:cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 inline-flex items-center justify-center gap-2";
 
 // Outline red with a soft fill on hover — the same destructive treatment
 // ReviewQuoteDialog uses, and now the single one across the request table.

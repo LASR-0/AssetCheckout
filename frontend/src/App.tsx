@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import RequestFormPage from "@/pages/RequestFormPage";
 import AccessoryRequestFormPage from "@/pages/AccessoryFormPage";
@@ -14,8 +15,16 @@ import TroubleshootingPage from "./pages/TroubleshootingPage";
 import TroubleshootingArticlePage from "./pages/TroubleshootingArticlePage";
 import { TROUBLESHOOTING_ROUTES } from "./lib/troubleshootingRoutes";
 import Footer from "./components/footer/Footer";
+import { syncOrgPreset } from "./hooks/usePreset";
 
 function App() {
+  // Once, at boot. The palette the org defaults to has to reach everybody, and
+  // the picker that would otherwise fetch it only mounts on the Settings page.
+  // It never overrides somebody's own choice — see syncOrgPreset.
+  useEffect(() => {
+    void syncOrgPreset();
+  }, []);
+
   return (
     <>
       <Navbar />

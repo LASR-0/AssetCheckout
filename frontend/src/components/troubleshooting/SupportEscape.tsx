@@ -145,7 +145,7 @@ export function SupportEscapeSection({
           <a
             href={callHref(config.supportPhone)}
             onClick={() => escape("called")}
-            className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-[0_4px_12px_rgba(80,37,186,0.3)] hover:opacity-90 active:scale-95 transition-all"
+            className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-brand hover:opacity-90 active:scale-95 transition-all"
           >
             <span className="material-symbols-outlined !text-[18px]">call</span>
             Call IT support
