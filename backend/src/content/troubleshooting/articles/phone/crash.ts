@@ -26,7 +26,7 @@ const crash: Article = {
   symptomId: "crash",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "Force closing and reopening fixes most of these. If it's a work app, the problem is usually the sign-in behind it rather than the app itself.",
+    "Force closing and reopening fixes most of these. If it's a work app; the problem is usually the sign-in behind it rather than the app itself.",
   timeEstimate: "About 15 minutes",
   appliesTo: "All KSB company {devices}",
   updated: "2026-08-11",
@@ -47,16 +47,16 @@ const crash: Article = {
     },
     {
       title: "Restart the {device}",
-      body: "Power it fully off, wait ten seconds, and power it back on. Worth doing before anything more drastic — it costs a minute and clears the case where the {device} rather than the app is the problem.",
+      body: "Power it fully off, wait ten seconds, and power it back on. Worth doing before anything more drastic; it costs a minute and clears the case where the {device} rather than the app is the problem.",
     },
     {
       title: "Update the app, then the {device}",
-      body: "Check the App Store or Play Store for an update to the app first — a crash on launch after a {device} update is usually an app waiting for its own. Then check for an OS update: on an iPhone, Settings › General › Software Update; on a Samsung, Settings › Software update › Download and install.",
+      body: "Check the App Store or Play Store for an update to the app first; a crash on launch after a {device} update is usually an app waiting for its own. Then check for an OS update: on an iPhone, Settings › General › Software Update; on a Samsung, Settings › Software update › Download and install.",
     },
     {
       title: "Delete the app and install it again",
-      body: "This resolves nearly everything the steps above don't. Hold the app icon, remove it, then install it fresh from the App Store or Play Store — nothing is blocked on a KSB phone, so you don't need approval to reinstall something you already had.",
-      warn: "Anything the app stored on the {device} and never synced goes with it — draft notes, offline files, local settings. If the app holds something you can't afford to lose and you can't open it to check, contact IT before doing this rather than after.",
+      body: "This resolves nearly everything the steps above don't. Hold the app icon, remove it, then install it fresh from the App Store or Play Store; nothing is blocked on a KSB phone, so you don't need approval to reinstall something you already had.",
+      warn: "Anything the app stored on the {device} and never synced goes with it; draft notes, offline files, local settings. If the app holds something you can't afford to lose and you can't open it to check, contact IT before doing this rather than after.",
       branch: {
         label: "I'm not sure how to install it again",
         targetSymptomId: "install-app",
@@ -72,7 +72,7 @@ const crash: Article = {
     },
     {
       title: "Still crashing? Contact IT",
-      body: "Tell them which app, whether it ever worked, and whether anything changed just before — a {device} update, an app update, a password change. Those answers point at completely different causes, and the last one in particular is fixed centrally rather than on your handset.",
+      body: "Tell them which app, whether it ever worked, and whether anything changed just before, a {device} update, an app update, a password change. Those answers point at completely different causes, and the last one in particular is fixed centrally rather than on your handset.",
     },
   ],
 };

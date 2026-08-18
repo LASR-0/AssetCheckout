@@ -291,9 +291,13 @@ describe("an archived article", () => {
       deletedBy: null,
     });
 
-    expect(source).toContain("never published");
-    expect(source).not.toContain("Reason given");
-    expect(source).not.toContain(" by ");
+    // Scoped to the header, because the article's own prose is real content
+    // and may legitimately contain any of these words.
+    const header = source.slice(0, source.indexOf("const "));
+
+    expect(header).toContain("never published");
+    expect(header).not.toContain("Reason given");
+    expect(header).not.toContain(" by ");
   });
 });
 
@@ -346,5 +350,55 @@ describe("block order", () => {
     };
 
     expect(await articlesDiffer(base, reordered)).toBe(true);
+  });
+});
+
+describe("external links", () => {
+  ///  The block exists because step bodies are plain text — a Teams deep link
+  ///  written into prose is unreadable and unclickable. Its URL reaches an
+  ///  `href`, and it is admin-editable, so the scheme check is a security
+  ///  property rather than tidiness.
+
+  const withLink = (url: string): unknown => ({
+    symptomId: "linked",
+    subjectKeys: ["ess"],
+    summary: "s",
+    timeEstimate: "t",
+    appliesTo: "a",
+    updated: "2026-08-18",
+    before: [],
+    steps: [{ title: "x", body: "y", link: { label: "Message Sue", url } }],
+  });
+
+  it("accepts http and https", () => {
+    expect(articleSchema.safeParse(withLink("https://teams.microsoft.com/l/chat/19:a@b/c")).success).toBe(true);
+    expect(articleSchema.safeParse(withLink("http://itsp.intern.ksb.com/x")).success).toBe(true);
+  });
+
+  it("refuses schemes that would execute", () => {
+    // `z.url()` alone accepts these, and this string is rendered into an href.
+    expect(articleSchema.safeParse(withLink("javascript:alert(1)")).success).toBe(false);
+    expect(articleSchema.safeParse(withLink("data:text/html,<script>")).success).toBe(false);
+  });
+
+  it("refuses anything that isn't a web address", () => {
+    expect(articleSchema.safeParse(withLink("ftp://example.com/a")).success).toBe(false);
+    expect(articleSchema.safeParse(withLink("not-a-url")).success).toBe(false);
+  });
+
+  it("round-trips through the serialiser", async () => {
+    const article = articleSchema.parse(withLink("https://example.com/a?b=c#d"));
+    const source = await serialiseArticle(article);
+
+    expect(source).toContain("link:");
+    expect(articleSchema.parse(evaluate(source))).toEqual(article);
+  });
+
+  it("is absent from every module written before it existed", async () => {
+    // The key is last in STEP_KEYS for exactly this reason — the sixty
+    // existing articles must still emit byte-for-byte.
+    for (const article of articles.slice(0, 12)) {
+      expect(await serialiseArticle(authored(article))).not.toContain("link: {");
+    }
   });
 });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import EditableText from "./EditableText";
 import FigureEditor from "./FigureEditor";
 import BranchEditor from "./BranchEditor";
+import LinkEditor from "./LinkEditor";
 import BlockRow, {
   RailLabel,
   BLOCK_STYLES,
@@ -98,7 +99,7 @@ export default function StepEditor({
   const blocks = orderedBlocks(step);
 
   /** What this step does not have yet, in the order the Insert row offers it. */
-  const available = (["note", "warn", "figure", "branch"] as const).filter(
+  const available = (["note", "warn", "figure", "branch", "link"] as const).filter(
     (kind) => step[kind] === undefined
   );
 
@@ -227,6 +228,13 @@ export default function StepEditor({
               />
             )}
 
+            {kind === "link" && (
+              <LinkEditor
+                link={step.link}
+                onChange={(link) => set("link", link)}
+              />
+            )}
+
             {kind === "branch" && (
               <BranchEditor
                 branch={step.branch}
@@ -264,7 +272,9 @@ export default function StepEditor({
    * `targetSymptomId` is a slug and "" is not one.
    */
   function add(kind: BlockKind) {
-    if (kind === "figure") {
+    if (kind === "link") {
+      set("link", { label: "", url: "" });
+    } else if (kind === "figure") {
       set("figure", { caption: "" });
     } else if (kind === "branch") {
       set("branch", {

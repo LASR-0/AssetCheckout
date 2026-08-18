@@ -11,6 +11,7 @@ import {
   getTroubleshootingConfig,
   createArticleDraft,
 } from "@/api/troubleshooting";
+import FigureLightbox from "@/components/troubleshooting/FigureLightbox";
 import { orderedBlocks } from "@/lib/troubleshootingBlocks";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useViewState } from "@/hooks/useViewState";
@@ -136,19 +137,36 @@ const FIGURE_WIDTH_PAIRED = {
  */
 function FigureShot({ image, className }: { image: FigureImage; className: string }) {
   const { resolvedTheme } = useTheme();
-  const src = resolvedTheme === "dark" && image.srcDark ? image.srcDark : image.src;
+  const [expanded, setExpanded] = useState(false);
+  const src = `/troubleshooting/${
+    resolvedTheme === "dark" && image.srcDark ? image.srcDark : image.src
+  }`;
 
   return (
-    <img
-      src={`/troubleshooting/${src}`}
-      // Empty alt on purpose: the figcaption below carries the same words, and
-      // a screen reader would otherwise announce them once per picture. The
-      // caption is the accessible description — see schema.ts, where it is
-      // required and the images are not.
-      alt=""
-      className={className}
-      loading="lazy"
-    />
+    <>
+      {/* A button rather than a click handler on the image: this is a real
+          action, and it should be reachable by keyboard and announced as
+          something you can press. */}
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        aria-label="Show this screenshot full size"
+        className="cursor-zoom-in appearance-none border-0 bg-transparent p-0 text-left"
+      >
+        <img
+          src={src}
+          // Empty alt on purpose: the figcaption below carries the same words,
+          // and a screen reader would otherwise announce them once per
+          // picture. The caption is the accessible description — see
+          // schema.ts, where it is required and the images are not.
+          alt=""
+          className={className}
+          loading="lazy"
+        />
+      </button>
+
+      {expanded && <FigureLightbox src={src} onClose={() => setExpanded(false)} />}
+    </>
   );
 }
 
@@ -163,14 +181,31 @@ function StepFigure({ figure }: { figure: Figure }) {
   // `flex-wrap` rather than a fixed two-column grid: on a narrow screen a
   // phone screenshot cut to half width is unreadable, so they stack instead.
   const many = images.length > 1;
-  const width = many
-    ? FIGURE_WIDTH_PAIRED[figure.size ?? "flyout"]
-    : FIGURE_WIDTH[figure.size ?? "flyout"];
+
+  // A PAIR AT FULL SIZE STACKS INSTEAD. "Full" means the picture needs the
+  // whole column to be readable — a whole-screen capture — so putting two of
+  // them side by side halves the one thing the size was asked for. Every
+  // other size pairs horizontally, where two half-width shots still read as
+  // one illustration.
+  const size = figure.size ?? "flyout";
+  const stacked = many && size === "full";
+
+  const width = stacked
+    ? FIGURE_WIDTH.full
+    : many
+      ? FIGURE_WIDTH_PAIRED[size]
+      : FIGURE_WIDTH[size];
 
   return (
     <figure className="flex flex-col gap-2">
       {images.length > 0 && (
-        <div className="flex flex-wrap items-start gap-3">
+        <div
+          className={
+            stacked
+              ? "flex flex-col items-start gap-3"
+              : "flex flex-wrap items-start gap-3"
+          }
+        >
           {images.map((image) => (
             <FigureShot
               key={image.src}
@@ -268,6 +303,24 @@ function StepBlock({
               );
             case "figure":
               return <StepFigure key="figure" figure={step.figure!} />;
+            case "link":
+              // Opened in a new tab: these leave the library entirely — a
+              // Teams chat, a service portal — and a reader part-way through
+              // a set of steps should come back to find their place intact.
+              return (
+                <a
+                  key="link"
+                  href={step.link!.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-block-link/40 bg-block-link/5 px-3.5 py-2 text-sm font-semibold text-block-link transition-colors hover:bg-block-link/10"
+                >
+                  <span className="material-symbols-outlined !text-[18px]">
+                    open_in_new
+                  </span>
+                  {step.link!.label}
+                </a>
+              );
             case "branch":
               // The exit for when this step reveals the real problem is a
               // different symptom. Branches may point at another device, so

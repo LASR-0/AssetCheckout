@@ -37,7 +37,7 @@ const installApp: Article = {
   symptomId: "install-app",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "Nothing is blocked on a KSB phone — you can install anything you like straight from the App Store or Play Store. The company catalogue is only for apps you sign into with your KSB account.",
+    "Nothing is blocked on a KSB phone; you can install anything you like straight from the App Store or Play Store. The company catalogue is only for apps you sign into with your KSB account.",
   timeEstimate: "About 5 minutes",
   appliesTo: "All KSB company {devices}",
   updated: "2026-08-11",
@@ -46,12 +46,12 @@ const installApp: Article = {
     {
       title: "For most apps, just install them from the store",
       body: "The App Store and the Play Store both work normally on a KSB phone. Nothing is blocked, you don't need approval, and you don't need to ask IT. If you want a maps app, a translation app or anything else that helps you do your job, go and get it.",
-      note: "This is the part that surprises people, because laptops work the other way round — the Microsoft Store is blocked there and software comes through Company Portal. {Devices} do not work like that.",
+      note: "This is the part that surprises people, because laptops work the other way round; the Microsoft Store is blocked there and software comes through Company Portal. {Devices} do not work like that.",
     },
     {
       title: "For company apps, open your company catalogue",
-      body: "Apps that use your KSB account — the ones IT has bundled into the company profile — are listed in a catalogue on the {device}. It shows you which apps those are and sends you to the store to download them. It is a list, not an installer, so expect to be handed off to the App Store or Play Store to finish the job.",
-      note: "You will have one of two apps, never both. {Devices} provisioned since the move to Apple Business Manager have Company Portal; everything enrolled before it has At Work, where the list is under Apps Catalog. If you have neither, skip to the last step — the {device} isn't on the company profile.",
+      body: "Apps that use your KSB account; the ones IT has bundled into the company profile, are listed in a catalogue on the {device}. It shows you which apps those are and sends you to the store to download them. It is a list, not an installer, so expect to be handed off to the App Store or Play Store to finish the job.",
+      note: "You will have one of two apps, never both. {Devices} provisioned since the move to Apple Business Manager have Company Portal; everything enrolled before it has At Work, where the list is under Apps Catalog. If you have neither, skip to the last step, the {device} isn't on the company profile.",
       figure: {
         images: [
           {
@@ -59,7 +59,7 @@ const installApp: Article = {
             srcDark: "phone/install-app/Mobile-companyportal-dark.jpg",
           },
         ],
-        caption: "Company Portal › Apps — or At Work › Apps Catalog",
+        caption: "Company Portal › Apps, or At Work › Apps Catalog",
       },
     },
     {

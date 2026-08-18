@@ -36,7 +36,7 @@ const cannotOpenFileType: Article = {
     {
       title: "Open Company Portal",
       body: "Press the Start button and type Company Portal, then open it. It is already installed on every managed laptop.",
-      note: "Company Portal is where approved software lives. You don't need to download VLC from the internet, and it's worth not doing — search results for media players are a well-known way to pick up something you didn't want.",
+      note: "Company Portal is where approved software lives. You don't need to download VLC from the internet, and it's worth not doing; search results for media players are a well-known way to pick up something you didn't want.",
       figure: {
         images: [
           {
@@ -50,7 +50,7 @@ const cannotOpenFileType: Article = {
     },
     {
       title: "Search for VLC and install it",
-      body: "Type VLC into the search box at the top. VLC Media Player comes back as the only result — open it and choose Install. It installs on its own and needs no admin rights.",
+      body: "Type VLC into the search box at the top. VLC Media Player comes back as the only result; open it and choose Install. It installs on its own and needs no admin rights.",
       figure: {
         images: [
           {
@@ -65,7 +65,7 @@ const cannotOpenFileType: Article = {
     {
       title: "Open the file with VLC, and choose Always",
       body: "Right-click the file and choose Open with › Choose another app. Pick VLC media player from the list, then click Always at the bottom. The file opens, and every file of that type opens in VLC from then on.",
-      note: "Always and Just once sit side by side, and Just once is the trap — it opens this file and leaves the next one just as stuck. Always is what makes this a one-off job.",
+      note: "Always and Just once sit side by side, and Just once is the trap; it opens this file and leaves the next one just as stuck. Always is what makes this a one-off job.",
       figure: {
         images: [
           {

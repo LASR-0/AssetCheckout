@@ -33,20 +33,20 @@ const notCompliant: Article = {
   symptomId: "not-compliant",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "Compliance here means one thing only — whether your operating system is up to date. Installing the latest update fixes almost every case of this.",
+    "Compliance here means one thing only; whether your operating system is up to date. Installing the latest update fixes almost every case of this.",
   timeEstimate: "About 30 minutes, mostly waiting for the update",
   appliesTo: "All KSB company {devices}",
   updated: "2026-08-11",
   before: [
     "The device is on charge, or has plenty of battery",
-    "You are on Wi-Fi — an OS update is a large download",
+    "You are on Wi-Fi; an OS update is a large download",
   ],
   steps: [
     {
       title: "Install the latest operating system update",
       body: "This is the fix. On an iPhone or iPad: Settings › General › Software Update. On a Samsung: Settings › Software update › Download and install. Install whatever it offers and let the device restart itself.",
-      note: "Your device has to be running a version inside the range KSB approves, and that range moves forward over time. A device that was compliant last month can fall out of it without anything changing on your end — you haven't done anything wrong, and it isn't a sign the device is faulty.",
-      warn: "Don't interrupt it once it starts. Leave it on charge and on Wi-Fi until it has finished restarting — an update stopped part-way through is a much bigger problem than the one you started with.",
+      note: "Your device has to be running a version inside the range KSB approves, and that range moves forward over time. A device that was compliant last month can fall out of it without anything changing on your end; you haven't done anything wrong, and it isn't a sign the device is faulty.",
+      warn: "Don't interrupt it once it starts. Leave it on charge and on Wi-Fi until it has finished restarting; an update stopped part-way through is a much bigger problem than the one you started with.",
       figure: {
         images: [
           {
@@ -59,13 +59,13 @@ const notCompliant: Article = {
           },
         ],
         caption:
-          "Settings › General › Software Update — or Settings › Software update › Download and install",
+          "Settings › General › Software Update, or Settings › Software update › Download and install",
       },
     },
     {
       title: "Let your compliance app check again",
-      body: "Once the device has restarted, open Company Portal or At Work — whichever one you have — and let it refresh. It re-runs the check and should report the device as compliant within a few minutes. You don't have to do anything else.",
-      note: "You will have one of those two apps, never both, and which one depends on when the device was set up. If you have neither, the device was never added to the company profile, which is an IT job rather than something you can fix.",
+      body: "Once the device has restarted, open Company Portal or At Work, whichever one you have, and let it refresh. It re-runs the check and should report the device as compliant within a few minutes. You don't have to do anything else.",
+      note: "You will have one of those two apps, never both, and which one depends on when the device was set up. If you have neither; the device was never added to the company profile, which is an IT job rather than something you can fix.",
       branch: {
         label: "The app won't let me sign in",
         targetSymptomId: "portal",
@@ -73,7 +73,7 @@ const notCompliant: Article = {
     },
     {
       title: "No updates available? Take it to IT for a replacement",
-      body: "If Software Update says the device is already up to date but it is still reported as non-compliant, the device has reached the end of its supported life. The vendor has stopped issuing updates for it, so it cannot reach the version that is required — there is nothing you or IT can install to change that. Take it in and you'll be issued a replacement.",
+      body: "If Software Update says the device is already up to date but it is still reported as non-compliant; the device has reached the end of its supported life. The vendor has stopped issuing updates for it, so it cannot reach the version that is required; there is nothing you or IT can install to change that. Take it in and you'll be issued a replacement.",
       note: "Worth doing sooner rather than later. Nothing breaks the moment a device falls out of compliance, but access to company apps and data is what compliance gates, so it will start getting in your way.",
     },
   ],

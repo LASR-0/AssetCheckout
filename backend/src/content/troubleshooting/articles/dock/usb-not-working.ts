@@ -40,8 +40,8 @@ const dockUsbNotWorking: Article = {
     {
       title:
         "Try another port on the dock, then plug the device into the laptop",
-      body: "Move the device to a different USB port on the dock. If it works there, one port has failed and the dock is otherwise fine. If it fails on every dock port, plug it straight into a USB port on the laptop — if it works there, the problem is the dock; if it fails there too, the problem is the device.",
-      note: "Worth doing in that order, and worth actually doing both halves. This is the difference between IT replacing a dock, replacing a mouse, or looking at your laptop — and it is thirty seconds of your time.",
+      body: "Move the device to a different USB port on the dock. If it works there, one port has failed and the dock is otherwise fine. If it fails on every dock port, plug it straight into a USB port on the laptop. If it works there; the problem is the dock; if it fails there too; the problem is the device.",
+      note: "Worth doing in that order, and worth actually doing both halves. This is the difference between IT replacing a dock, replacing a mouse, or looking at your laptop, and it is thirty seconds of your time.",
     },
     {
       title: "Power-cycle the dock",
@@ -53,13 +53,13 @@ const dockUsbNotWorking: Article = {
     },
     {
       title: "Unplug anything power-hungry and try again",
-      body: "Portable hard drives, phone chargers and USB fans all draw their power from the port. Several at once — or one greedy one — can pull the dock's USB side past what it will supply, and the ports shut down while the screens and ethernet carry on working normally. Unplug everything, test one device on its own, and add the rest back one at a time.",
+      body: "Portable hard drives, phone chargers and USB fans all draw their power from the port. Several at once, or one greedy one, can pull the dock's USB side past what it will supply, and the ports shut down while the screens and ethernet carry on working normally. Unplug everything, test one device on its own, and add the rest back one at a time.",
       note: "This is worth a minute even if nothing you have plugged in looks demanding. It explains the otherwise baffling case where USB stops working and everything else on the dock is fine.",
     },
     {
       title:
         "Update the dock firmware with Lenovo Commercial Vantage, then restart",
-      body: "Open Lenovo Commercial Vantage from the Start menu, let it check for updates, and install anything it offers — dock firmware included. Then restart the laptop from the Start menu rather than closing the lid, and leave the dock connected while you do.",
+      body: "Open Lenovo Commercial Vantage from the Start menu, let it check for updates, and install anything it offers; dock firmware included. Then restart the laptop from the Start menu rather than closing the lid, and leave the dock connected while you do.",
       note: "Vantage is only on Lenovo machines, which is every laptop here and the ThinkCentre desktops. Restart even if it offers nothing: that alone reloads the USB controller and resolves a fair share of these.",
       figure: {
         images: [
@@ -74,7 +74,7 @@ const dockUsbNotWorking: Article = {
     },
     {
       title: "Still nothing? Contact IT",
-      body: "Tell them whether the device worked when plugged directly into the laptop, and whether every dock port failed or only one. Those two answers are the whole diagnosis and decide whether it is the dock, the device or the laptop that needs attention.",
+      body: "Tell them whether the device worked when plugged directly into the laptop, and whether every dock port failed or only one. Those two answers are the whole diagnosis and decide whether it is the dock; the device or the laptop that needs attention.",
     },
   ],
 };

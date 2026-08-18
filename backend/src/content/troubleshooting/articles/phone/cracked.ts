@@ -32,17 +32,12 @@ const cracked: Article = {
   symptomId: "cracked",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "There's nothing to repair yourself — bring the {device} back to IT and it gets replaced. This is what to do in the meantime and what to have ready when you hand it over.",
+    "There's nothing to repair yourself; bring the {device} back to IT and it gets replaced. This is what to do in the meantime and what to have ready when you hand it over.",
   timeEstimate: "About 10 minutes",
   appliesTo: "All KSB company {devices}",
-  updated: "2026-08-11",
+  updated: "2026-08-17",
   before: [],
   steps: [
-    {
-      title: "Stop holding it against your face if the glass is shattered",
-      body: "Use speakerphone or a headset until it's replaced. Cracked screens shed fine slivers of glass that you won't see and won't feel until they're in your ear or cheek.",
-      warn: "If the glass is lifting, bulging or separating from the frame, stop using the {device} altogether and bring it in today. A swelling battery pushes the screen out from behind, and that is the one version of this fault that gets worse rather than staying put.",
-    },
     {
       title: "Work out whether it still does its job",
       body: "Can you make a call, read email, and unlock it? A {device} with a cracked corner that works perfectly can wait until you're next in the office. One that won't unlock, won't charge, or has dead patches under the crack can't, and it's worth saying which when you get in touch.",
@@ -53,12 +48,12 @@ const cracked: Article = {
     },
     {
       title: "Make sure nothing important lives only on this phone",
-      body: "Your KSB email, Teams messages and files are in your account rather than on the handset, so they arrive on the replacement by themselves — there is nothing to move. Personal photos and anything saved locally by an app are the exception. If the screen still works well enough, check those are backed up before you hand it over.",
+      body: "Your KSB email, Teams messages and files are in your account rather than on the handset, so they arrive on the replacement by themselves; there is nothing to move. Personal photos and anything saved locally by an app are the exception. If the screen still works well enough, check those are backed up before you hand it over.",
       note: "Don't factory reset it or sign yourself out before bringing it in. IT handles the wipe as part of the swap, and doing it early only makes the handover slower.",
     },
     {
       title: "Bring it to IT and they'll replace it",
-      body: "Hand the {device} in and tell them roughly what happened and when. Bring the charger and cable if you have them. You aren't in trouble — screens break, this is a routine swap, and the sooner it's in the sooner the replacement is set up.",
+      body: "Hand the {device} in and tell them roughly what happened and when. Bring the charger and cable if you have them. You aren't in trouble; screens break, this is a routine swap, and the sooner it's in the sooner the replacement is set up.",
       note: "If you're at another site or working from home, get in touch first rather than posting it. They'll tell you how they want it sent and can start setting up the replacement before it arrives.",
     },
   ],

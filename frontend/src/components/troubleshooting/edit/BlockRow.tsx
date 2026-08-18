@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { BlockKind } from "@/lib/troubleshootingBlocks";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +33,11 @@ import {
 //  came to nine targets per step competing with the text for attention.
 ///  +-----------------------------------------------------------------+
 
-/** The four things a step can carry, and how each announces itself. */
-export type BlockKind = "note" | "warn" | "figure" | "branch";
+/** Re-exported so callers can take the type and the styles from one import;
+ *  DEFINED in lib/troubleshootingBlocks, which also owns the ordering. Two
+ *  declarations meant adding a kind updated one and silently missed the
+ *  other. */
+export type { BlockKind } from "@/lib/troubleshootingBlocks";
 
 /**
  * Every class WRITTEN OUT IN FULL, never composed at runtime.
@@ -89,6 +93,16 @@ export const BLOCK_STYLES: Record<BlockKind, Style> = {
     tint: "bg-block-figure/10",
     insert:
       "text-block-figure border-block-figure/40 hover:bg-block-figure/10 hover:border-block-figure",
+  },
+  link: {
+    label: "External link",
+    icon: "open_in_new",
+    hint: "Leaves the library",
+    accent: "text-block-link",
+    spine: "border-l-block-link",
+    tint: "bg-block-link/10",
+    insert:
+      "text-block-link border-block-link/40 hover:bg-block-link/10 hover:border-block-link",
   },
   branch: {
     label: "Article link",

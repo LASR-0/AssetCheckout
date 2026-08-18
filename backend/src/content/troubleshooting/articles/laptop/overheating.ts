@@ -14,7 +14,7 @@ const overheating: Article = {
   symptomId: "overheating",
   subjectKeys: ["laptop"],
   summary:
-    "Laptops run warm, and hot under heavy use is normal. Blocked vents are the usual cause of anything worse — a laptop that is hot while doing nothing is the case worth reporting.",
+    "Laptops run warm, and hot under heavy use is normal. Blocked vents are the usual cause of anything worse; a laptop that is hot while doing nothing is the case worth reporting.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB Lenovo laptops",
   updated: "2026-08-10",
@@ -24,7 +24,7 @@ const overheating: Article = {
   steps: [
     {
       title: "Check the vents aren't blocked",
-      body: "Laptops draw air in underneath and push it out of the sides or back. On a bed, a cushion or a stack of paper, those vents are covered and the machine cooks itself. Move it onto a hard flat surface and see whether the fans settle within a few minutes.",
+      body: "Laptops draw air in underneath and push it out of the sides or back. On a bed, a cushion or a stack of paper; those vents are covered and the machine cooks itself. Move it onto a hard flat surface and see whether the fans settle within a few minutes.",
     },
     {
       title: "Take it off the charger briefly",
@@ -32,7 +32,7 @@ const overheating: Article = {
     },
     {
       title: "Close what you don't need, then restart",
-      body: "Video calls, large spreadsheets and dozens of browser tabs all keep the processor busy, and a busy processor is a hot one. Close what you are not using and restart the laptop — a process stuck in a loop will run a fan flat out indefinitely.",
+      body: "Video calls, large spreadsheets and dozens of browser tabs all keep the processor busy, and a busy processor is a hot one. Close what you are not using and restart the laptop; a process stuck in a loop will run a fan flat out indefinitely.",
     },
     {
       title: "Look at whether it's hot while idle",

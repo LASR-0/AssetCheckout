@@ -18,10 +18,10 @@ const vpnFromHome: Article = {
   symptomId: "vpn-from-home",
   subjectKeys: ["laptop", "desktop"],
   summary:
-    "Internal systems aren't on the public internet, so reaching them from home needs the VPN. Most things — email, Teams, SharePoint — don't, so it's worth checking before you connect.",
+    "Internal systems aren't on the public internet, so reaching them from home needs the VPN. Most things (email, Teams, SharePoint) don't, so it's worth checking before you connect.",
   timeEstimate: "About 2 minutes",
   appliesTo: "KSB Windows {devices}, away from the office",
-  updated: "2026-08-07",
+  updated: "2026-08-16",
   before: [
     "You are working away from a KSB office",
     "You have a working internet connection",
@@ -29,13 +29,13 @@ const vpnFromHome: Article = {
   steps: [
     {
       title: "Check whether you actually need the VPN",
-      body: "Only internal systems require it — the ones that aren't reachable from the public internet. The quickest test is the address: internal systems typically have .intern in the URL. Email, Teams, SharePoint and OneDrive all work without the VPN.",
+      body: "Only internal systems require it, the ones that aren't reachable from the public internet. The quickest test is the address: internal systems typically have .intern in the URL. Email, Teams, SharePoint and OneDrive all work without the VPN.",
       note: "If what you're trying to reach doesn't have .intern in its address, the VPN almost certainly isn't what's wrong, and connecting won't fix it.",
-      warn: "The VPN is slow — every request is routed through our parent company's firewall in Germany and back again. Connect when you need an internal site and disconnect when you're done. You don't need it for Citrix, and SAFEQ printing will not work at all while you are connected.",
+      warn: "The VPN is slow, every request is routed through our global company's firewall in Germany and back again. Connect when you need an internal site and disconnect when you're done. You don't need it for Citrix, and SAFEQ printing will not work at all while you are connected.",
     },
     {
       title: "Find the GlobalProtect icon",
-      body: "It lives in the hidden icon tray — click the small upward arrow at the right-hand end of the taskbar, next to the clock. Look for a globe.",
+      body: "It lives in the hidden icon tray; click the small upward arrow at the right-hand end of the taskbar, next to the clock. Look for a globe.",
       figure: {
         images: [
           {
@@ -59,7 +59,7 @@ const vpnFromHome: Article = {
     },
     {
       title: "Check it worked",
-      body: "The panel changes to Connected and names the gateway you have landed on. Open the internal site you were after — if it has .intern in the address and it now loads, you're through.",
+      body: "The panel changes to Connected and names the gateway you have landed on. Open the internal site you were after. If it has .intern in the address and it now loads, you're through.",
       figure: {
         images: [
           { src: "laptop/vpn-from-home/Globalprotect-connected-light.jpg" },

@@ -47,8 +47,8 @@ const portal: Article = {
   steps: [
     {
       title: "Test your password in a private browser window",
-      body: "Open a private or incognito window and sign in to office.com with your full @ksb.com email address and your usual password. In Safari, tap the tabs button then Private. In Chrome, tap ⋮ then New Incognito tab. In Samsung Internet, tap Tabs then Turn on Secret mode. If office.com rejects the password, that is your answer — the app is fine and the password is the problem.",
-      note: "It has to be a private window. In an ordinary one you are almost certainly still signed in from earlier, so it will let you straight through without ever asking for your password — which tells you nothing about the one that just failed. A password that has recently expired or been changed fails here in exactly the same way it fails in the app.",
+      body: "Open a private or incognito window and sign in to office.com with your full @ksb.com email address and your usual password. In Safari, tap the tabs button then Private. In Chrome, tap ⋮ then New Incognito tab. In Samsung Internet, tap Tabs then Turn on Secret mode. If office.com rejects the password, that is your answer; the app is fine and the password is the problem.",
+      note: "It has to be a private window. In an ordinary one you are almost certainly still signed in from earlier, so it will let you straight through without ever asking for your password, which tells you nothing about the one that just failed. A password that has recently expired or been changed fails here in exactly the same way it fails in the app.",
       figure: {
         images: [
           {
@@ -56,7 +56,7 @@ const portal: Article = {
             srcDark: "phone/portal/Mobile-privatebrowser-dark.jpg",
           },
         ],
-        caption: "Safari › Tabs › Private — or Chrome › ⋮ › New Incognito tab",
+        caption: "Safari › Tabs › Private, or Chrome › ⋮ › New Incognito tab",
       },
     },
     {
@@ -66,7 +66,7 @@ const portal: Article = {
     },
     {
       title: "Still won't sign in? Take it to IT",
-      body: "If the password works at office.com and your connection is fine, the problem is with the account or with how the device was enrolled — neither of which is visible from where you are standing, and neither of which you can fix. Take the device in and tell them the password worked in a private browser window. That one sentence saves them repeating everything you have already done.",
+      body: "If the password works at office.com and your connection is fine; the problem is with the account or with how the device was enrolled; neither of which is visible from where you are standing, and neither of which you can fix. Take the device in and tell them the password worked in a private browser window. That one sentence saves them repeating everything you have already done.",
     },
   ],
 };

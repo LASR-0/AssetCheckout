@@ -39,7 +39,7 @@ const droppedCalls: Article = {
   steps: [
     {
       title: "Ask someone standing near you whether their calls work",
-      body: "If a colleague on Telstra in the same spot also has one bar, the problem is coverage and not your handset — and nothing you do to the {device} will change it. This costs five seconds and settles the question outright.",
+      body: "If a colleague on Telstra in the same spot also has one bar; the problem is coverage and not your handset, and nothing you do to the {device} will change it. This costs five seconds and settles the question outright.",
       note: "It has to be Telstra to prove anything. Another carrier working tells you about their network, not ours.",
     },
     {
@@ -58,7 +58,7 @@ const droppedCalls: Article = {
           },
         ],
         caption:
-          "Settings › Apps › Phone › Wi-Fi Calling — or Settings › Connections › Wi-Fi Calling",
+          "Settings › Apps › Phone › Wi-Fi Calling, or Settings › Connections › Wi-Fi Calling",
       },
       branch: {
         label: "I'm not connected to KSB-Mobile Wi-Fi",
@@ -79,7 +79,7 @@ const droppedCalls: Article = {
     },
     {
       title: "Still dropping? Contact IT",
-      body: "Tell them where it happens, whether a colleague's Telstra phone has the same trouble there, and whether the {device} shows any bars at all when it drops. A dead spot is something to plan around, a handset that drops calls everywhere is a fault, and a {device} showing no service at all is usually the SIM or the plan.",
+      body: "Tell them where it happens, whether a colleague's Telstra phone has the same trouble there, and whether the {device} shows any bars at all when it drops. A dead spot is something to plan around; a handset that drops calls everywhere is a fault, and a {device} showing no service at all is usually the SIM or the plan.",
       branch: {
         label: "I have no mobile data either (Samsung)",
         targetSymptomId: "no-data-samsung",
@@ -87,7 +87,7 @@ const droppedCalls: Article = {
     },
   ],
   source: {
-    name: "Telstra — Fix an issue with my mobile device",
+    name: "Telstra; Fix an issue with my mobile device",
     url: "https://www.telstra.com.au/support/mobiles-devices/fix-troubleshoot-mobile",
   },
 };

@@ -28,13 +28,13 @@ const taskbarNotResponding: Article = {
   appliesTo: "KSB {devices}",
   updated: "2026-08-10",
   before: [
-    "The rest of the {device} still responds — you can switch between open windows with Alt + Tab",
+    "The rest of the {device} still responds; you can switch between open windows with Alt + Tab",
   ],
   steps: [
     {
       title: "Try opening Task Manager with Ctrl + Shift + Escape",
       body: "Hold all three together. If Task Manager opens, go to the Processes tab and type explorer into the search box at the top to narrow the list down. Right-click Windows Explorer and choose Restart. The taskbar disappears for a second and comes back working, with everything you had open still open.",
-      note: "If nothing happens, you are not doing it wrong. Most staff need to request permission before Task Manager will open — skip to the next step, which works for everyone.",
+      note: "If nothing happens, you are not doing it wrong. Most staff need to request permission before Task Manager will open; skip to the next step, which works for everyone.",
       figure: {
         images: [
           {
@@ -50,7 +50,7 @@ const taskbarNotResponding: Article = {
     },
     {
       title: "Restart the {device}",
-      body: "This is the reliable fix and needs no special permission. Save anything open first, then restart from the Start menu if you can reach it — or hold the power button for about ten seconds, then press it again.",
+      body: "This is the reliable fix and needs no special permission. Save anything open first, then restart from the Start menu if you can reach it, or hold the power button for about ten seconds, then press it again.",
       warn: "Save your work before you restart. If the taskbar is frozen you may not be able to reach the Start menu, and holding the power button is a forced shutdown that loses anything unsaved.",
     },
   ],

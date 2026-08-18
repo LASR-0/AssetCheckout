@@ -92,6 +92,15 @@ import phoneMic from "./articles/phone/mic.js";
 import phoneCamera from "./articles/phone/camera.js";
 import phoneNotCompliant from "./articles/phone/not-compliant.js";
 import phonePortal from "./articles/phone/portal.js";
+import onedriveDiskSpace from "./articles/onedrive/disk-space.js";
+import onedriveShortcutNotWorking from "./articles/onedrive/shortcut-not-working.js";
+import onedriveShareLargeFile from "./articles/onedrive/share-large-file.js";
+import onedriveReceiveLargeFile from "./articles/onedrive/receive-large-file.js";
+import sapUnlockAccount from "./articles/sap/unlock-account.js";
+import sapResetPassword from "./articles/sap/reset-password.js";
+import essAccountLocked from "./articles/ess/account-locked.js";
+import essTwoFactorCode from "./articles/ess/two-factor-code.js";
+import onedriveOnedriveNotSyncing from "./articles/onedrive/onedrive-not-syncing.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                 TROUBLESHOOTING REPOSITORY                      |
@@ -384,6 +393,15 @@ const ARTICLE_MODULES: unknown[] = [
   webcamNotInTeams,
   outlookEmailsNotArriving,
   outlookSlow,
+  onedriveDiskSpace,
+  onedriveShortcutNotWorking,
+  onedriveShareLargeFile,
+  onedriveReceiveLargeFile,
+  sapUnlockAccount,
+  sapResetPassword,
+  essAccountLocked,
+  essTwoFactorCode,
+  onedriveOnedriveNotSyncing,
 ];
 
 /**

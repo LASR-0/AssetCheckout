@@ -89,6 +89,12 @@ export type Figure = {
   caption: string;
 };
 
+/** A link to somewhere outside the troubleshooting library. */
+export type ExternalLink = {
+  label: string;
+  url: string;
+};
+
 export type Step = {
   title: string;
   body: string;
@@ -96,6 +102,9 @@ export type Step = {
   warn?: string;
   figure?: Figure;
   branch?: Branch;
+  /** A link out of the library — see linkSchema on the backend for why this
+   *  is a block rather than a URL written into `body`. */
+  link?: ExternalLink;
   /**
    * The order to show the optional blocks in, when it is not the default.
    *
@@ -104,7 +113,7 @@ export type Step = {
    * this directly. Absent means the default order, which is what every
    * article written before it existed relies on.
    */
-  blockOrder?: ("note" | "warn" | "figure" | "branch")[];
+  blockOrder?: ("note" | "warn" | "figure" | "branch" | "link")[];
 };
 
 export type Article = {

@@ -33,7 +33,7 @@ const noCharge: Article = {
   symptomId: "no-charge",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "Nearly always the cable, the plug or a port packed with pocket lint — very rarely the {device} itself. These steps rule those out in the order that costs you least.",
+    "Nearly always the cable, the plug or a port packed with pocket lint; very rarely the {device} itself. These steps rule those out in the order that costs you least.",
   timeEstimate: "About 15 minutes, plus an hour on charge",
   appliesTo: "All KSB company {devices}",
   updated: "2026-08-11",
@@ -56,11 +56,11 @@ const noCharge: Article = {
     {
       title: "Look inside the charging port",
       body: "Pocket lint compacts into a solid plug at the bottom of the port over months, and it stops the cable seating fully. Shine a light in and look at the very bottom. A cable that no longer clicks in firmly, or that works only when held at an angle, is this almost every time.",
-      warn: "Use a wooden toothpick gently, or a short burst of compressed air. Never anything metal — a paperclip, a pin or a SIM tool shorts the contacts, and that turns a free fix into a replacement handset. If you can see corrosion or any sign of liquid, stop and contact IT instead.",
+      warn: "Use a wooden toothpick gently, or a short burst of compressed air. Never anything metal, a paperclip, a pin or a SIM tool shorts the contacts, and that turns a free fix into a replacement handset. If you can see corrosion or any sign of liquid, stop and contact IT instead.",
     },
     {
       title: "Force restart it while it is plugged in",
-      body: "A device that has crashed can sit there not charging and not responding. On an iPhone or iPad: press and release volume up, press and release volume down, then hold the side button — the top button on an iPad — until the Apple logo appears. On a Samsung: hold the side button and volume down together for at least seven seconds, until it vibrates and the Samsung logo appears. Neither erases anything.",
+      body: "A device that has crashed can sit there not charging and not responding. On an iPhone or iPad: press and release volume up, press and release volume down, then hold the side button, the top button on an iPad, until the Apple logo appears. On a Samsung: hold the side button and volume down together for at least seven seconds, until it vibrates and the Samsung logo appears. Neither erases anything.",
       branch: {
         label: "It still won't turn on at all, even after charging",
         targetSymptomId: "wont-turn-on-ios",
@@ -68,11 +68,11 @@ const noCharge: Article = {
     },
     {
       title: "Still not charging? Contact IT",
-      body: "Tell them which of these you have already ruled out — especially whether a known-good cable made any difference, and whether it charges slowly rather than not at all. Those two answers are most of the diagnosis and decide whether it is a battery, a port or a charger.",
+      body: "Tell them which of these you have already ruled out, especially whether a known-good cable made any difference, and whether it charges slowly rather than not at all. Those two answers are most of the diagnosis and decide whether it is a battery, a port or a charger.",
     },
   ],
   source: {
-    name: "Apple Support — If your iPhone or iPod touch won't charge",
+    name: "Apple Support. If your iPhone or iPod touch won't charge",
     url: "https://support.apple.com/en-us/108805",
   },
 };

@@ -25,14 +25,14 @@ const displayFlickering: Article = {
     "Flickering on an external screen is usually the cable or the refresh rate. Flickering on the computer's own screen is a different matter and needs looking at.",
   timeEstimate: "About 15 minutes",
   appliesTo: "KSB laptops and desktops",
-  updated: "2026-08-10",
+  updated: "2026-08-16",
   before: [
-    "You can tell which screen is flickering — the computer's own, or an external one",
+    "You can tell which screen is flickering, the computer's own, or an external one",
   ],
   steps: [
     {
       title: "Work out which screen is affected",
-      body: "If the computer's built-in screen flickers while external monitors are steady, the steps below won't help — that is the panel or its cable inside the machine, and it needs a hardware repair. Skip to the last step and contact IT.",
+      body: "If the computer's built-in screen flickers while external monitors are steady, the steps below won't help; that is the panel or its cable inside the machine, and it needs a hardware repair. Skip to the last step and contact IT.",
     },
     {
       title: "Reseat the cable at both ends",
@@ -43,13 +43,8 @@ const displayFlickering: Article = {
       body: "Swap in a known-working cable. This is the single most likely fix for a flickering external monitor, and a marginal cable often works fine for months before it starts.",
     },
     {
-      title: "Check the refresh rate",
-      body: "Open Display settings, scroll to Advanced display, select the affected screen, and look at the refresh rate. If several are offered, try the highest the monitor supports — and if it is already there and flickering, step down one and see whether it settles.",
-      figure: { caption: "Display settings › Advanced display › refresh rate" },
-    },
-    {
       title: "Update the graphics driver, then restart",
-      body: "Open Lenovo Commercial Vantage from the Start menu, install anything it offers, and restart. If the flickering started after an update, this is where a fix would arrive. Vantage is only on Lenovo machines — every laptop, and the ThinkCentre desktops. On a custom-built engineering PC there is no Vantage: use Settings › Windows Update instead, and if the machine has a dedicated graphics card, that card's own updater is where its display drivers come from.",
+      body: "Open Lenovo Commercial Vantage from the Start menu, install anything it offers, and restart. If the flickering started after an update, this is where a fix would arrive. Vantage is only on Lenovo machines, every laptop, and the ThinkCentre desktops. On a custom-built engineering PC there is no Vantage: use Settings › Windows Update instead, and if the machine has a dedicated graphics card; that card's own updater is where its display drivers come from.",
       figure: {
         images: [
           {

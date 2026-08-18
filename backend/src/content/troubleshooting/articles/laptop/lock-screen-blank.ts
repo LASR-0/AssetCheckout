@@ -24,12 +24,12 @@ const lockScreenBlank: Article = {
   appliesTo: "KSB {devices}",
   updated: "2026-08-10",
   before: [
-    "The {device} is switched on and the screen is lit — you can see the wallpaper",
+    "The {device} is switched on and the screen is lit; you can see the wallpaper",
   ],
   steps: [
     {
       title: "Check the screen is awake, not off",
-      body: "You should be able to see the wallpaper. Press a key or move the mouse first — if the screen stays completely black with no backlight, this is a different problem and the steps below won't help.",
+      body: "You should be able to see the wallpaper. Press a key or move the mouse first. If the screen stays completely black with no backlight, this is a different problem and the steps below won't help.",
       branch: {
         label: "The screen is completely black and won't wake",
         targetSymptomId: "wont-turn-on",
@@ -43,7 +43,7 @@ const lockScreenBlank: Article = {
     {
       title: "If the fields still don't appear, restart the {device}",
       body: "Hold the power button down for about ten seconds until the machine switches off, then press it again to start it up. The lock screen comes back normally.",
-      warn: "This is a forced shutdown, so anything unsaved in open applications is lost. It is the right move here — you can't reach those applications to save them anyway — but it is worth knowing before you hold the button.",
+      warn: "This is a forced shutdown, so anything unsaved in open applications is lost. It is the right move here, you can't reach those applications to save them anyway, but it is worth knowing before you hold the button.",
     },
   ],
 };

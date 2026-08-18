@@ -202,6 +202,38 @@ export const branchSchema = z.object({
   targetSubjectKey: subjectKeySchema.optional(),
 });
 
+/**
+ * A link out of the library.
+ *
+ * The sibling of `branch`: both are "press this and go somewhere", and they
+ * are separate fields because the destinations are nothing alike. A branch
+ * names a symptom this library owns and is checked at publish time against
+ * the taxonomy; this names an address it does not, and cannot be checked at
+ * all beyond its shape.
+ *
+ * IT EXISTS BECAUSE STEP BODIES ARE PLAIN TEXT. A URL written into `body`
+ * renders as characters — fine for filetransfer.ksb.com, useless for a Teams
+ * deep link carrying two GUIDs, which nobody can retype and which reads as
+ * line noise in the middle of a sentence.
+ */
+export const linkSchema = z.object({
+  /** What the button says. Written as the reader's intent, like a branch. */
+  label: z.string().min(1),
+  /**
+   * Where it goes.
+   *
+   * http and https only. `z.url()` alone would accept javascript: and data:,
+   * and this string is admin-editable and rendered into an href — which is
+   * exactly the shape of a stored cross-site scripting bug.
+   */
+  url: z
+    .url()
+    .refine(
+      (value) => /^https?:\/\//i.test(value),
+      "must be an http or https address"
+    ),
+});
+
 export const stepSchema = z.object({
   title: z.string().min(1),
   /** Prose. Markdown is permitted here; it is the only place it is. */
@@ -210,6 +242,7 @@ export const stepSchema = z.object({
   warn: z.string().min(1).optional(),
   figure: figureSchema.optional(),
   branch: branchSchema.optional(),
+  link: linkSchema.optional(),
   /**
    * The order the optional blocks are shown in, when it is not the default.
    *
@@ -229,13 +262,19 @@ export const stepSchema = z.object({
    * `orderedBlocks` treats it as a hint precisely so that a wrong entry can
    * never make content vanish.
    */
-  blockOrder: z.array(z.enum(["note", "warn", "figure", "branch"])).optional(),
+  blockOrder: z.array(z.enum(["note", "warn", "figure", "branch", "link"])).optional(),
 });
 
 /** The blocks a step can carry, in the order they are shown unless told
  *  otherwise. Exported so the reader, the editor and the schema cannot
  *  disagree about what "default" means. */
-export const DEFAULT_BLOCK_ORDER = ["note", "warn", "figure", "branch"] as const;
+export const DEFAULT_BLOCK_ORDER = [
+  "note",
+  "warn",
+  "figure",
+  "branch",
+  "link",
+] as const;
 
 export type BlockKind = (typeof DEFAULT_BLOCK_ORDER)[number];
 

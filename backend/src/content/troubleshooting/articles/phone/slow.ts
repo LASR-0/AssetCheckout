@@ -39,12 +39,12 @@ const slow: Article = {
   steps: [
     {
       title: "Restart it properly",
-      body: "Power it right off, wait ten seconds, and power it back on. Not lock and unlock — fully off. {Devices} go weeks or months between restarts and accumulate stuck background processes the whole time.",
+      body: "Power it right off, wait ten seconds, and power it back on. Not lock and unlock; fully off. {Devices} go weeks or months between restarts and accumulate stuck background processes the whole time.",
       note: "Worth doing even though it sounds like the thing support says to get rid of you. It fixes more of these than everything below it put together, and it costs a minute.",
     },
     {
       title: "Is it the whole device, or one app?",
-      body: "Open something simple — Settings, or the camera — and see whether that is slow too. If everything drags, keep going down this list. If the device is fine and one app is unusable, the problem is that app, and the rest of these steps won't touch it.",
+      body: "Open something simple (Settings, or the camera) and see whether that is slow too. If everything drags, keep going down this list. If the device is fine and one app is unusable; the problem is that app, and the rest of these steps won't touch it.",
       branch: {
         label: "It's one app, and it closes as soon as I open it",
         targetSymptomId: "crash",
@@ -65,7 +65,7 @@ const slow: Article = {
     },
     {
       title: "Check the battery isn't the real story",
-      body: "A device that is slow and also flat by mid-afternoon usually has one cause, not two — a worn battery, or an app burning through both at once. If that sounds familiar, the battery article is the more useful place to be.",
+      body: "A device that is slow and also flat by mid-afternoon usually has one cause, not two, a worn battery, or an app burning through both at once. If that sounds familiar; the battery article is the more useful place to be.",
       branch: {
         label: "The battery is draining fast too",
         targetSymptomId: "battery-drain-ios",
@@ -73,7 +73,7 @@ const slow: Article = {
     },
     {
       title: "Still slow? Contact IT",
-      body: "Tell them roughly how much free storage there is, whether it is slow everywhere or only in one app, and how old the device is. Those three answers separate a full device, a bad app and hardware that has genuinely reached the end of its life.",
+      body: "Tell them roughly how much free storage there is, whether it is slow everywhere or only in one app, and how old the device is. Those three answers separate a full device; a bad app and hardware that has genuinely reached the end of its life.",
     },
   ],
 };

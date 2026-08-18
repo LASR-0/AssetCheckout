@@ -48,18 +48,18 @@ const connectKsbMobileIos: Article = {
   symptomId: "connect-ksb-mobile-ios",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "KSB-Mobile is the network company {devices} belong on. There is no Wi-Fi password — the {device} proves who it is with a certificate it was given when IT set it up, so joining is usually one tap.",
+    "KSB-Mobile is the network company {devices} belong on. There is no Wi-Fi password; the {device} proves who it is with a certificate it was given when IT set it up, so joining is usually one tap.",
   timeEstimate: "About 5 minutes",
   appliesTo: "KSB-managed {devices}",
   updated: "2026-08-11",
   before: [
     "You are somewhere with KSB Wi-Fi coverage and can see 'KSB-Mobile' in the Wi-Fi list",
-    "The {device} is a KSB {device} set up by IT — a personal iPhone cannot join KSB-Mobile",
+    "The {device} is a KSB {device} set up by IT, a personal iPhone cannot join KSB-Mobile",
   ],
   steps: [
     {
       title: "Tap KSB-Mobile in the Wi-Fi list",
-      body: "Open Settings › Wi-Fi and tap KSB-Mobile. It connects on its own after a few seconds. There is nothing to type — no username, no password, no Wi-Fi key — and for almost everybody this is the entire job.",
+      body: "Open Settings › Wi-Fi and tap KSB-Mobile. It connects on its own after a few seconds. There is nothing to type (no username, no password, no Wi-Fi key) and for almost everybody this is the entire job.",
       note: "If the {device} does ask you for a username and password, don't try to guess them: there is no password for this network. KSB-Mobile recognises the {device} by a certificate it was issued when IT set it up, so a prompt means that certificate is missing. The rest of this article is about getting it back.",
       figure: { caption: "Settings › Wi-Fi › KSB-Mobile" },
     },
@@ -74,7 +74,7 @@ const connectKsbMobileIos: Article = {
     {
       title: "Install any pending iOS update",
       body: "KSB-Mobile only admits devices that are compliant, and compliance here means one thing: an iOS version inside the approved range. Go to Settings › General › Software Update, install whatever it offers, let the device restart, and then try KSB-Mobile again.",
-      note: "You can confirm the result in Company Portal or At Work, whichever one you have — open it, let it refresh, and it will report the device as compliant once the update has landed. You will have one of those two apps and never both. If you have neither, skip to the last step: the device isn't on the company profile at all.",
+      note: "You can confirm the result in Company Portal or At Work, whichever one you have; open it, let it refresh, and it will report the device as compliant once the update has landed. You will have one of those two apps and never both. If you have neither, skip to the last step: the device isn't on the company profile at all.",
       figure: {
         images: [
           {
@@ -95,7 +95,7 @@ const connectKsbMobileIos: Article = {
     },
     {
       title: "Still not connecting? Contact IT",
-      body: "Tell them the {device} won't join KSB-Mobile, and whether it asked you for a password — that one detail separates a missing certificate from everything else, and saves a round of questions. Mention it too if you have neither At Work nor Company Portal installed: that means the {device} was never added to the company profile, which only IT can do.",
+      body: "Tell them the {device} won't join KSB-Mobile, and whether it asked you for a password; that one detail separates a missing certificate from everything else, and saves a round of questions. Mention it too if you have neither At Work nor Company Portal installed: that means the {device} was never added to the company profile, which only IT can do.",
     },
   ],
 };

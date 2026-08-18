@@ -21,7 +21,7 @@ const screenRotated: Article = {
   timeEstimate: "About 3 minutes",
   appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
-  before: ["The screen is showing a picture — just at the wrong orientation"],
+  before: ["The screen is showing a picture, just at the wrong orientation"],
   steps: [
     {
       title: "Open Display settings",
@@ -53,8 +53,8 @@ const screenRotated: Article = {
     },
     {
       title: "Set Display orientation to Landscape",
-      body: "Find Display orientation and choose Landscape. The screen rights itself immediately and Windows asks you to confirm — choose Keep changes.",
-      note: "If you don't confirm within about fifteen seconds it reverts on its own. That is deliberate, so a setting that leaves you with an unusable screen undoes itself — but it does mean you have to click Keep changes reasonably promptly.",
+      body: "Find Display orientation and choose Landscape. The screen rights itself immediately and Windows asks you to confirm; choose Keep changes.",
+      note: "If you don't confirm within about fifteen seconds it reverts on its own. That is deliberate, so a setting that leaves you with an unusable screen undoes itself, but it does mean you have to click Keep changes reasonably promptly.",
       figure: {
         images: [
           {

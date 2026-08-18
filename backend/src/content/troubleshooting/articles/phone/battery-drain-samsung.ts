@@ -39,7 +39,7 @@ const batteryDrainSamsung: Article = {
   steps: [
     {
       title: "Look at which app is actually using the battery",
-      body: "Open Settings › Battery and tap the graph to see the usage list. An app near the top that you barely open is your answer — usually something that syncs or tracks location in the background.",
+      body: "Open Settings › Battery and tap the graph to see the usage list. An app near the top that you barely open is your answer, usually something that syncs or tracks location in the background.",
       note: "On older One UI versions Battery isn't a top-level entry. If you don't see it, look under Settings › Battery and device care › Battery instead.",
       figure: {
         caption: "Settings › Battery › tap the graph for the usage list",
@@ -48,7 +48,7 @@ const batteryDrainSamsung: Article = {
     {
       title: "Has the {device} updated recently?",
       body: "If a One UI update landed in the last week or two, this is very likely nothing more than that. The {device}'s adaptive battery throws away everything it had learned about how you use it and starts again, and while it relearns the drain is noticeably worse. It settles by itself, typically within a fortnight.",
-      note: "Worth ruling in before you change any settings — plenty of perfectly healthy {devices} get handed in during this window. If the timing fits, give it another week before going further.",
+      note: "Worth ruling in before you change any settings; plenty of perfectly healthy {devices} get handed in during this window. If the timing fits, give it another week before going further.",
     },
     {
       title: "Turn on Power saving to get through today",
@@ -56,7 +56,7 @@ const batteryDrainSamsung: Article = {
     },
     {
       title: "Put the offending app to sleep",
-      body: "Go to Settings › Battery › Background usage limits. Adding an app to Sleeping apps stops it running in the background but lets it update occasionally; Deep sleeping apps stops it completely, so it only ever runs while you have it open. Use Deep sleeping apps for the one the battery list pointed at — Sleeping apps often isn't strong enough to make a visible difference.",
+      body: "Go to Settings › Battery › Background usage limits. Adding an app to Sleeping apps stops it running in the background but lets it update occasionally; Deep sleeping apps stops it completely, so it only ever runs while you have it open. Use Deep sleeping apps for the one the battery list pointed at; Sleeping apps often isn't strong enough to make a visible difference.",
       warn: "Don't deep-sleep Company Portal, At Work, Teams or Outlook. Those need to run in the background to keep the {device} compliant and to deliver notifications, and silencing them causes a different problem a fortnight later that nobody connects back to this.",
       figure: { caption: "Settings › Battery › Background usage limits" },
     },
@@ -66,15 +66,15 @@ const batteryDrainSamsung: Article = {
     },
     {
       title: "Update the software",
-      body: "Settings › Software update › Download and install. Battery fixes ship in these more often than anything else — though if an update is what started this, see step 2 before installing another one.",
+      body: "Settings › Software update › Download and install. Battery fixes ship in these more often than anything else, though if an update is what started this, see step 2 before installing another one.",
     },
     {
       title: "Still draining? Contact IT",
-      body: "Tell them which app was top of the battery list and whether a software update landed just before it started. If the {device} is a few years old the battery may simply be worn out, which is a replacement rather than anything you can fix — IT can check its health directly.",
+      body: "Tell them which app was top of the battery list and whether a software update landed just before it started. If the {device} is a few years old the battery may simply be worn out, which is a replacement rather than anything you can fix; IT can check its health directly.",
     },
   ],
   source: {
-    name: "Samsung — What to do when your Samsung Galaxy device battery drains faster",
+    name: "Samsung; What to do when your Samsung Galaxy device battery drains faster",
     url: "https://www.samsung.com/uk/support/mobile-devices/what-to-do-when-your-samsung-galaxy-device-battery-drains-faster/",
   },
 };

@@ -19,17 +19,17 @@ const wifiDownEthernetFine: Article = {
   symptomId: "wifi-down-ethernet-fine",
   subjectKeys: ["laptop", "desktop"],
   summary:
-    "If a cable works and Wi-Fi doesn't, your account and the network are both fine — the problem is the wireless adapter or the saved network. That rules out most of what could be wrong.",
+    "If a cable works and Wi-Fi doesn't, your account and the network are both fine; the problem is the wireless adapter or the saved network. That rules out most of what could be wrong.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB {devices}",
   updated: "2026-08-10",
   before: [
-    "A wired connection works — you can reach internal sites over ethernet",
+    "A wired connection works; you can reach internal sites over ethernet",
   ],
   steps: [
     {
       title: "Check Wi-Fi is actually switched on",
-      body: "Open the network menu from the right-hand end of the taskbar. If the Wi-Fi tile is greyed out, click it to turn it back on, and check Flight mode is off while you are there. The same switches live in Settings › Network & internet if you would rather see them all at once — Wi-Fi and Flight mode are both in that one list. Some {devices} also have a keyboard shortcut that disables wireless, usually one of the F keys with a small aerial on it, and it is easily pressed by accident.",
+      body: "Open the network menu from the right-hand end of the taskbar. If the Wi-Fi tile is greyed out, click it to turn it back on, and check Flight mode is off while you are there. The same switches live in Settings › Network & internet if you would rather see them all at once; Wi-Fi and Flight mode are both in that one list. Some {devices} also have a keyboard shortcut that disables wireless, usually one of the F keys with a small aerial on it, and it is easily pressed by accident.",
       figure: {
         images: [
           {
@@ -39,12 +39,12 @@ const wifiDownEthernetFine: Article = {
         ],
         size: "full",
         caption:
-          "Settings › Network & internet — Wi-Fi and Flight mode in one list",
+          "Settings › Network & internet; Wi-Fi and Flight mode in one list",
       },
     },
     {
       title: "See whether any networks appear at all",
-      body: "With Wi-Fi on, look at the list of available networks. Seeing other networks but not connecting is a different problem from seeing none at all — if the list is completely empty, note that, because it points at the adapter rather than the network.",
+      body: "With Wi-Fi on, look at the list of available networks. Seeing other networks but not connecting is a different problem from seeing none at all. If the list is completely empty, note that, because it points at the adapter rather than the network.",
     },
     {
       title: "Forget KSB-Office and rejoin it",
@@ -56,8 +56,8 @@ const wifiDownEthernetFine: Article = {
     },
     {
       title: "Update your drivers, then restart",
-      body: "Open Lenovo Commercial Vantage from the Start menu and let it check for updates. Install anything it offers — wireless adapter drivers in particular — and then restart the {device} from the Start menu, not by closing the lid. Vantage is only on Lenovo machines — every laptop, and the ThinkCentre desktops. On a custom-built engineering PC there is no Vantage: use Settings › Windows Update instead, and if the machine has a dedicated graphics card, that card's own updater is where its display drivers come from.",
-      note: "Restart even if Vantage offers nothing. A restart reloads the wireless adapter's driver on its own, and that alone fixes a fair share of cases where the adapter is present but not working — so this step is worth finishing either way.",
+      body: "Open Lenovo Commercial Vantage from the Start menu and let it check for updates. Install anything it offers, wireless adapter drivers in particular, and then restart the {device} from the Start menu, not by closing the lid. Vantage is only on Lenovo machines, every laptop, and the ThinkCentre desktops. On a custom-built engineering PC there is no Vantage: use Settings › Windows Update instead, and if the machine has a dedicated graphics card; that card's own updater is where its display drivers come from.",
+      note: "Restart even if Vantage offers nothing. A restart reloads the wireless adapter's driver on its own, and that alone fixes a fair share of cases where the adapter is present but not working, so this step is worth finishing either way.",
       figure: {
         images: [
           {

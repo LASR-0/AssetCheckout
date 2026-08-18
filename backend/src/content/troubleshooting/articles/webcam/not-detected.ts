@@ -26,7 +26,7 @@ const webcamNotDetected: Article = {
   symptomId: "webcam-not-detected",
   subjectKeys: ["webcam"],
   summary:
-    "Check the physical shutter over the lens first — a closed one gives a black picture rather than an error, which looks exactly like a broken camera.",
+    "Check the physical shutter over the lens first, a closed one gives a black picture rather than an error, which looks exactly like a broken camera.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB laptops and webcams",
   updated: "2026-08-11",
@@ -35,11 +35,11 @@ const webcamNotDetected: Article = {
     {
       title: "Check the privacy shutter over the lens",
       body: "Most KSB laptops have a small physical slider beside the camera at the top of the screen, and most external webcams have a cover that twists or slides. Closed, you get a black picture and no error message at all. Slide it across and look for the lens.",
-      note: "Some Lenovo laptops also have a function key that disables the camera in firmware — usually F8 or F9, marked with a small camera symbol, pressed with the Fn key. That one makes the camera disappear from Windows entirely rather than showing black, so it is worth pressing if the camera isn't listed anywhere.",
+      note: "Some Lenovo laptops also have a function key that disables the camera in firmware, usually F8 or F9, marked with a small camera symbol, pressed with the Fn key. That one makes the camera disappear from Windows entirely rather than showing black, so it is worth pressing if the camera isn't listed anywhere.",
     },
     {
       title: "Close everything else that might be using it",
-      body: "Only one application can hold the camera at a time. Teams, Zoom and the Camera app all keep it once they have it, and Teams in particular carries on running in the background after you close its window. Quit Teams properly — right-click its icon in the hidden icon tray and choose Quit — then try again.",
+      body: "Only one application can hold the camera at a time. Teams, Zoom and the Camera app all keep it once they have it, and Teams in particular carries on running in the background after you close its window. Quit Teams properly, right-click its icon in the hidden icon tray and choose Quit, then try again.",
       branch: {
         label: "It's only Teams that can't see it",
         targetSymptomId: "webcam-not-in-teams",
@@ -52,12 +52,12 @@ const webcamNotDetected: Article = {
     },
     {
       title: "Check camera access is switched on for apps",
-      body: "Open Settings › Privacy & security › Camera. Make sure camera access is on, that apps are allowed to use it, and that the app you need appears in the list below and is switched on. This gets turned off by accident and is invisible from inside the app that is failing.",
+      body: "Open Settings › Privacy & security › Camera. Make sure camera access is on; that apps are allowed to use it, and that the app you need appears in the list below and is switched on. This gets turned off by accident and is invisible from inside the app that is failing.",
       figure: { caption: "Settings › Privacy & security › Camera" },
     },
     {
       title: "If it's an external webcam, reseat it and change port",
-      body: "Unplug it and put it into a different USB port — one directly on the laptop rather than on the dock, as a test. Webcams draw a fair amount of power and are among the first things to drop off a dock that is supplying too many devices.",
+      body: "Unplug it and put it into a different USB port, one directly on the laptop rather than on the dock, as a test. Webcams draw a fair amount of power and are among the first things to drop off a dock that is supplying too many devices.",
       branch: {
         label: "None of the USB ports on my dock are working",
         targetSymptomId: "dock-usb-not-working",
@@ -67,7 +67,7 @@ const webcamNotDetected: Article = {
     },
     {
       title: "Update with Lenovo Commercial Vantage, then restart",
-      body: "Open Lenovo Commercial Vantage from the Start menu, install anything it offers, and restart from the Start menu rather than closing the lid. Restart even if it offers nothing — it reloads the camera driver, which fixes a fair share of these on its own.",
+      body: "Open Lenovo Commercial Vantage from the Start menu, install anything it offers, and restart from the Start menu rather than closing the lid. Restart even if it offers nothing; it reloads the camera driver, which fixes a fair share of these on its own.",
     },
     {
       title: "Still not detected? Contact IT",

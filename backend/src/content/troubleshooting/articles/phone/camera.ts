@@ -35,18 +35,18 @@ const camera: Article = {
   steps: [
     {
       title: "Open the {device}'s own camera app first",
-      body: "Not the camera inside Teams, or a scanning app, or anything else — the built-in Camera app. If that works properly, the camera hardware is fine and the problem belongs to whichever app you were in, which is a much easier thing to fix.",
+      body: "Not the camera inside Teams, or a scanning app, or anything else, the built-in Camera app. If that works properly; the camera hardware is fine and the problem belongs to whichever app you were in, which is a much easier thing to fix.",
       note: "A black preview in the built-in app is not the same as it refusing to open. A black preview usually means something is over the lens, which the next two steps cover.",
     },
     {
       title: "Take the case off and clean the lens",
-      body: "Wipe the lens with a soft dry cloth, then take the case off and look at the window that sits over the camera. On a {device} that lives on site, that clear plastic scratches and hazes within months, and every photo goes through it. Photograph the same thing with the case on and off and compare — the difference is usually obvious.",
+      body: "Wipe the lens with a soft dry cloth, then take the case off and look at the window that sits over the camera. On a {device} that lives on site, that clear plastic scratches and hazes within months, and every photo goes through it. Photograph the same thing with the case on and off and compare; the difference is usually obvious.",
       note: "Fingerprints and sunscreen on the lens do most of the rest. Both scatter light badly and both look like a camera that can no longer focus.",
     },
     {
       title: "Force close the camera and open it again",
       body: "Swipe up from the bottom and hold to bring up recent apps, swipe the camera away, and open it fresh. A camera that opens to a black or frozen preview is nearly always one stuck app rather than a hardware fault, and this clears it.",
-      note: "Only one app can hold the camera at a time. If Teams or a scanning app is still running in the background with the camera open, the built-in Camera app gets nothing — so swipe those away too.",
+      note: "Only one app can hold the camera at a time. If Teams or a scanning app is still running in the background with the camera open, the built-in Camera app gets nothing, so swipe those away too.",
     },
     {
       title: "Restart the {device}",
@@ -67,7 +67,7 @@ const camera: Article = {
           },
         ],
         caption:
-          "Settings › Privacy & Security › Camera — or Settings › Apps › [app] › Permissions",
+          "Settings › Privacy & Security › Camera, or Settings › Apps › [app] › Permissions",
       },
       branch: {
         label: "That app closes as soon as I open it",

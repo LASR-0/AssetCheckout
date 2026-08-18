@@ -27,7 +27,7 @@ const notCharging: Article = {
     {
       title: "Check you're using a port that charges",
       body: "On a USB-C laptop, not every port carries power. The charging ports are usually marked with a small battery or lightning symbol, or sit on one particular side. If nothing happens on one port, try the others before assuming anything is broken.",
-      note: "The same applies to the cable. A USB-C cable that charges a phone perfectly well may not carry enough power for a laptop — use the one that came with it where you can.",
+      note: "The same applies to the cable. A USB-C cable that charges a phone perfectly well may not carry enough power for a laptop; use the one that came with it where you can.",
     },
     {
       title: "Look for a charging light",
@@ -35,12 +35,12 @@ const notCharging: Article = {
     },
     {
       title: "Check what Windows thinks",
-      body: "Hover over the battery icon at the right-hand end of the taskbar. It will say whether it is charging, plugged in and not charging, or running on battery — which is worth knowing, because 'plugged in, not charging' is a different fault from no power at all.",
+      body: "Hover over the battery icon at the right-hand end of the taskbar. It will say whether it is charging, plugged in and not charging, or running on battery, which is worth knowing, because 'plugged in, not charging' is a different fault from no power at all.",
       figure: { caption: "Taskbar › battery icon › charging status" },
     },
     {
       title: "Check the battery in Lenovo Commercial Vantage",
-      body: "Open Lenovo Commercial Vantage from the Start menu and look at the battery details. It reports the battery's condition and its charge, which separates a battery that has worn out from a charger that isn't delivering power — they look identical from the outside.",
+      body: "Open Lenovo Commercial Vantage from the Start menu and look at the battery details. It reports the battery's condition and its charge, which separates a battery that has worn out from a charger that isn't delivering power; they look identical from the outside.",
       figure: { caption: "Lenovo Commercial Vantage › battery details" },
     },
     {

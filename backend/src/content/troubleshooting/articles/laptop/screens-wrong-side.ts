@@ -16,12 +16,12 @@ const screensWrongSide: Article = {
   symptomId: "screens-wrong-side",
   subjectKeys: ["laptop", "desktop", "monitor"],
   summary:
-    "Your mouse leaves the left of one screen and appears on the right of the other. Windows doesn't know how your monitors sit on the desk — you tell it once, in Display settings.",
+    "Your mouse leaves the left of one screen and appears on the right of the other. Windows doesn't know how your monitors sit on the desk; you tell it once, in Display settings.",
   timeEstimate: "About 3 minutes",
   appliesTo: "KSB laptops and desktops",
   updated: "2026-08-10",
   before: [
-    "Both screens are working — this is about where they are, not whether they show a picture",
+    "Both screens are working; this is about where they are, not whether they show a picture",
   ],
   steps: [
     {
@@ -39,7 +39,7 @@ const screensWrongSide: Article = {
     },
     {
       title: "Press Identify to see which box is which",
-      body: "Click Identify and a large number appears briefly on each screen. Note which physical monitor is 1, which is 2, and so on — the boxes are otherwise unlabelled and it is easy to move the wrong one.",
+      body: "Click Identify and a large number appears briefly on each screen. Note which physical monitor is 1, which is 2, and so on; the boxes are otherwise unlabelled and it is easy to move the wrong one.",
       figure: {
         images: [
           {

@@ -32,7 +32,7 @@ const webcamNotInTeams: Article = {
   steps: [
     {
       title: "Check the shutter, then test outside Teams",
-      body: "Slide the privacy cover away from the lens — closed, it gives a black picture and no error. Then search the Start menu for Camera and open it. If the Camera app shows a picture, the camera is fine and this is a Teams setting. If it shows nothing either, the problem is bigger than Teams.",
+      body: "Slide the privacy cover away from the lens; closed, it gives a black picture and no error. Then search the Start menu for Camera and open it. If the Camera app shows a picture; the camera is fine and this is a Teams setting. If it shows nothing either; the problem is bigger than Teams.",
       branch: {
         label: "Nothing can see the camera, not just Teams",
         targetSymptomId: "webcam-not-detected",
@@ -45,12 +45,12 @@ const webcamNotInTeams: Article = {
     },
     {
       title: "Close anything else holding the camera",
-      body: "Only one app can use the camera at a time. If Zoom, the Camera app or a browser tab on a video call still has it, Teams gets a black rectangle. Close them all — including the Camera app you opened in step 1, which is the one people forget.",
+      body: "Only one app can use the camera at a time. If Zoom, the Camera app or a browser tab on a video call still has it, Teams gets a black rectangle. Close them all, including the Camera app you opened in step 1, which is the one people forget.",
       note: "Worth a moment. Testing in the Camera app and then leaving it open is a very easy way to create the exact problem you were trying to diagnose.",
     },
     {
       title: "Restart Teams properly",
-      body: "Right-click the Teams icon in the hidden icon tray at the right-hand end of the taskbar and choose Quit, rather than closing the window — closing it leaves Teams running. Then start it again. Teams claims camera devices when it launches, so one connected afterwards is often not picked up until it restarts.",
+      body: "Right-click the Teams icon in the hidden icon tray at the right-hand end of the taskbar and choose Quit, rather than closing the window; closing it leaves Teams running. Then start it again. Teams claims camera devices when it launches, so one connected afterwards is often not picked up until it restarts.",
     },
     {
       title: "Check Teams is allowed to use the camera",

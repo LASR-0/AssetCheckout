@@ -23,7 +23,7 @@ const mouseBattery: Article = {
   symptomId: "mouse-battery",
   subjectKeys: ["mouse"],
   summary:
-    "Usually because it never gets switched off — a mouse in a bag runs all weekend against the lining. There's a switch underneath that almost nobody uses.",
+    "Usually because it never gets switched off, a mouse in a bag runs all weekend against the lining. There's a switch underneath that almost nobody uses.",
   timeEstimate: "About 5 minutes",
   appliesTo: "KSB wireless mice",
   updated: "2026-08-11",
@@ -31,7 +31,7 @@ const mouseBattery: Article = {
   steps: [
     {
       title: "Switch it off when you pack it away",
-      body: "Turn the mouse over — there is a slider or button underneath. A mouse that goes in a bag switched on keeps running the whole time it is in there, with the sensor tracking against the lining, and that alone accounts for most batteries that seem to last no time at all.",
+      body: "Turn the mouse over; there is a slider or button underneath. A mouse that goes in a bag switched on keeps running the whole time it is in there, with the sensor tracking against the lining, and that alone accounts for most batteries that seem to last no time at all.",
       note: "It matters most over a weekend or a break. Two days in a bag is easily as much running time as a working week on a desk.",
     },
     {
@@ -40,7 +40,7 @@ const mouseBattery: Article = {
     },
     {
       title: "Check it isn't sitting somewhere that keeps it awake",
-      body: "A mouse will not go to sleep while it thinks it is being used. One left on a surface that vibrates — beside a printer, on a bench near machinery, on a desk against a busy walkway — can stay awake indefinitely. So can one left upside down with the sensor pointing at the ceiling.",
+      body: "A mouse will not go to sleep while it thinks it is being used. One left on a surface that vibrates (beside a printer, on a bench near machinery, on a desk against a busy walkway) can stay awake indefinitely. So can one left upside down with the sensor pointing at the ceiling.",
     },
     {
       title: "Check the battery level rather than guessing",

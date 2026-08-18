@@ -17,18 +17,18 @@ const noDisplayDisplayPort: Article = {
   symptomId: "no-display-displayport",
   subjectKeys: ["laptop", "desktop", "monitor"],
   summary:
-    "Nothing appears over DisplayPort. Usually the cable or the projection mode — but DisplayPort has two traps of its own worth knowing about.",
+    "Nothing appears over DisplayPort. Usually the cable or the projection mode, but DisplayPort has two traps of its own worth knowing about.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB laptops and desktops",
-  updated: "2026-08-10",
+  updated: "2026-08-16",
   before: [
     "The screen is switched on and connected by DisplayPort or by a USB-C to DisplayPort lead",
   ],
   steps: [
     {
       title: "Reseat the cable, pressing the latch to remove it",
-      body: "Many DisplayPort plugs have a small catch on top that must be held down before the plug will come out. Forcing it damages the socket. Press the catch, remove the plug, then push it back in until it clicks.",
-      warn: "Do not pull a latched DisplayPort cable out by force. The latch is there to stop it falling out, and dragging it free can take part of the socket with it — turning a five-minute problem into a new monitor.",
+      body: "Many (not all) DisplayPort plugs have a small catch on top that must be held down before the plug will come out. Forcing it damages the socket. Press the catch, remove the plug, then push it back in until it clicks.",
+      warn: "Do not pull a latched DisplayPort cable out by force. The latch is there to stop it falling out, and dragging it free can take part of the socket with it; turning a five-minute problem into a new monitor.",
     },
     {
       title:
@@ -50,12 +50,12 @@ const noDisplayDisplayPort: Article = {
     },
     {
       title: "Reset the graphics driver with Windows + Ctrl + Shift + B",
-      body: "Hold all four keys together. The screen goes black for a second and you may hear a short beep — that is the graphics driver restarting. It often brings back a display that stopped working while the computer was running.",
-      note: "This is safe to do at any time. Nothing closes, nothing is saved over, and your open windows stay exactly where they were — the brief black screen and the beep are the whole of it.",
+      body: "Hold all four keys together. The screen goes black for a second and you may hear a short beep; that is the graphics driver restarting. It often brings back a display that stopped working while the computer was running.",
+      note: "This is safe to do at any time. Nothing closes, nothing is saved over, and your open windows stay exactly where they were; the brief black screen and the beep are the whole of it.",
     },
     {
       title: "Update the graphics driver, then restart",
-      body: "Open Lenovo Commercial Vantage from the Start menu, install anything offered, and restart with the screen connected. Vantage is only on Lenovo machines — every laptop, and the ThinkCentre desktops. On a custom-built engineering PC there is no Vantage: use Settings › Windows Update instead, and if the machine has a dedicated graphics card, that card's own updater is where its display drivers come from.",
+      body: "Open Lenovo Commercial Vantage from the Start menu, install anything offered, and restart with the screen connected. Vantage is only on Lenovo machines, every laptop, and the ThinkCentre desktops. On a custom-built engineering PC there is no Vantage: use Settings › Windows Update instead, and if the machine has a dedicated graphics card; that card's own updater is where its display drivers come from.",
       figure: {
         images: [
           {

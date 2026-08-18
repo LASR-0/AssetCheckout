@@ -51,8 +51,8 @@ const wontTurnOnIos: Article = {
   steps: [
     {
       title: "Force restart it",
-      body: "Press and release the volume up button. Press and release the volume down button. Then press and hold the third button until the Apple logo appears, and let go — that's the side button on an iPhone and the top button on an iPad. It takes about ten seconds of holding.",
-      note: "The two volume buttons are quick taps, not holds, and the three presses run one straight after another. Holding all three together does nothing, which is why people conclude the device is dead when it isn't. Keep holding that last button past the point where the screen stays black and past the power-off slider if it appears — the Apple logo is the signal to let go.",
+      body: "Press and release the volume up button. Press and release the volume down button. Then press and hold the third button until the Apple logo appears, and let go; that's the side button on an iPhone and the top button on an iPad. It takes about ten seconds of holding.",
+      note: "The two volume buttons are quick taps, not holds, and the three presses run one straight after another. Holding all three together does nothing, which is why people conclude the device is dead when it isn't. Keep holding that last button past the point where the screen stays black and past the power-off slider if it appears; the Apple logo is the signal to let go.",
       warn: "Nothing is erased by this. A force restart is not a factory reset, and no photos, messages or apps are affected.",
     },
     {
@@ -62,7 +62,7 @@ const wontTurnOnIos: Article = {
     },
     {
       title: "Put it on charge and leave it for an hour",
-      body: "If the force restart did nothing, plug it into a wall socket — not a laptop USB port or a dock, which charge far more slowly — and leave it alone for an hour before trying again. A completely flat battery shows nothing on screen at all, and can take several minutes of charging before even the charging symbol appears.",
+      body: "If the force restart did nothing, plug it into a wall socket (not a laptop USB port or a dock, which charge far more slowly) and leave it alone for an hour before trying again. A completely flat battery shows nothing on screen at all, and can take several minutes of charging before even the charging symbol appears.",
       note: "Resist checking it every few minutes. Pressing buttons on a device that is slowly recovering a flat battery is the main reason people give up on this step before it has had a chance to work.",
     },
     {
@@ -75,16 +75,16 @@ const wontTurnOnIos: Article = {
     },
     {
       title: "Look inside the charging port",
-      body: "Pocket lint compacts into the bottom of the port and stops the cable seating fully. Shine a light in: if the cable does not click in and sit flush, that is almost certainly what has happened.",
-      warn: "Don't put anything metal into the port. A wooden toothpick used gently, or a short burst of compressed air, is the safe way — a paperclip or a pin damages the contacts and turns a five-minute fix into a replacement.",
+      body: "Pocket lint compacts into the bottom of the port and stops the cable seating fully. Shine a light in: if the cable does not click in and sit flush; that is almost certainly what has happened.",
+      warn: "Don't put anything metal into the port. A wooden toothpick used gently, or a short burst of compressed air, is the safe way, a paperclip or a pin damages the contacts and turns a five-minute fix into a replacement.",
     },
     {
       title: "Still nothing? Contact IT",
-      body: "Tell them what you have already tried, and in particular whether the screen ever showed anything at all — an Apple logo that appears and then vanishes is a different fault from a screen that stayed black throughout, and that one detail decides whether it needs a repair or a replacement.",
+      body: "Tell them what you have already tried, and in particular whether the screen ever showed anything at all; an Apple logo that appears and then vanishes is a different fault from a screen that stayed black throughout, and that one detail decides whether it needs a repair or a replacement.",
     },
   ],
   source: {
-    name: "Apple Support — Restart an unresponsive iPhone",
+    name: "Apple Support; Restart an unresponsive iPhone",
     url: "https://support.apple.com/en-us/116940",
   },
 };

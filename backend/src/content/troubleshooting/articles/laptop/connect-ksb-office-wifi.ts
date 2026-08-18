@@ -31,13 +31,13 @@ const connectKsbOfficeWifi: Article = {
   symptomId: "connect-ksb-office-wifi",
   subjectKeys: ["laptop", "desktop"],
   summary:
-    "KSB-Office is the network every laptop belongs on. Most of the time it connects on its own — if it does ask for a username and password, they're your ordinary KSB ones.",
+    "KSB-Office is the network every laptop belongs on. Most of the time it connects on its own. If it does ask for a username and password, they're your ordinary KSB ones.",
   timeEstimate: "About 5 minutes",
   appliesTo: "KSB {devices}",
-  updated: "2026-08-10",
+  updated: "2026-08-16",
   before: [
     "You are in a KSB office and can see 'KSB-Office' in the Wi-Fi list",
-    "You know your @ksb.com email address and its password — the same one you use for email",
+    "You know your @ksb.com email address and its password, the same one you use for email",
   ],
   steps: [
     {
@@ -60,8 +60,8 @@ const connectKsbOfficeWifi: Article = {
     },
     {
       title: "If your credentials are rejected, check the password itself",
-      body: "Open a private or incognito browser window and sign in to office.com with the same email address and password. A password that has recently expired or been changed will fail here too — and the Wi-Fi gives the same unhelpful message either way.",
-      note: "It has to be a private window. In an ordinary one you are almost certainly still signed in from an earlier session, so it will let you straight through without ever asking for the password — which tells you nothing about the one you just typed.",
+      body: "Open a private or incognito browser window and sign in to office.com with the same email address and password. A password that has recently expired or been changed will fail here too, and the Wi-Fi gives the same unhelpful message either way.",
+      note: "It has to be a private window. In an ordinary one you are almost certainly still signed in from an earlier session, so it will let you straight through without ever asking for the password, which tells you nothing about the one you just typed.",
       figure: {
         images: [
           {
@@ -75,17 +75,16 @@ const connectKsbOfficeWifi: Article = {
       },
     },
     {
-      title: "Use ethernet to keep working meanwhile",
-      body: "A wired connection asks for no credentials at all and reaches everything KSB-Office does. If you have a dock or a spare port, this gets you working now rather than after the Wi-Fi is sorted out.",
+      title: "Use KSB-Guest to keep working meanwhile",
+      body: "KSB-Guest is guarded by a password only, you can contact IT at this point to get the password. If you reach this point and you're contacting IT for the guest password; we advise that you just get them to take a look while you have their attention.",
       branch: {
         label: "Ethernet works but Wi-Fi still won't connect",
         targetSymptomId: "wifi-down-ethernet-fine",
       },
     },
     {
-      title: "Still stuck? Ask IT for the KSB-Guest password",
-      body: "KSB-Guest is password protected, so you'll need IT to give you the password. It is a useful test: if KSB-Guest connects and KSB-Office doesn't, the {device}'s wireless and the office signal are both fine. It has no route to internal systems, though, so anything with .intern in the address will still fail while you're on it.",
-      note: "You're already contacting IT for that password — ask them to look at KSB-Office at the same time rather than making two separate approaches. It's usually sorted in the one conversation.",
+      title: "Still stuck? Ask IT.",
+      body: "You're already contacting IT for that password; ask them to look at KSB-Office at the same time rather than making two separate approaches. It's usually sorted in the one conversation.",
     },
   ],
 };

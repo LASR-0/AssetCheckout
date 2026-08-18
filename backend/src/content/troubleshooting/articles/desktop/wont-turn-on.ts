@@ -19,7 +19,7 @@ const desktopWontTurnOn: Article = {
   symptomId: "wont-turn-on",
   subjectKeys: ["desktop"],
   summary:
-    "A desktop that does nothing at all is usually mains power — the wall switch, the cable, or the switch on the power supply itself. These rule those out before anyone opens anything.",
+    "A desktop that does nothing at all is usually mains power, the wall switch, the cable, or the switch on the power supply itself. These rule those out before anyone opens anything.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB desktop PCs",
   updated: "2026-08-10",
@@ -27,7 +27,7 @@ const desktopWontTurnOn: Article = {
   steps: [
     {
       title: "Check the wall socket and the power cable",
-      body: "Make sure the socket is switched on at the wall, and that the kettle-style cable is pushed fully into the back of the computer. That cable works loose easily — it only needs to move a few millimetres to stop making contact, and it looks perfectly seated while doing so.",
+      body: "Make sure the socket is switched on at the wall, and that the kettle-style cable is pushed fully into the back of the computer. That cable works loose easily; it only needs to move a few millimetres to stop making contact, and it looks perfectly seated while doing so.",
     },
     {
       title: "Check the switch on the power supply",
@@ -35,7 +35,7 @@ const desktopWontTurnOn: Article = {
     },
     {
       title: "Look for lights on the machine and the board",
-      body: "Press the power button and watch. A light on the front, a fan twitching, or a lit indicator visible through the case vents all mean the machine is getting power and failing later in its start-up — a completely different fault from getting no power at all.",
+      body: "Press the power button and watch. A light on the front, a fan twitching, or a lit indicator visible through the case vents all mean the machine is getting power and failing later in its start-up, a completely different fault from getting no power at all.",
       note: "If you can see a small lit number or a row of tiny lights on the board through the vents, note what you see. Those are diagnostic indicators, and they tell IT which part failed rather than leaving them to guess.",
     },
     {

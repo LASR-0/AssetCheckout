@@ -27,7 +27,7 @@ const mic: Article = {
   symptomId: "mic",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "A ten-second voice memo tells you whether the microphones work at all. If they do — and they usually do — the problem is a permission or the app, not the {device}.",
+    "A ten-second voice memo tells you whether the microphones work at all. If they do, and they usually do; the problem is a permission or the app, not the {device}.",
   timeEstimate: "About 10 minutes",
   appliesTo: "All KSB company {devices}",
   updated: "2026-08-11",
@@ -35,11 +35,11 @@ const mic: Article = {
   steps: [
     {
       title: "Record ten seconds and play it back",
-      body: "Open Voice Memos on an iPhone or Voice Recorder on a Samsung, record yourself talking normally, and play it back. This is the whole diagnosis: if you can hear yourself clearly, every microphone on the {device} works and nothing below step 3 applies to you. If the recording is silent or muffled, the microphones are genuinely blocked or faulty.",
+      body: "Open Voice Memos on an iPhone or Voice Recorder on a Samsung, record yourself talking normally, and play it back. This is the whole diagnosis: if you can hear yourself clearly, every microphone on the {device} works and nothing below step 3 applies to you. If the recording is silent or muffled; the microphones are genuinely blocked or faulty.",
       note: "Do it without holding the {device} to your face, and don't cover the bottom edge with your hand. Half the point is to find out whether something is physically over a microphone.",
       figure: {
         caption:
-          "Voice Memos (iPhone) or Voice Recorder (Samsung) — record and play back",
+          "Voice Memos (iPhone) or Voice Recorder (Samsung); record and play back",
       },
     },
     {
@@ -67,7 +67,7 @@ const mic: Article = {
           },
         ],
         caption:
-          "Settings › Privacy & Security › Microphone — or Settings › Apps › [app] › Permissions",
+          "Settings › Privacy & Security › Microphone, or Settings › Apps › [app] › Permissions",
       },
     },
     {
@@ -80,11 +80,11 @@ const mic: Article = {
     },
     {
       title: "Still can't be heard? Contact IT",
-      body: "Tell them whether the voice memo played back clearly. That single answer decides everything — a good recording means the {device} is fine and the problem is an app or a permission, and a silent one means the hardware needs looking at.",
+      body: "Tell them whether the voice memo played back clearly. That single answer decides everything; a good recording means the {device} is fine and the problem is an app or a permission, and a silent one means the hardware needs looking at.",
     },
   ],
   source: {
-    name: "Apple Support — If the microphones on your iPhone aren't working",
+    name: "Apple Support. If the microphones on your iPhone aren't working",
     url: "https://support.apple.com/en-us/101600",
   },
 };

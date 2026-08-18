@@ -35,7 +35,7 @@ const flicker: Article = {
   steps: [
     {
       title: "Work out which of the two you have",
-      body: "Fixed lines — vertical or horizontal bands that stay in the same place regardless of what is on screen — are a panel or connector fault. Nothing in this article will change them, so skip to the last step and report it. Flickering that comes and goes, or that changes with brightness, is worth working through.",
+      body: "Fixed lines, vertical or horizontal bands that stay in the same place regardless of what is on screen, are a panel or connector fault. Nothing in this article will change them, so skip to the last step and report it. Flickering that comes and goes, or that changes with brightness, is worth working through.",
     },
     {
       title: "Let it cool down",
@@ -47,8 +47,8 @@ const flicker: Article = {
     },
     {
       title: "Turn off automatic brightness and watch it",
-      body: "Adaptive brightness constantly adjusts the screen, and in changing light — walking past windows, under some fluorescent lighting — that reads as flicker. On an iPhone: Settings › Accessibility › Display & Text Size › Auto-Brightness. On a Samsung: Settings › Display › Adaptive brightness. Switch it off for a day and see whether the flicker goes with it.",
-      note: "If that fixes it, nothing is broken. Leave it off, or turn it back on knowing what it is — either is fine.",
+      body: "Adaptive brightness constantly adjusts the screen, and in changing light (walking past windows, under some fluorescent lighting) that reads as flicker. On an iPhone: Settings › Accessibility › Display & Text Size › Auto-Brightness. On a Samsung: Settings › Display › Adaptive brightness. Switch it off for a day and see whether the flicker goes with it.",
+      note: "If that fixes it, nothing is broken. Leave it off, or turn it back on knowing what it is; either is fine.",
     },
     {
       title: "Restart the {device}",

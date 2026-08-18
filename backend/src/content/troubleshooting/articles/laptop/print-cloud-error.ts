@@ -31,7 +31,7 @@ const printCloudError: Article = {
   symptomId: "print-cloud-error",
   subjectKeys: ["laptop", "desktop", "printer"],
   summary:
-    "Almost always the VPN. SAFEQ printing does not work while GlobalProtect is connected — disconnect it, print, and reconnect afterwards if you still need it.",
+    "Almost always the VPN. SAFEQ printing does not work while GlobalProtect is connected; disconnect it, print, and reconnect afterwards if you still need it.",
   timeEstimate: "About 5 minutes",
   appliesTo: "KSB laptops and desktops",
   updated: "2026-08-11",
@@ -40,7 +40,7 @@ const printCloudError: Article = {
     {
       title: "Disconnect the VPN, then try printing again",
       body: "Click the small upward arrow at the right-hand end of the taskbar to open the hidden icon tray, find GlobalProtect, and disconnect it. Then send the job again. SAFEQ printing does not work at all while the VPN is connected, and this is much the commonest cause of a cloud error.",
-      note: "You only need the VPN for internal systems — the ones with .intern in the address. Reconnect it once you have printed if you still need those. It is worth knowing this is why printing works at your desk and fails from home: the VPN is the thing that changed, not the location.",
+      note: "You only need the VPN for internal systems, the ones with .intern in the address. Reconnect it once you have printed if you still need those. It is worth knowing this is why printing works at your desk and fails from home: the VPN is the thing that changed, not the location.",
       figure: {
         images: [{ src: "laptop/shared/Globalprotect-disconnect-light.jpg" }],
         caption: "Hidden icon tray › GlobalProtect › Disconnect",
@@ -56,7 +56,7 @@ const printCloudError: Article = {
     },
     {
       title: "Check you have a working internet connection",
-      body: "SAFEQ is a cloud service, so a job cannot leave your machine without one. Load an ordinary external website to confirm — not an internal one, which proves something different. A connection that is joined but not passing traffic looks entirely normal and fails exactly like this.",
+      body: "SAFEQ is a cloud service, so a job cannot leave your machine without one. Load an ordinary external website to confirm, not an internal one, which proves something different. A connection that is joined but not passing traffic looks entirely normal and fails exactly like this.",
       branch: {
         label: "My Wi-Fi isn't connecting",
         targetSymptomId: "connect-ksb-office-wifi",
@@ -68,8 +68,8 @@ const printCloudError: Article = {
     },
     {
       title: "Restart the SAFEQ client",
-      body: "Right-click the SAFEQ icon in the hidden icon tray and exit it, then start it again from C:\\Program Files\\Y Soft Corporation\\SAFEQ Cloud Client\\ — open the version folder inside and run safeqclient, not safeqclientcore. Sign in with the LOGIN VIA MICROSOFT ENTRA ID button rather than the username box.",
-      warn: "Use the Entra ID button, never the username and password boxes above it. The boxes are for a different kind of account and will not accept your KSB sign-in — everybody tries them first, because that is what a username box is for.",
+      body: "Right-click the SAFEQ icon in the hidden icon tray and exit it, then start it again from C:\\Program Files\\Y Soft Corporation\\SAFEQ Cloud Client\\; open the version folder inside and run safeqclient, not safeqclientcore. Sign in with the LOGIN VIA MICROSOFT ENTRA ID button rather than the username box.",
+      warn: "Use the Entra ID button, never the username and password boxes above it. The boxes are for a different kind of account and will not accept your KSB sign-in; everybody tries them first, because that is what a username box is for.",
       figure: {
         images: [
           {

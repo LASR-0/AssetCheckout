@@ -36,13 +36,13 @@ const connectKsbMobileSamsung: Article = {
   symptomId: "connect-ksb-mobile-samsung",
   subjectKeys: ["phone"],
   summary:
-    "KSB-Mobile is the network company {devices} belong on. There is no Wi-Fi password — the {device} proves who it is with a certificate it was given when IT set it up, so joining is usually one tap.",
+    "KSB-Mobile is the network company {devices} belong on. There is no Wi-Fi password; the {device} proves who it is with a certificate it was given when IT set it up, so joining is usually one tap.",
   timeEstimate: "About 5 minutes",
   appliesTo: "KSB-managed Samsung {devices}",
   updated: "2026-08-11",
   before: [
     "You are somewhere with KSB Wi-Fi coverage and can see 'KSB-Mobile' in the Wi-Fi list",
-    "The {device} is a KSB {device} set up by IT — a personal phone cannot join KSB-Mobile",
+    "The {device} is a KSB {device} set up by IT, a personal phone cannot join KSB-Mobile",
   ],
   steps: [
     {
@@ -53,7 +53,7 @@ const connectKsbMobileSamsung: Article = {
     },
     {
       title: "Forget KSB-Mobile, restart, and rejoin",
-      body: "In the same Wi-Fi list, tap the ⚙ beside KSB-Mobile and choose Forget at the bottom of the screen — pressing and holding the network name gets you the same option. Then power the {device} off and back on, and tap KSB-Mobile again once it has restarted. This clears a saved network that has gone stale, which is the commonest reason a {device} that used to connect suddenly won't.",
+      body: "In the same Wi-Fi list, tap the ⚙ beside KSB-Mobile and choose Forget at the bottom of the screen; pressing and holding the network name gets you the same option. Then power the {device} off and back on, and tap KSB-Mobile again once it has restarted. This clears a saved network that has gone stale, which is the commonest reason a {device} that used to connect suddenly won't.",
       note: "Restart between the two halves rather than rejoining straight away. The {device} re-reads its certificates as it starts up, so forgetting and immediately retrying often just fails the same way.",
       figure: {
         caption:
@@ -63,7 +63,7 @@ const connectKsbMobileSamsung: Article = {
     {
       title: "Install any pending software update",
       body: "KSB-Mobile only admits {devices} that are compliant, and compliance here means one thing: an Android version inside the approved range. Go to Settings › Software update › Download and install, install whatever it offers, let the {device} restart, and then try KSB-Mobile again.",
-      note: "You can confirm the result in Company Portal or At Work EMM, whichever one you have — note the EMM, because on an iPhone the same app is just called At Work and people go looking for the wrong name. You will have one of those two apps and never both. If you have neither, skip to the last step: the {device} isn't on the company profile at all.",
+      note: "You can confirm the result in Company Portal or At Work EMM, whichever one you have; note the EMM, because on an iPhone the same app is just called At Work and people go looking for the wrong name. You will have one of those two apps and never both. If you have neither, skip to the last step: the {device} isn't on the company profile at all.",
       figure: { caption: "Settings › Software update › Download and install" },
       branch: {
         label: "It says it's up to date but still isn't compliant",
@@ -72,7 +72,7 @@ const connectKsbMobileSamsung: Article = {
     },
     {
       title: "Still not connecting? Contact IT",
-      body: "Tell them the {device} won't join KSB-Mobile, and whether it asked you for a password — that one detail separates a missing certificate from everything else, and saves a round of questions. Mention it too if you have neither At Work EMM nor Company Portal installed: that means the {device} was never added to the company profile, which only IT can do.",
+      body: "Tell them the {device} won't join KSB-Mobile, and whether it asked you for a password; that one detail separates a missing certificate from everything else, and saves a round of questions. Mention it too if you have neither At Work EMM nor Company Portal installed: that means the {device} was never added to the company profile, which only IT can do.",
     },
   ],
   // Only the One UI navigation is Samsung's; everything about the network and
@@ -80,7 +80,7 @@ const connectKsbMobileSamsung: Article = {
   // that goes stale when Samsung reshuffles Settings, and this is the page a
   // reviewer should check when it does.
   source: {
-    name: "Samsung — How to forget a network on Samsung Mobile Device",
+    name: "Samsung; How to forget a network on Samsung Mobile Device",
     url: "https://www.samsung.com/sg/support/mobile-devices/how-to-forget-a-network-on-samsung-mobile-device/",
   },
 };

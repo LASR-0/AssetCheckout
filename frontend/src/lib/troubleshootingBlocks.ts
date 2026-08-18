@@ -19,7 +19,7 @@ import type { Step } from "@/types/troubleshootingType";
 //  order things appear in. It can never make one disappear.
 ///  +-----------------------------------------------------------------+
 
-export type BlockKind = "note" | "warn" | "figure" | "branch";
+export type BlockKind = "note" | "warn" | "figure" | "branch" | "link";
 
 /** The order used when a step says nothing — what the reader hardcoded before
  *  `blockOrder` existed, so every article written up to now is unaffected. */
@@ -28,6 +28,7 @@ export const DEFAULT_BLOCK_ORDER: readonly BlockKind[] = [
   "warn",
   "figure",
   "branch",
+  "link",
 ];
 
 /** Which blocks this step actually carries, in default order. */

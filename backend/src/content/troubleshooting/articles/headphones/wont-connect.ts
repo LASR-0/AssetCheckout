@@ -26,7 +26,7 @@ const headsetWontConnect: Article = {
   symptomId: "headset-wont-connect",
   subjectKeys: ["headphones"],
   summary:
-    "Nearly always because the headset is still connected to something else — a laptop, a phone in a bag, a meeting room. Neither device tells you that is what is happening.",
+    "Nearly always because the headset is still connected to something else, a laptop, a phone in a bag, a meeting room. Neither device tells you that is what is happening.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB headsets",
   updated: "2026-08-11",
@@ -35,19 +35,19 @@ const headsetWontConnect: Article = {
     {
       title: "Put it into pairing mode properly",
       body: "Switching it on is not the same as making it pairable. Most headsets need the power or Bluetooth button held for five seconds or more, until a light flashes blue, or alternates blue and red. Until that light is flashing, nothing will find it.",
-      note: "The button and the hold time differ on every make. If you are not sure, hold it longer than feels right — too short is the usual mistake, and nothing bad happens from holding it too long.",
+      note: "The button and the hold time differ on every make. If you are not sure, hold it longer than feels right; too short is the usual mistake, and nothing bad happens from holding it too long.",
     },
     {
       title: "Disconnect it from whatever else it is paired to",
-      body: "A headset holds one connection at a time. If it is still joined to your laptop, your phone, a meeting room system or a colleague's machine, it will not connect to anything new — and neither end gives you any sign that is the reason. Turn Bluetooth off on the other device, or walk well away from it, then try again.",
+      body: "A headset holds one connection at a time. If it is still joined to your laptop, your phone, a meeting room system or a colleague's machine, it will not connect to anything new, and neither end gives you any sign that is the reason. Turn Bluetooth off on the other device, or walk well away from it, then try again.",
       note: "This is the answer far more often than a fault. The giveaway is a headset that connects perfectly at home and never at your desk, or the other way round.",
     },
     {
       title: "Remove the old pairing and add it again",
-      body: "If it used to work and has stopped, the saved pairing has gone stale. On Windows: Settings › Bluetooth & devices, find the headset, choose Remove device. On an iPhone or iPad: Settings › Bluetooth, tap the ⓘ, then Forget This Device. On a Samsung: Settings › Connections › Bluetooth, tap the ⚙, then Unpair. Then pair it fresh.",
+      body: "If it used to work and has stopped; the saved pairing has gone stale. On Windows: Settings › Bluetooth & devices, find the headset, choose Remove device. On an iPhone or iPad: Settings › Bluetooth, tap the ⓘ, then Forget This Device. On a Samsung: Settings › Connections › Bluetooth, tap the ⚙, then Unpair. Then pair it fresh.",
       figure: {
         caption:
-          "Settings › Bluetooth & devices › Remove device — then pair again",
+          "Settings › Bluetooth & devices › Remove device, then pair again",
       },
     },
     {
@@ -60,7 +60,7 @@ const headsetWontConnect: Article = {
     },
     {
       title: "Test it against another device",
-      body: "Pair it with a phone or another laptop. If it fails there too, the headset is the problem rather than your machine — which is worth establishing before anyone spends time on the machine.",
+      body: "Pair it with a phone or another laptop. If it fails there too; the headset is the problem rather than your machine, which is worth establishing before anyone spends time on the machine.",
     },
     {
       title: "Still won't connect? Contact IT",

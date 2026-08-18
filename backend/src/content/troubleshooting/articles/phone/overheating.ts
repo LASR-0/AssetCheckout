@@ -38,7 +38,7 @@ const overheating: Article = {
     {
       title: "Get it out of the sun and off the dashboard",
       body: "Direct sunlight is far and away the commonest cause, and a {device} on a car dashboard or a windowsill will overheat within minutes on a warm day regardless of what it is doing. Move it somewhere shaded and give it ten minutes before judging anything else.",
-      note: "{Devices} are designed to run in roughly 0 to 35 °C. On an Australian site in summer, the ambient temperature alone can be outside that — so a {device} getting hot outdoors is behaving correctly, not failing.",
+      note: "{Devices} are designed to run in roughly 0 to 35 °C. On an Australian site in summer; the ambient temperature alone can be outside that, so a {device} getting hot outdoors is behaving correctly, not failing.",
     },
     {
       title: "Take the case off, especially while charging",
@@ -46,7 +46,7 @@ const overheating: Article = {
     },
     {
       title: "Stop whatever is working it hard",
-      body: "Navigation with the screen on, video calls, the camera used for long stretches, and large downloads all heat a {device} quickly and legitimately. Close them and let it cool. If the heat tracks exactly with one of these, nothing is wrong — the {device} is doing what you asked of it.",
+      body: "Navigation with the screen on, video calls, the camera used for long stretches, and large downloads all heat a {device} quickly and legitimately. Close them and let it cool. If the heat tracks exactly with one of these, nothing is wrong; the {device} is doing what you asked of it.",
     },
     {
       title: "If you get a temperature warning screen, power it off and wait",
@@ -64,11 +64,11 @@ const overheating: Article = {
     {
       title: "Report it if it's hot for no reason, or if it looks distorted",
       body: "Tell IT if it gets hot while idle, gets hot every time it charges regardless of the case, or has started doing this recently without anything else changing. Those are worth looking at rather than working around.",
-      warn: "Stop using it immediately and hand it in if the screen is lifting away from the frame, the back is bulging, or it will not sit flat on a table. That is a swelling battery, and it needs to come out of service today rather than at your convenience.",
+      warn: "Stop using it immediately and hand it in if the screen is lifting away from the frame; the back is bulging, or it will not sit flat on a table. That is a swelling battery, and it needs to come out of service today rather than at your convenience.",
     },
   ],
   source: {
-    name: "Apple Support — If your iPhone or iPad gets too hot or too cold",
+    name: "Apple Support. If your iPhone or iPad gets too hot or too cold",
     url: "https://support.apple.com/en-us/118431",
   },
 };

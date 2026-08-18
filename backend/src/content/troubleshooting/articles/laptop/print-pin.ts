@@ -18,22 +18,22 @@ const printPin: Article = {
   symptomId: "print-pin",
   subjectKeys: ["laptop", "desktop", "printer"],
   summary:
-    "Your PIN releases jobs from the secure print queue at any printer on the network. You only need it for that — printing straight to a printer doesn't use a PIN at all.",
+    "Your PIN releases jobs from the secure print queue at any printer on the network. You only need it for that; printing straight to a printer doesn't use a PIN at all.",
   timeEstimate: "About 3 minutes",
   appliesTo: "KSB laptops and desktops",
   updated: "2026-08-07",
   before: [
-    "You are signed in to SAFEQ — the printer icon in the hidden icon tray has no orange exclamation mark",
+    "You are signed in to SAFEQ; the printer icon in the hidden icon tray has no orange exclamation mark",
   ],
   steps: [
     {
       title: "Check whether you need a PIN at all",
-      body: "A PIN is only for the secure print queue — the one where you send a job first and collect it from whichever printer you walk up to. If you print straight to a specific printer, you never need one.",
+      body: "A PIN is only for the secure print queue, the one where you send a job first and collect it from whichever printer you walk up to. If you print straight to a specific printer, you never need one.",
     },
     {
       title: "Open your SAFEQ profile",
       body: "Right-click the SAFEQ printer icon in the hidden icon tray and choose My Profile. Your profile opens in SAFEQ online.",
-      note: "This option only appears once you're signed in. If you can't see it, the icon is probably showing an orange exclamation mark.",
+      note: "This option only appears once you're signed in. If you can't see it; the icon is probably showing an orange exclamation mark.",
       figure: {
         images: [{ src: "laptop/print-pin/Safeq-profile-menu-light.jpg" }],
         caption: "Right-click the SAFEQ printer icon › My Profile",

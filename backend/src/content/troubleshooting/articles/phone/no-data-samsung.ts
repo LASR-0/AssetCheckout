@@ -30,7 +30,7 @@ const noDataSamsung: Article = {
   appliesTo: "KSB-managed Samsung {devices} on Telstra",
   updated: "2026-08-11",
   before: [
-    "You have no mobile data — web pages and email fail when you are away from Wi-Fi",
+    "You have no mobile data; web pages and email fail when you are away from Wi-Fi",
   ],
   steps: [
     {
@@ -45,8 +45,8 @@ const noDataSamsung: Article = {
     },
     {
       title: "Ask someone next to you whether their data works",
-      body: "If a colleague on Telstra standing in the same spot also has nothing, the problem is the tower and not your {device}, and everything below this is wasted effort. This is the single most useful thing you can do and it takes five seconds.",
-      note: "It has to be Telstra to mean anything — another carrier working proves nothing about ours. Telstra also publish a service status page you can check from Wi-Fi, which will tell you about a known outage at your location.",
+      body: "If a colleague on Telstra standing in the same spot also has nothing; the problem is the tower and not your {device}, and everything below this is wasted effort. This is the single most useful thing you can do and it takes five seconds.",
+      note: "It has to be Telstra to mean anything; another carrier working proves nothing about ours. Telstra also publish a service status page you can check from Wi-Fi, which will tell you about a known outage at your location.",
     },
     {
       title: "Restart the {device}",
@@ -55,7 +55,7 @@ const noDataSamsung: Article = {
     {
       title: "Check the APN is set to telstra.internet",
       body: "Go to Settings › Connections › Mobile networks › Access Point Names. There should be an entry named Telstra with an APN of telstra.internet, and it should be the one selected. If it is missing or set to something else, tap Add, enter telstra.internet as the APN, save it, and select it.",
-      note: "Some older Telstra entries use telstra.wap instead. That is for a service we don't use — if the {device} is set to it, switch to telstra.internet.",
+      note: "Some older Telstra entries use telstra.wap instead. That is for a service we don't use. If the {device} is set to it, switch to telstra.internet.",
       figure: {
         caption:
           "Settings › Connections › Mobile networks › Access Point Names",
@@ -64,7 +64,7 @@ const noDataSamsung: Article = {
     {
       title: "Reset network settings",
       body: "Settings › General management › Reset › Reset network settings. The {device} registers on Telstra as though it were new, which clears a stuck registration that nothing above will shift.",
-      warn: "This erases every saved Wi-Fi network, every Bluetooth pairing and any VPN settings on the {device} — including KSB-Mobile. You will have to rejoin it afterwards, so don't do this step while you are relying on the {device} for something.",
+      warn: "This erases every saved Wi-Fi network, every Bluetooth pairing and any VPN settings on the {device}, including KSB-Mobile. You will have to rejoin it afterwards, so don't do this step while you are relying on the {device} for something.",
       branch: {
         label: "I did this and now KSB-Mobile won't reconnect",
         targetSymptomId: "connect-ksb-mobile-samsung",
@@ -72,11 +72,11 @@ const noDataSamsung: Article = {
     },
     {
       title: "Still no data? Contact IT",
-      body: "Tell them whether a colleague's Telstra phone worked in the same place, and whether the {device} shows any signal bars at all. Those two answers separate a network outage, a dead SIM and a plan problem — and only the last of those is something IT resolves with Telstra rather than with the handset.",
+      body: "Tell them whether a colleague's Telstra phone worked in the same place, and whether the {device} shows any signal bars at all. Those two answers separate a network outage, a dead SIM and a plan problem, and only the last of those is something IT resolves with Telstra rather than with the handset.",
     },
   ],
   source: {
-    name: "Telstra — Fix an issue with my mobile device",
+    name: "Telstra; Fix an issue with my mobile device",
     url: "https://www.telstra.com.au/support/mobiles-devices/fix-troubleshoot-mobile",
   },
 };

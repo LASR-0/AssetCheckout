@@ -29,7 +29,7 @@ const mouseNotMoving: Article = {
   symptomId: "mouse-not-moving",
   subjectKeys: ["mouse"],
   summary:
-    "Usually the surface rather than the mouse — glass and gloss defeat the sensor completely. A sheet of paper under it settles that in ten seconds.",
+    "Usually the surface rather than the mouse; glass and gloss defeat the sensor completely. A sheet of paper under it settles that in ten seconds.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB mice",
   updated: "2026-08-11",
@@ -37,7 +37,7 @@ const mouseNotMoving: Article = {
   steps: [
     {
       title: "Check the machine itself hasn't frozen",
-      body: "Press Ctrl, Alt and Delete together. If the security screen comes up, Windows is fine and this is a mouse problem. If nothing at all happens, the machine has stopped responding and the mouse is an innocent bystander.",
+      body: "Press Ctrl, Alt and Delete together. If the security screen comes up, Windows is fine and this is a mouse problem. If nothing at all happens; the machine has stopped responding and the mouse is an innocent bystander.",
       branch: {
         label: "The whole machine has stopped responding",
         targetSymptomId: "taskbar-not-responding",
@@ -46,7 +46,7 @@ const mouseNotMoving: Article = {
     },
     {
       title: "Put a sheet of paper under the mouse and try again",
-      body: "Optical sensors need texture to track against. Clear glass, high-gloss desks and dark shiny surfaces give them nothing, and the pointer stutters, jumps, or sits perfectly still. Plain white paper is the quickest possible test — if the pointer behaves on paper, nothing is broken and you need a mousemat.",
+      body: "Optical sensors need texture to track against. Clear glass, high-gloss desks and dark shiny surfaces give them nothing, and the pointer stutters, jumps, or sits perfectly still. Plain white paper is the quickest possible test. If the pointer behaves on paper, nothing is broken and you need a mousemat.",
       note: "Worth doing even if the desk has worked for a year. A desk that got a new glass top, or a mouse that migrated onto a laminated sheet or a folder, is the usual story.",
     },
     {
@@ -60,7 +60,7 @@ const mouseNotMoving: Article = {
     },
     {
       title: "Move the receiver, or move nearer",
-      body: "If your mouse uses a small USB receiver, take it out of a port behind a monitor and put it in one on the front or side of the dock. Wireless mice are also affected by other things on the desk — a phone charger, a large metal monitor stand, a second wireless receiver right beside the first — so give it a clear line if you can.",
+      body: "If your mouse uses a small USB receiver, take it out of a port behind a monitor and put it in one on the front or side of the dock. Wireless mice are also affected by other things on the desk, a phone charger, a large metal monitor stand, a second wireless receiver right beside the first, so give it a clear line if you can.",
     },
     {
       title: "Try the mouse on another machine, and another mouse on yours",

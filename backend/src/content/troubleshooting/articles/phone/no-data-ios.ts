@@ -49,17 +49,17 @@ const noDataIos: Article = {
   symptomId: "no-data-ios",
   subjectKeys: ["phone", "tablet"],
   summary:
-    "Usually the device has dropped off Telstra's network and needs nudging back on. On an iPad, first check it has a mobile plan at all — plenty don't.",
+    "Usually the device has dropped off Telstra's network and needs nudging back on. On an iPad, first check it has a mobile plan at all; plenty don't.",
   timeEstimate: "About 10 minutes",
   appliesTo: "KSB-managed iPhones and cellular iPads on Telstra",
   updated: "2026-08-11",
   before: [
-    "You have no mobile data — web pages and email fail when you are away from Wi-Fi",
+    "You have no mobile data; web pages and email fail when you are away from Wi-Fi",
   ],
   steps: [
     {
       title: "On an iPad, check it has mobile data in the first place",
-      body: "Not every KSB iPad does. Staff who travel between sites get one with a mobile plan; iPads that stay inside a plant are Wi-Fi only, and there is nothing to fix on those — they are working as issued. If Settings has no Mobile Data section at all, that is what you have.",
+      body: "Not every KSB iPad does. Staff who travel between sites get one with a mobile plan; iPads that stay inside a plant are Wi-Fi only, and there is nothing to fix on those; they are working as issued. If Settings has no Mobile Data section at all; that is what you have.",
       note: "Skip this step on an iPhone. Every KSB phone has a plan.",
       branch: {
         label: "I need this iPad to work away from Wi-Fi",
@@ -68,12 +68,12 @@ const noDataIos: Article = {
     },
     {
       title: "Is this a device you've just been given?",
-      body: "KSB mobile plans are eSIMs — there is no plastic SIM card to move across. When you are issued a replacement iPhone or iPad, the eSIM has to be transferred to it, and until that happens the new device has Wi-Fi but no mobile data. It looks exactly like a fault and isn't one.",
+      body: "KSB mobile plans are eSIMs; there is no plastic SIM card to move across. When you are issued a replacement iPhone or iPad; the eSIM has to be transferred to it, and until that happens the new device has Wi-Fi but no mobile data. It looks exactly like a fault and isn't one.",
       note: "This is not something you can do yourself, and there is no setting that will start it. Contact IT, tell them you've swapped to a new device and need the eSIM moved across, and have both devices to hand if you still have the old one.",
     },
     {
       title: "Check mobile data is switched on and Flight Mode is off",
-      body: "Open Settings › Mobile Service — it is called Mobile Data on older iOS versions — and make sure Mobile Data is on. Then check Flight Mode is off in Settings or the Control Centre. Both get switched by accident more often than anyone admits, particularly Flight Mode after a trip.",
+      body: "Open Settings › Mobile Service, it is called Mobile Data on older iOS versions, and make sure Mobile Data is on. Then check Flight Mode is off in Settings or the Control Centre. Both get switched by accident more often than anyone admits, particularly Flight Mode after a trip.",
       note: "While you are there, look at Low Data Mode. It doesn't cut data off, but it stops background refresh and updates, which feels exactly like a broken connection if that is what you were waiting on.",
       figure: {
         images: [
@@ -91,8 +91,8 @@ const noDataIos: Article = {
     },
     {
       title: "Ask someone next to you whether their data works",
-      body: "If a colleague on Telstra standing in the same spot also has nothing, the problem is the tower and not your {device}, and everything below this is wasted effort. This is the single most useful thing you can do and it takes five seconds.",
-      note: "It has to be Telstra to mean anything — another carrier working proves nothing about ours. Telstra also publish a service status page you can check from Wi-Fi, which will tell you about a known outage at your location.",
+      body: "If a colleague on Telstra standing in the same spot also has nothing; the problem is the tower and not your {device}, and everything below this is wasted effort. This is the single most useful thing you can do and it takes five seconds.",
+      note: "It has to be Telstra to mean anything; another carrier working proves nothing about ours. Telstra also publish a service status page you can check from Wi-Fi, which will tell you about a known outage at your location.",
     },
     {
       title: "Restart the {device}",
@@ -101,7 +101,7 @@ const noDataIos: Article = {
     {
       title: "Check the APN is set to telstra.internet",
       body: "Go to Settings › Mobile Service › Mobile Data Network and look at the APN under Mobile Data. It should read telstra.internet. If it says something else, correcting it restores data immediately.",
-      note: "If that menu is missing entirely, or the fields are greyed out and empty, that is normal on a company phone — the carrier profile locks them. Don't try to force it; move on to the next step.",
+      note: "If that menu is missing entirely, or the fields are greyed out and empty, that is normal on a company phone, the carrier profile locks them. Don't try to force it; move on to the next step.",
       figure: {
         images: [
           {
@@ -115,7 +115,7 @@ const noDataIos: Article = {
     {
       title: "Reset network settings",
       body: "Settings › General › Transfer or Reset iPhone › Reset › Reset Network Settings. The {device} restarts and registers on Telstra as though it were new, which clears a stuck registration that nothing above will shift.",
-      warn: "This erases every saved Wi-Fi network, every Bluetooth pairing and any VPN settings on the {device} — including KSB-Mobile. You will have to rejoin it afterwards, so don't do this step while you are relying on the {device} for something.",
+      warn: "This erases every saved Wi-Fi network, every Bluetooth pairing and any VPN settings on the {device}, including KSB-Mobile. You will have to rejoin it afterwards, so don't do this step while you are relying on the {device} for something.",
       branch: {
         label: "I did this and now KSB-Mobile won't reconnect",
         targetSymptomId: "connect-ksb-mobile-ios",
@@ -123,11 +123,11 @@ const noDataIos: Article = {
     },
     {
       title: "Still no data? Contact IT",
-      body: "Tell them whether a colleague's Telstra phone worked in the same place, and whether the {device} shows any signal bars at all. Those two answers separate a network outage, a dead SIM and a plan problem — and only the last of those is something IT resolves with Telstra rather than with the handset.",
+      body: "Tell them whether a colleague's Telstra phone worked in the same place, and whether the {device} shows any signal bars at all. Those two answers separate a network outage, a dead SIM and a plan problem, and only the last of those is something IT resolves with Telstra rather than with the handset.",
     },
   ],
   source: {
-    name: "Telstra — Fix an issue with my mobile device",
+    name: "Telstra; Fix an issue with my mobile device",
     url: "https://www.telstra.com.au/support/mobiles-devices/fix-troubleshoot-mobile",
   },
 };

@@ -35,13 +35,13 @@ const noSound: Article = {
   steps: [
     {
       title: "Check the volume during an actual call",
-      body: "Call volume is a separate setting from ringtone and media volume, and it only exists while a call is running. Press volume up during the call, not before it — turning it up beforehand adjusts the ringer and changes nothing about what you hear.",
+      body: "Call volume is a separate setting from ringtone and media volume, and it only exists while a call is running. Press volume up during the call, not before it; turning it up beforehand adjusts the ringer and changes nothing about what you hear.",
       note: "Check the silent switch or Do Not Disturb too while you are there. Neither should mute a call you have already answered, but both cause the closely related complaint of never hearing the {device} ring in the first place.",
     },
     {
       title: "Check nothing else has taken the audio",
-      body: "A paired headset in your bag, a car you are parked next to, or a meeting room speaker will take the call audio without asking, and the {device} gives you almost no sign that it has happened. Turn Bluetooth off completely and make a test call.",
-      note: "This is much the commonest cause of a {device} that seems to have lost its speaker. If turning Bluetooth off fixes it, the {device} is fine — something else was simply louder about wanting the call.",
+      body: "A paired headset in your bag; a car you are parked next to, or a meeting room speaker will take the call audio without asking, and the {device} gives you almost no sign that it has happened. Turn Bluetooth off completely and make a test call.",
+      note: "This is much the commonest cause of a {device} that seems to have lost its speaker. If turning Bluetooth off fixes it; the {device} is fine; something else was simply louder about wanting the call.",
       branch: {
         label: "I want to stop that headset connecting automatically",
         targetSymptomId: "bluetooth",
@@ -54,19 +54,19 @@ const noSound: Article = {
     },
     {
       title: "Test the loudspeaker against the earpiece",
-      body: "During a call, switch to speakerphone. If the loudspeaker works and holding the {device} to your ear gives you nothing, the earpiece is the problem — usually the blocked grille above. If both are silent, the fault is further in and worth reporting.",
+      body: "During a call, switch to speakerphone. If the loudspeaker works and holding the {device} to your ear gives you nothing; the earpiece is the problem, usually the blocked grille above. If both are silent; the fault is further in and worth reporting.",
       figure: {
         caption:
-          "During a call › Speaker — compare against holding it to your ear",
+          "During a call › Speaker; compare against holding it to your ear",
       },
     },
     {
       title: "Restart the {device}",
-      body: "Power it fully off, wait ten seconds, and power it back on. Audio routing gets stuck occasionally — usually after a Bluetooth device disconnected badly — and a restart is what clears it.",
+      body: "Power it fully off, wait ten seconds, and power it back on. Audio routing gets stuck occasionally, usually after a Bluetooth device disconnected badly, and a restart is what clears it.",
     },
     {
       title: "Still silent? Contact IT",
-      body: "Tell them whether the loudspeaker works when the earpiece doesn't, and whether it fails on every call or only some. Those two answers separate a blocked grille, a failed speaker and a network problem — and the first two look identical from where you are standing.",
+      body: "Tell them whether the loudspeaker works when the earpiece doesn't, and whether it fails on every call or only some. Those two answers separate a blocked grille, a failed speaker and a network problem, and the first two look identical from where you are standing.",
     },
   ],
 };

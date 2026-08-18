@@ -23,7 +23,7 @@ const wontTurnOn: Article = {
     {
       title: "Plug it in and leave it for fifteen minutes",
       body: "Connect the charger directly to a wall socket rather than through a dock or a monitor. A battery that is completely flat will not respond to the power button at all for the first few minutes, even while it is charging.",
-      note: "Look for a charging light on the laptop. If one comes on, the machine is getting power and this is a flat battery rather than a dead laptop — leave it and try again shortly.",
+      note: "Look for a charging light on the laptop. If one comes on; the machine is getting power and this is a flat battery rather than a dead laptop; leave it and try again shortly.",
       branch: {
         label: "There's no charging light and it isn't charging",
         targetSymptomId: "not-charging",

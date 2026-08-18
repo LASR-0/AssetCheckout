@@ -64,12 +64,14 @@ const STEP_KEYS = [
   "warn",
   "figure",
   "branch",
+  "link",
   // Last, so every module written before it existed emits unchanged.
   "blockOrder",
 ] as const;
 const FIGURE_KEYS = ["images", "size", "caption"] as const;
 const IMAGE_KEYS = ["src", "srcDark"] as const;
 const BRANCH_KEYS = ["label", "targetSymptomId", "targetSubjectKey"] as const;
+const LINK_KEYS = ["label", "url"] as const;
 const SOURCE_KEYS = ["name", "url"] as const;
 
 const SUBJECT_ORDER = new Map<string, number>(
@@ -178,6 +180,10 @@ function emitStep(step: Record<string, unknown>, path: string, ctx: Emit): strin
     if (key === "figure") return emitFigure(v as Record<string, unknown>, childPath, ctx);
     if (key === "branch")
       return obj(v as Record<string, unknown>, BRANCH_KEYS, childPath, ctx, (_, x) =>
+        str(x as string)
+      );
+    if (key === "link")
+      return obj(v as Record<string, unknown>, LINK_KEYS, childPath, ctx, (_, x) =>
         str(x as string)
       );
     return str(v as string);

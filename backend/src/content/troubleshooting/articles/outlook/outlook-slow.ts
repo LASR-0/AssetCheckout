@@ -9,49 +9,54 @@ import type { Article } from "../../schema.js";
 //  copy is at fault, and if it is the local copy they can keep working in the
 //  browser while it gets sorted. Nobody has to sit and wait.
 //
-//  ADD-INS ARE THE COMMONEST REAL CAUSE and almost nobody suspects them,
-//  because they arrive with other software rather than being installed
-//  deliberately. Outlook's own slow-add-in notice is easy to dismiss and
-//  never comes back.
+//  NO ADD-IN STEP, and that is a KSB-specific decision rather than a general
+//  one. Add-ins are the commonest cause of a slow Outlook on a machine where
+//  people install their own software; here they are managed centrally, so
+//  asking somebody to untick things in COM Add-ins sends them poking at a list
+//  they did not choose and cannot meaningfully change.
 //
-//  BIG FOLDERS ARE THE OTHER HALF, and the number is worth stating plainly:
-//  a single folder with tens of thousands of messages will drag regardless of
-//  how good the machine is, and "sort it into subfolders" is a real fix
-//  rather than housekeeping advice.
+//  WHAT IS LEFT IS WHAT A USER CAN ACTUALLY ACT ON: is it this machine or the
+//  mailbox, is the local cache full, is the VPN in the way, is it Outlook or
+//  the whole laptop.
 //
-//  NO REBUILD-THE-OST STEP. It is the standard vendor answer, it takes a long
-//  time, and it needs judgement about what is cached locally — that is an IT
-//  job, and the last step hands it over rather than talking a user through
-//  deleting a data file.
+//  THE OST STEP IS HERE NOW, and it used to be deliberately absent — the note
+//  that stood here said rebuilding was an IT job. It was moved in because a
+//  .ost at its 50 GB ceiling is a specific, checkable condition with an
+//  unambiguous fix, which is different from "rebuild it and see". What made
+//  it an IT job was the judgement, and checking a file size needs none.
+//
+//  IT CARRIES A WARNING FOR A REASON. The rebuild is not destructive to the
+//  mailbox, but it takes days on a large one, and somebody who does it the
+//  morning of a deadline will be without offline mail when they need it. The
+//  warning says the cost in days rather than saying "this may take a while".
 ///  +-----------------------------------------------------------------+
 
 const outlookSlow: Article = {
   symptomId: "outlook-slow",
   subjectKeys: ["outlook"],
   summary:
-    "Usually an add-in or one enormous folder rather than the machine. Outlook on the web tells you which — and keeps you working while you sort it out.",
+    "Usually an add-in or one enormous folder rather than the machine. Outlook on the web tells you which, and keeps you working while you sort it out.",
   timeEstimate: "About 20 minutes",
   appliesTo: "KSB laptops and desktops running Outlook Classic",
-  updated: "2026-08-11",
+  updated: "2026-08-14",
   before: [],
   steps: [
     {
       title: "Try Outlook on the web",
-      body: "Go to office.com, sign in, and open Outlook there. If the web version is quick, your mailbox and the network are both fine and the problem is the Outlook installed on this machine. If the web version is slow too, it is the mailbox rather than the app.",
+      body: "Go to outlook.office.com/mail/ and sign in. If the web version is quick, your mailbox and the network are both fine and the problem is the Outlook installed on this machine. If the web version is slow too, it is the mailbox rather than the app.",
       note: "Keep the web version open while you work through the rest of this. It does almost everything the installed one does, so there is no reason to sit waiting on a slow Outlook while you troubleshoot it.",
     },
     {
-      title: "Turn off add-ins you don't recognise",
-      body: "Go to File › Options › Add-ins. At the bottom, next to Manage, choose COM Add-ins and click Go. Untick anything you don't actively use — most arrive with other software and never get removed — then restart Outlook. Add-ins are much the commonest cause of Outlook being slow to start and slow to open messages.",
-      note: "Outlook sometimes shows a notice saying an add-in is slowing it down and offers to disable it. That notice is easy to dismiss without reading and never appears again, which is why this is worth checking by hand.",
+      title: "Check whether your local mailbox file is full",
+      body: "Go to File › Account Settings › Account Settings, open the Data Files tab, select your account and click Open File Location. Windows opens the folder holding your .ost file, the local copy of your whole mailbox. Right-click it, choose Properties, and look at the size. Outlook Classic caps this file at 50 GB and starts dragging well before it reaches that. If yours is close to it, close Outlook completely, delete the .ost file, and open Outlook again; it rebuilds itself from the server.",
+      note: "The file does not shrink when you delete mail. Outlook reuses the space inside it instead, so a mailbox you have tidied up can still have a .ost sitting at its maximum size.",
+      warn: "Deleting the .ost removes every email cached on this machine. Nothing is lost from the server, but until Outlook finishes downloading it all again you will have little or no mail available offline, and on a large mailbox that can take up to three days. Do this when you can work in Outlook on the web for a few days, not the morning of a deadline.",
       figure: {
-        caption: "Outlook › File › Options › Add-ins › COM Add-ins › Go",
+        images: [{ src: "outlook/outlook-slow/Outlook-ost-light.png" }],
+        size: "window",
+        caption:
+          "Outlook › File › Account Settings › Account Settings › Data Files › Open File Location",
       },
-    },
-    {
-      title: "Look for one enormous folder",
-      body: "Right-click your Inbox and choose Properties, then Folder Size. Any single folder holding tens of thousands of messages will make Outlook drag no matter how fast the machine is. Inbox, Sent Items and Deleted Items are the usual offenders. Move older mail into subfolders by year — that alone often transforms it.",
-      note: "Subfolders genuinely help; Outlook works folder by folder. Ten folders of five thousand behave far better than one folder of fifty thousand.",
     },
     {
       title: "Empty Deleted Items and Junk",
@@ -59,7 +64,7 @@ const outlookSlow: Article = {
     },
     {
       title: "Check whether it's only slow on the VPN",
-      body: "If you are connected to GlobalProtect, disconnect it and see whether Outlook picks up. The VPN routes traffic through the parent company's firewall in Germany, which makes everything noticeably slower — and you only need it for internal systems with .intern in the address, not for email.",
+      body: "If you are connected to GlobalProtect, disconnect it and see whether Outlook picks up. The VPN routes traffic through the parent company's firewall in Germany, which makes everything noticeably slower, and you only need it for internal systems with .intern in the address, not for email.",
       branch: {
         label: "I'm not sure whether I need the VPN on",
         targetSymptomId: "vpn-from-home",
@@ -68,7 +73,7 @@ const outlookSlow: Article = {
     },
     {
       title: "Close everything else and restart the laptop",
-      body: "Restart from the Start menu rather than closing the lid. If Outlook is quick immediately after a restart and degrades through the day, the problem is something else on the machine competing with it rather than Outlook itself.",
+      body: "Restart from the Start menu rather than closing the lid. If Outlook is quick immediately after a restart and degrades through the day; the problem is something else on the machine competing with it rather than Outlook itself.",
       branch: {
         label: "Everything on the laptop is slow, not just Outlook",
         targetSymptomId: "apps-slow",
@@ -77,7 +82,7 @@ const outlookSlow: Article = {
     },
     {
       title: "Still slow? Contact IT",
-      body: "Tell them whether Outlook on the web is quick, and whether disabling add-ins made any difference. If the web version is fine and the installed one isn't, the fix is usually rebuilding the local copy of your mailbox — that is something IT does rather than something to attempt yourself, because it decides what stays available offline.",
+      body: "Tell them whether Outlook on the web is quick and how big your .ost file was. If the web version is fine and the installed one isn't, and the file was nowhere near 50 GB; the cause is on this machine rather than in your mailbox, which is the useful thing for them to know before they start.",
     },
   ],
 };
