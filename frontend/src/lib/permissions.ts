@@ -51,10 +51,22 @@ export const ALL_COLUMN_IDS = [
 
 export type ColumnId = (typeof ALL_COLUMN_IDS)[number];
 
+//  THE ACTIONS COLUMN IS NOT AN ADMIN COLUMN. A requester has exactly one
+//  action in the whole workflow, and it is the last one: confirming they
+//  collected or received their device. Withholding the column left those
+//  requests parked at "ready to collect" with nobody able to close them —
+//  the requester could see the row, could see the badge telling them to
+//  collect it, and had no button.
+//
+//  Safe because the cell gates every branch itself (columns.tsx): the
+//  correction, manager and admin actions are each behind a role check, and
+//  the collect/receive button is behind ownership. A requester who is not
+//  the owner, or is at a stage with nothing to do, gets the stage badge —
+//  which is what the column already showed everyone else.
 const ROLE_COLUMNS: Record<NonNullable<Role>, ColumnId[]> = {
   ADMIN: ["userName", "requestType", "assetDetails", "reason", "manager", "createdAt", "actions"],
   MANAGER: ["userName", "requestType", "reason", "manager", "createdAt", "actions"],
-  REQUESTER: ["userName", "requestType", "reason", "manager", "createdAt"],
+  REQUESTER: ["userName", "requestType", "reason", "manager", "createdAt", "actions"],
 };
 
 

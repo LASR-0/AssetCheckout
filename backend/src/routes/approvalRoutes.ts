@@ -33,6 +33,7 @@ import {
   getActorEmail,
   isAdminEmail,
   isApprover,
+  isRequestee,
 } from "../config/auth.js";
 
 const router = express.Router();
@@ -683,14 +684,35 @@ router.post("/:requestId/receive", async (req, res, next) => {
     // Ownership check: load the request, confirm actor is its user or an admin.
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { userName: true },
+      select: { userId: true, userName: true },
     });
     if (!request) {
       return res.status(404).json({ success: false, message: "Request not found" });
     }
 
-    const isAdmin = isAdminEmail(getActorEmail(req));
-    const isOwner = request.userName === actorName;
+    const actorEmail = getActorEmail(req);
+
+    // Matched on the Snipe user id for the same reason as the requests list:
+    // the SSO display name and the one stored on the request come from
+    // different directories. A raw name comparison here refused the requestee
+    // their own collection confirmation with a 403 — and this is the last
+    // action in the workflow, so there was nothing else they could do about
+    // it. Left null when Snipe cannot be reached, which falls back to the
+    // name comparison inside isRequestee.
+    let actorId: number | null = null;
+    if (actorEmail) {
+      try {
+        actorId = await resolveActorUserId(actorEmail);
+      } catch (err) {
+        console.error(
+          "[approvals] could not resolve actor to a Snipe user, falling back to name matching:",
+          err
+        );
+      }
+    }
+
+    const isAdmin = isAdminEmail(actorEmail);
+    const isOwner = isRequestee(request, { id: actorId, name: actorName });
     if (!isAdmin && !isOwner) {
       return res.status(403).json({
         success: false,
