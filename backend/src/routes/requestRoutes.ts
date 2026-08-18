@@ -6,12 +6,17 @@ import {
   getTierValues,
 } from "../services/snipeitassets.js";
 import { getAllAccessories } from "../services/snipeitaccessories.js";
-import { findSnipeUserByEmail } from "../services/snipeitassets.js";
+import { findSnipeUserByEmail, resolveActorUserId } from "../services/snipeitassets.js";
 import { getStandardAccessories } from "../services/settings.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import { createRequest, createCorrectionRequest } from "../services/request.js";
-import { getActorName, getActorEmail, isAdminEmail, normalizeName } from "../config/auth.js";
+import {
+  getActorName,
+  getActorEmail,
+  isAdminEmail,
+  canSeeRequest,
+} from "../config/auth.js";
 
 const router = express.Router();
 
@@ -126,13 +131,34 @@ router.get("/averages", async (req, res, next) => {
  * about identity or role is accepted from the client:
  *
  *   - Admin (email in ADMIN_EMAILS): all requests.
- *   - Everyone else: requests they submitted OR requests where they are
- *     the nominated approver. A "manager" is not a stored role; it's
- *     simply having your name in the manager field of a request.
+ *   - Everyone else: requests they are the requestee of OR requests where
+ *     they are the nominated approver. A "manager" is not a stored role;
+ *     it's simply being named as the approver on a request.
  *
- * Name matching is done in code with normalizeName (SQLite
- * case-insensitivity workaround), consistent with how manager/requester
- * matching works elsewhere.
+ * MATCHED ON SNIPE USER ID, NOT DISPLAY NAME. Both userId and managerId
+ * come from the same Snipe picker that filled userName and manager, so
+ * they identify the same people — but the id is stable and the name is
+ * not. The actor arrives from SSO as an email, which resolves to an id via
+ * resolveActorUserId. Matching the SSO display name against the Snipe one
+ * used to hide a person's own requests from them whenever the two
+ * directories spelled them differently, which is invisible from the
+ * outside: the table is simply empty, with no error and no denial.
+ *
+ * THE NAME MATCH IS KEPT AS AN EXTRA CLAUSE, not as the primary one. An
+ * offboarded-then-rehired employee gets a fresh Snipe account (see
+ * findSnipeUserByEmail), so their pre-rehire requests carry an id they no
+ * longer have; the name still finds those. It only ever widens what the id
+ * match already returns, so it cannot hide anything.
+ *
+ * Its known cost, which predates this filter: two people who genuinely
+ * share a display name can see each other's rows. Removing the clause
+ * would close that and re-break rehires, so it is left as a deliberate
+ * trade rather than an oversight.
+ *
+ * IF SNIPE IS UNREACHABLE the id cannot be resolved, and the filter falls
+ * back to name matching alone — degraded and imperfect, but exactly what
+ * this endpoint did before, which beats showing everyone an empty table
+ * during a Snipe outage.
  *
  * Accessory enrichment (best-effort, one catalog read + one settings read
  * for the whole page, freshness bounded by the accessory cache TTL ~10 min):
@@ -193,12 +219,25 @@ router.get("/", async (req, res, next) => {
     let visible = requests;
 
     if (!isAdmin) {
-      const actor = normalizeName(actorName);
-      visible = requests.filter(
-        (r) =>
-          normalizeName(r.userName) === actor ||
-          (r.manager !== null && normalizeName(r.manager) === actor)
-      );
+      const actorEmail = getActorEmail(req);
+
+      // Null covers both "no Snipe account" and "Snipe did not answer". The
+      // id clause simply drops out in either case, which is why the name
+      // clause below is still here.
+      let actorId: number | null = null;
+      if (actorEmail) {
+        try {
+          actorId = await resolveActorUserId(actorEmail);
+        } catch (err) {
+          console.error(
+            "[requests] could not resolve actor to a Snipe user, falling back to name matching:",
+            err
+          );
+        }
+      }
+
+      const actor = { id: actorId, name: actorName };
+      visible = requests.filter((r) => canSeeRequest(r, actor));
     }
 
     // Enrich accessory rows: live stock (drives "Add stock") plus the two

@@ -168,3 +168,84 @@ describe("identity handling, in both modes", () => {
     expect(isAdminEmail("")).toBe(false);
   });
 });
+
+///  +-----------------------------------------------------------------+
+///  |            THE BUG THIS PREDICATE WAS WRITTEN FOR               |
+///  +-----------------------------------------------------------------+
+//
+//  Visibility used to be decided by comparing the SSO display name against
+//  the one stored on the request. Those names come from two directories
+//  that do not spell people identically, so a user whose Entra name differs
+//  from their Snipe name saw an empty requests table: no error, no denial,
+//  nothing to suggest a filter had silently excluded everything.
+//
+//  It bit hardest when somebody raised a request ON BEHALF of a colleague,
+//  because that is exactly when the stored name comes from the Snipe picker
+//  rather than from the requestee's own session.
+///  +-----------------------------------------------------------------+
+
+describe("request visibility", () => {
+  const row = {
+    userId: 42,
+    userName: "Jane Smith",
+    managerId: 7,
+    manager: "Bob Jones",
+  };
+
+  it("shows a request to its requestee when the display names disagree", async () => {
+    // The reported bug. Snipe says "Jane Smith", Entra says "Jane Smith-Brown"
+    // after a name change; the id is the same person either way.
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest(row, { id: 42, name: "Jane Smith-Brown" })).toBe(true);
+  });
+
+  it("shows it no matter who submitted it", async () => {
+    // An admin raising it for Jane stores the Snipe spelling of HER name,
+    // not the submitter's. Nothing about the row records who typed it in,
+    // which is precisely why the requestee has to match on id.
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest(row, { id: 42, name: "J. Smith" })).toBe(true);
+  });
+
+  it("shows it to the nominated approver by id", async () => {
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest(row, { id: 7, name: "Robert Jones" })).toBe(true);
+  });
+
+  it("hides it from everybody else", async () => {
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest(row, { id: 99, name: "Someone Else" })).toBe(false);
+  });
+
+  it("still matches on name when the id could not be resolved", async () => {
+    // Snipe unreachable, or an actor with no Snipe account. Degraded to the
+    // old behaviour rather than showing an empty table during an outage.
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest(row, { id: null, name: "jane smith" })).toBe(true);
+    expect(canSeeRequest(row, { id: null, name: "BOB JONES" })).toBe(true);
+    expect(canSeeRequest(row, { id: null, name: "Someone Else" })).toBe(false);
+  });
+
+  it("matches a rehired employee's older requests by name", async () => {
+    // A rehire gets a fresh Snipe account, so requests raised before they
+    // left carry an id they no longer have. Without the name fallback their
+    // own history would disappear — the same bug in a new costume.
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest(row, { id: 500, name: "Jane Smith" })).toBe(true);
+  });
+
+  it("never matches an actor with no name and no id", async () => {
+    // An empty name must not match the empty manager field, or an
+    // unidentified caller would see every request that has no approver.
+    const { canSeeRequest } = await authUnder("production", "");
+
+    expect(canSeeRequest({ ...row, manager: null }, { id: null, name: "" })).toBe(false);
+    expect(canSeeRequest({ ...row, userName: "" }, { id: null, name: "  " })).toBe(false);
+  });
+});

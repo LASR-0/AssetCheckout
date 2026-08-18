@@ -4,6 +4,13 @@ import type { Role } from "@/types/authType";
 export interface AuthState {
   name: string;
   email: string;
+  /**
+   * The actor's Snipe-IT user id, which is what requests are keyed on.
+   * Null when Snipe has no account for this email, or could not be reached.
+   * Prefer it over `name` for any "is this mine?" comparison: the display
+   * name comes from a different directory and the two do not always agree.
+   */
+  userId: number | null;
   role: Role;
   isLoading: boolean;
   refresh: () => void;
@@ -58,6 +65,7 @@ export function setDevUserEmail(email: string): void {
 export function useAuth(): AuthState {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
+  const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<Role>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [tick, setTick] = useState(0);
@@ -85,6 +93,7 @@ export function useAuth(): AuthState {
           if (!cancelled) {
             setName("");
             setEmail("");
+            setUserId(null);
             setRole(null);
             setIsLoading(false);
           }
@@ -104,12 +113,14 @@ export function useAuth(): AuthState {
         if (!cancelled) {
           setName(normalizeDisplayName(data.name ?? devName));
           setEmail(data.email ?? devEmail);
+          setUserId(typeof data.userId === "number" ? data.userId : null);
           setRole(data.role);
           setIsLoading(false);
         }
       } catch (err) {
         console.error("useAuth failed", err);
         if (!cancelled) {
+          setUserId(null);
           setRole(null);
           setIsLoading(false);
         }
@@ -122,5 +133,5 @@ export function useAuth(): AuthState {
     };
   }, [tick]);
 
-  return { name, email, role, isLoading, refresh };
+  return { name, email, userId, role, isLoading, refresh };
 }

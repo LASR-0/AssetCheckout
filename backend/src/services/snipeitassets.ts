@@ -1500,6 +1500,55 @@ export async function findSnipeUserByEmail(email: string): Promise<SnipeUserDeta
   };
 }
 
+///  +-----------------------------------------------------------------+
+///  |                  ACTOR IDENTITY (EMAIL -> SNIPE ID)             |
+///  +-----------------------------------------------------------------+
+//
+//  THE JOIN BETWEEN THE TWO DIRECTORIES. Requests store a Snipe user id;
+//  the SSO proxy tells us an email. Everything that needs to know "is this
+//  row mine?" needs that mapping, and the display names cannot supply it:
+//  Entra and Snipe disagree about how to spell people (middle names,
+//  "Last, First", post-marriage surnames), so matching on name silently
+//  hides a person's own requests from them.
+//
+//  CACHED BECAUSE IT IS ON THE READ PATH. Every request-list load asks this
+//  question, and the answer changes about as often as someone joins the
+//  company. The TTL matches the hardware cache; a rehire that lands inside
+//  the window costs one stale lookup, not a wrong answer.
+//
+//  NEGATIVE RESULTS ARE CACHED TOO. An actor with no Snipe account at all
+//  (a contractor, a service login) would otherwise re-query Snipe on every
+//  page load, forever, to be told "no" each time.
+///  +-----------------------------------------------------------------+
+
+const ACTOR_ID_TTL_MS = 10 * 60 * 1000;     // 10 minutes
+
+const actorIdCache = new Map<string, { id: number | null; fetchedAt: number }>();
+
+/**
+ * Map an authenticated actor's email to their Snipe user id, or null when
+ * Snipe has no account for that address.
+ *
+ * Throws if Snipe cannot be reached — callers must decide for themselves
+ * whether that means "deny" or "fall back", and the two are not the same
+ * choice everywhere, so this deliberately does not pick one.
+ */
+export async function resolveActorUserId(email: string): Promise<number | null> {
+  const key = email.trim().toLowerCase();
+  if (!key) return null;
+
+  const hit = actorIdCache.get(key);
+  if (hit && isFresh(hit.fetchedAt, ACTOR_ID_TTL_MS)) {
+    return hit.id;
+  }
+
+  const user = await findSnipeUserByEmail(key);
+  const id = user?.id ?? null;
+
+  actorIdCache.set(key, { id, fetchedAt: Date.now() });
+  return id;
+}
+
 /**
  * Create a Snipe user for an employee. The account is a directory entry for
  * asset assignment, not a login: activated=false, and the password (which

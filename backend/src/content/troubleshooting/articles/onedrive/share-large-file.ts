@@ -34,7 +34,7 @@ const onedriveShareLargeFile: Article = {
   steps: [
     {
       title: "Sign in to the file transfer site",
-      body: "Go to https://filetransfer.ksb.com/ and choose the SSO option to sign in, not a username and password. SSO uses the KSB account you are already signed in with, so there is nothing new to remember.",
+      body: "Go to KSB file transfer (link below) and choose the SSO option to sign in, not a username and password. SSO uses the KSB account you are already signed in with, so there is nothing new to remember.",
       note: "The first time you ever sign in; it can take up to five minutes before you can do anything useful. You will get an email saying you have been granted permissions for a data room named after your @ksb.com address; that is your own space on the site, and it has to be created before it will appear. If it looks empty at first, wait for the email rather than assuming it has not worked.",
       figure: {
         images: [
@@ -42,6 +42,10 @@ const onedriveShareLargeFile: Article = {
         ],
         size: "window",
         caption: "filetransfer.ksb.com, the SSO sign-in option",
+      },
+      link: {
+        label: "Go to KSB File Transfer",
+        url: "https://filetransfer.ksb.com/",
       },
     },
     {

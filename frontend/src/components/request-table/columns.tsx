@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
+import { isApprover, isRequestee } from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
 import { StatusBadge, deriveFulfilment, deriveStage } from "@/components/ui/statusbadge";
@@ -19,6 +20,8 @@ declare module "@tanstack/react-table" {
 export type RequestsTableMeta = {
   role: Role;
   currentUserName: string;
+  /** Snipe user id of the signed-in actor; null if it could not be resolved. */
+  currentUserId: number | null;
   onApprove: (request: Request) => void;
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
@@ -342,7 +345,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   } = deriveFulfilment(request);
 
   const needsShipping = request.needsShipping ?? false;
-  const isOwner = request.userName === meta.currentUserName;
+  const isOwner = isRequestee(request, meta.currentUserId, meta.currentUserName);
 
   // Stage-specific tooltip for the COMPLETED fulfilment badge, derived from
   // the same booleans that drive the badge itself.
@@ -620,10 +623,7 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
     // ADMIN so they never reach the manager branch above, and without this they
     // could never answer a quote that is genuinely theirs to answer.
     if (isAwaitingQuoteResponse) {
-      const isOwnQuote =
-        !!request.manager &&
-        request.manager.trim().toLowerCase() ===
-          (meta.currentUserName ?? "").trim().toLowerCase();
+      const isOwnQuote = isApprover(request, meta.currentUserId, meta.currentUserName);
 
       if (!isOwnQuote) {
         return <BadgeWithTooltip status="AWAITING_QUOTE" />;

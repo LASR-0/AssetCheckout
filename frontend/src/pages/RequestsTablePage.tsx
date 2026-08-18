@@ -10,7 +10,7 @@ import { getRequests } from "@/api/requests";
 import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
 import { deriveStage, isDoneStage } from "@/components/ui/statusbadge";
-import { getColumnVisibility } from "@/lib/permissions";
+import { getColumnVisibility, isApprover } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
@@ -99,7 +99,7 @@ export default function RequestTablePage() {
 
   const [selectedTier, setSelectedTier] = useState<string>("STANDARD");
 
-  const { role, name: currentUserName } = useAuth();
+  const { role, name: currentUserName, userId: currentUserId } = useAuth();
   const columnVisibility = getColumnVisibility(role);
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
@@ -519,6 +519,7 @@ export default function RequestTablePage() {
             requests={visibleRequests}
             role={role}
             currentUserName={currentUserName}
+            currentUserId={currentUserId}
             onApprove={handleApprove}
             onReject={handleRejectClick}
             onCreateModel={handleCreateModel}
@@ -591,8 +592,7 @@ export default function RequestTablePage() {
             // acting, not from an assumption about it.
             onBehalf={
               !!selectedRequest &&
-              (selectedRequest.manager ?? "").trim().toLowerCase() !==
-                (currentUserName ?? "").trim().toLowerCase()
+              !isApprover(selectedRequest, currentUserId, currentUserName)
             }
             onSuccess={loadRequests}
           />

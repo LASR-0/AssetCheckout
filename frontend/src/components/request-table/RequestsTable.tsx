@@ -17,6 +17,7 @@ type Props = {
   requests: Request[];
   role: Role;
   currentUserName: string;
+  currentUserId: number | null;
   onApprove: (request: Request) => void;
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
@@ -110,6 +111,7 @@ export default function RequestsTable({
   requests,
   role,
   currentUserName,
+  currentUserId,
   onApprove,
   onReject,
   onCreateModel,
@@ -149,6 +151,7 @@ export default function RequestsTable({
     meta: {
       role,
       currentUserName,
+      currentUserId,
       onApprove,
       onReject,
       onCreateModel,

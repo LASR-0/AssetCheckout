@@ -23,6 +23,7 @@ import {
   searchModelsForCorrection,
   searchAssetsBySerial,
   findAssetsWithSerial,
+  resolveActorUserId,
 } from "../services/snipeitassets.js";
 import { searchAccessories } from "../services/snipeitaccessories.js";
 import { prisma } from "../db/prisma.js";
@@ -31,7 +32,7 @@ import {
   getActorName,
   getActorEmail,
   isAdminEmail,
-  normalizeName,
+  isApprover,
 } from "../config/auth.js";
 
 const router = express.Router();
@@ -861,11 +862,19 @@ router.get("/:requestId/correction/search-assets", async (req, res, next) => {
  * manager-or-admin, because reading the document IT itself uploaded commits
  * nothing.
  *
- * Manager identity is name-matched because that is how the request records it
- * and how /auth/role resolves the MANAGER role — see authRoutes.ts. Admin
- * identity is email-matched, which is stable across display-name changes. An
- * admin who happens to BE the approver on a request matches as the manager
- * first, and answers as themselves rather than being locked out.
+ * Manager identity is matched on the stored managerId, which came from the
+ * same Snipe picker as the manager name and survives the two directories
+ * disagreeing about spelling. The name comparison is kept alongside it for
+ * approvers whose Snipe account was recreated after a rehire, and because
+ * that is how /auth/role resolves the MANAGER role — see authRoutes.ts.
+ * Either one is sufficient. Admin identity is email-matched, which is
+ * stable across display-name changes. An admin who happens to BE the
+ * approver on a request matches as the manager first, and answers as
+ * themselves rather than being locked out.
+ *
+ * A quote that cannot be answered is a request stuck with nobody able to
+ * unstick it — there is no IT override at this stage — so a manager locked
+ * out by a name mismatch was a dead end, not an inconvenience.
  *
  * Discriminated on a STRING, not a boolean, for the same reason
  * CorrectionOutcome is: this project compiles with `strict: false`, and
@@ -888,15 +897,30 @@ async function resolveQuoteActor(
 
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    select: { manager: true },
+    select: { manager: true, managerId: true },
   });
   if (!request) {
     return { outcome: "denied", status: 404, message: "Request not found" };
   }
 
-  const isAdmin = isAdminEmail(getActorEmail(req));
-  const isManager =
-    !!request.manager && normalizeName(request.manager) === normalizeName(actorName);
+  const actorEmail = getActorEmail(req);
+
+  // Left null when Snipe has no account for the actor or cannot be reached;
+  // the name comparison below then decides on its own, as it did before.
+  let actorId: number | null = null;
+  if (actorEmail) {
+    try {
+      actorId = await resolveActorUserId(actorEmail);
+    } catch (err) {
+      console.error(
+        "[approvals] could not resolve actor to a Snipe user, falling back to name matching:",
+        err
+      );
+    }
+  }
+
+  const isAdmin = isAdminEmail(actorEmail);
+  const isManager = isApprover(request, { id: actorId, name: actorName });
 
   if (isManager) {
     return { outcome: "allowed", name: actorName, onBehalf: false };
