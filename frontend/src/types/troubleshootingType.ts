@@ -149,6 +149,15 @@ export type TroubleshootingConfig = {
   /** False when the number is the XXXX placeholder. */
   supportPhoneConfigured: boolean;
   /**
+   * When the line is answered, as free text — "Mon–Fri, 7am–7pm".
+   *
+   * Null when the deployment hasn't said, and the line is then omitted
+   * rather than filled with a guess. Free text rather than open/close times
+   * so a deployment can write "closed public holidays" without the shape
+   * having to anticipate it — see getSupportHours in config/support.
+   */
+  supportHours: string | null;
+  /**
    * False hides the messaging option entirely.
    *
    * No placeholder equivalent to the phone number's "XXXX XXX XXX": a number

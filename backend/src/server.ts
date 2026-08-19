@@ -87,8 +87,28 @@ if (process.env.NODE_ENV === 'production') {
   //  class of breakage the content test used to catch on disk, and it stops
   //  being catchable at build time once images live on a volume. A 404 at
   //  least appears in devtools and in the console.
-  app.use('/troubleshooting', (_req: Request, res: Response) => {
-    res.status(404).end();
+  //
+  //  ONLY FOR ASSET REQUESTS, THOUGH. `/troubleshooting` is not just an image
+  //  root: it is also where three of the SPA's routes live, and app.use()
+  //  matches a prefix, so an unguarded 404 here swallowed every page URL
+  //  under it — /troubleshooting, /troubleshooting/phone and every article
+  //  deep link returned 404 on a hard load or refresh. It went unnoticed
+  //  because client-side navigation never asks the server, so the navbar
+  //  link worked and only a typed URL, a refresh or a pasted deep link broke
+  //  — the deep links this feature exists to make shareable.
+  //
+  //  An extension on the last segment is what separates the two: image srcs
+  //  are "<subject>/<article>/<file>.png" (see content/troubleshooting/
+  //  schema.ts) and always carry one, while route paths are built from
+  //  subject keys and symptom ids and never do.
+  const LOOKS_LIKE_A_FILE = /\.[a-z0-9]+$/i;
+
+  app.use('/troubleshooting', (req: Request, res: Response, next: NextFunction) => {
+    if (LOOKS_LIKE_A_FILE.test(req.path)) {
+      res.status(404).end();
+      return;
+    }
+    next();
   });
 
   app.use((_req: Request, res: Response) => {

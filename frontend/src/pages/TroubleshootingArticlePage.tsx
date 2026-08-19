@@ -12,6 +12,7 @@ import {
   createArticleDraft,
 } from "@/api/troubleshooting";
 import FigureLightbox from "@/components/troubleshooting/FigureLightbox";
+import RichText from "@/components/troubleshooting/RichText";
 import { orderedBlocks } from "@/lib/troubleshootingBlocks";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useViewState } from "@/hooks/useViewState";
@@ -19,6 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useArticleEditor } from "@/hooks/useArticleEditor";
 import EditModeBar from "@/components/troubleshooting/edit/EditModeBar";
 import EditableText from "@/components/troubleshooting/edit/EditableText";
+import RichTextField from "@/components/troubleshooting/edit/RichTextField";
 import StepEditor from "@/components/troubleshooting/edit/StepEditor";
 import { useSubjectBackNav } from "@/hooks/useSubjectBackNav";
 import {
@@ -223,6 +225,27 @@ function StepFigure({ figure }: { figure: Figure }) {
   );
 }
 
+/**
+ * The host a step's link lands on, for showing beside its label.
+ *
+ * Host only, never the path: these are Teams deep links carrying chat ids,
+ * GUIDs and an encoded context blob, and the whole point is to replace that
+ * with the one word a reader can act on. "teams.microsoft.com" answers
+ * "where am I about to go"; the rest answers nothing.
+ *
+ * Null on anything unparseable rather than throwing. The schema validates
+ * these on write (see linkSchema), so this is close to unreachable — but the
+ * link still works if the hint can't be derived, and losing a whole step
+ * because a decoration failed would be the wrong trade.
+ */
+function linkHost(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
 function StepBlock({
   step,
   index,
@@ -280,7 +303,7 @@ function StepBlock({
       <div className="flex min-w-0 flex-col gap-3">
         <h3 className="text-base font-bold">{step.title}</h3>
         <p className="max-w-[68ch] text-[15px] leading-relaxed text-info-light">
-          {step.body}
+          <RichText text={step.body} />
         </p>
 
         {/* Driven by `orderedBlocks` rather than written out in a fixed
@@ -292,13 +315,13 @@ function StepBlock({
             case "note":
               return (
                 <Callout key="note" variant="note">
-                  {step.note}
+                  <RichText text={step.note!} />
                 </Callout>
               );
             case "warn":
               return (
                 <Callout key="warn" variant="warn">
-                  {step.warn}
+                  <RichText text={step.warn!} />
                 </Callout>
               );
             case "figure":
@@ -307,6 +330,15 @@ function StepBlock({
               // Opened in a new tab: these leave the library entirely — a
               // Teams chat, a service portal — and a reader part-way through
               // a set of steps should come back to find their place intact.
+              //
+              // AND THE HOST IS NAMED ON THE BUTTON. It is already a real
+              // anchor, so the status bar shows the target on hover, but the
+              // targets here are Teams deep links: a chat id, two GUIDs and
+              // an encoded context blob, sometimes with a pre-written message
+              // trailing it. Nobody reads that and concludes "this opens
+              // Teams". The label says what the link does and the host says
+              // where it lands, which together are the two things somebody
+              // wants before they leave a page mid-repair.
               return (
                 <a
                   key="link"
@@ -319,6 +351,11 @@ function StepBlock({
                     open_in_new
                   </span>
                   {step.link!.label}
+                  {linkHost(step.link!.url) && (
+                    <span className="font-normal opacity-70">
+                      · {linkHost(step.link!.url)}
+                    </span>
+                  )}
                 </a>
               );
             case "branch":
@@ -631,19 +668,18 @@ export default function TroubleshootingArticlePage() {
             {shown && (
               <>
                 {editing && editor.working ? (
-                  <EditableText
+                  <RichTextField
                     value={editor.working.summary}
                     onChange={(summary) =>
                       editor.update((body) => ({ ...body, summary }))
                     }
                     ariaLabel="Article summary"
                     className="max-w-[66ch] text-[15px] text-info-light"
-                    rows={2}
                     tone="muted"
                   />
                 ) : (
                   <p className="max-w-[66ch] text-[15px] text-info-light">
-                    {shown.summary}
+                    <RichText text={shown.summary} />
                   </p>
                 )}
                 <div

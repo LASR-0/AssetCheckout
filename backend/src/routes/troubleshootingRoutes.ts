@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import {
   getSupportPhone,
+  getSupportHours,
   isSupportPhoneConfigured,
   isSupportChannelConfigured,
   getSupportChannelName,
@@ -62,6 +63,8 @@ router.get("/config", (_req: Request, res: Response) => {
     // Lets the UI soften the call-to-action rather than inviting somebody to
     // dial a row of X's.
     supportPhoneConfigured: isSupportPhoneConfigured(),
+    // Null when unset — the UI drops the line rather than inventing hours.
+    supportHours: getSupportHours(),
     // No placeholder equivalent: a button that opens nothing is worse than no
     // button, so an unconfigured channel hides the messaging option outright.
     supportChannelConfigured: isSupportChannelConfigured(),

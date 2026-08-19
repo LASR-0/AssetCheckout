@@ -34,11 +34,11 @@ const essTwoFactorCode: Article = {
   steps: [
     {
       title: "Message Sue and ask her to remove two-factor from your account",
-      body: "Sue administers ESS. There is no way to recover a code from an authenticator app you no longer have (a new phone, a reinstalled app; a deleted entry) so the fix is to take two-factor off your account and set it up again. Use the button below to open a Teams chat with her, or search for Sue in Teams and start one yourself.",
-      note: "Ask specifically for two-factor to be removed so you can re-add it. If you only say you cannot get in; the likely first answer is an account unlock, which will not help; you will sign in and be asked for the same code you do not have.",
+      body: "Sue administers ESS. There is no way to recover a code from an authenticator app you no longer have (a new phone, a reinstalled app; a deleted entry) so the fix is to take two-factor off your account and set it up again. The button below opens a Teams chat with her and writes the message for you; read it over and press send. If it opens empty, or you would rather write your own, search for Sue in Teams and start a chat yourself.",
+      note: "If you are writing it yourself, ask specifically for two-factor to be removed so you can re-add it. If you only say you cannot get in; the likely first answer is an account unlock, which will not help; you will sign in and be asked for the same code you do not have.",
       link: {
         label: "Message Sue about my ESS two-factor",
-        url: "https://teams.microsoft.com/l/chat/19:7f23fa78-eec2-49d7-bcf7-05b4f2c1bcbb_a09c7b9e-49d7-4022-88d6-b5fe87e50258@unq.gbl.spaces/conversations?context=%7B%22contextType%22%3A%22chat%22%7D",
+        url: "https://teams.microsoft.com/l/chat/19:7f23fa78-eec2-49d7-bcf7-05b4f2c1bcbb_a09c7b9e-49d7-4022-88d6-b5fe87e50258@unq.gbl.spaces/conversations?context=%7B%22contextType%22%3A%22chat%22%7D&message=Hi%20Sue%2C%20would%20you%20be%20able%20to%20remove%20the%202FA%20from%20my%20ESS%20account%3F%20I%20have%20lost%20my%20code.%20Thank%20you.",
       },
     },
     {

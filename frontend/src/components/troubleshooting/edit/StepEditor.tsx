@@ -1,5 +1,6 @@
 import { useState } from "react";
 import EditableText from "./EditableText";
+import RichTextField from "./RichTextField";
 import FigureEditor from "./FigureEditor";
 import BranchEditor from "./BranchEditor";
 import LinkEditor from "./LinkEditor";
@@ -151,13 +152,12 @@ export default function StepEditor({
         </div>
 
         <RailLabel>Body</RailLabel>
-        <EditableText
+        <RichTextField
           value={step.body}
           onChange={(v) => set("body", v)}
           ariaLabel={`Step ${index + 1} body`}
-          className="mt-3 rounded-lg border border-outline bg-surface px-3 py-2.5 text-[14px] leading-relaxed"
+          className="mt-3 text-[14px] leading-relaxed"
           placeholder="The instruction, in full sentences."
-          rows={3}
         />
       </div>
 
@@ -196,23 +196,21 @@ export default function StepEditor({
             canMoveDown={position < blocks.length - 1}
           >
             {kind === "note" && (
-              <EditableText
+              <RichTextField
                 value={step.note ?? ""}
                 onChange={(v) => set("note", v)}
                 ariaLabel={`Step ${index + 1} note`}
-                className="rounded-md border border-outline bg-surface px-2.5 py-2 text-[13.5px] leading-relaxed"
-                rows={2}
+                className="text-[13.5px] leading-relaxed"
                 placeholder="Context the reader needs but can skip."
               />
             )}
 
             {kind === "warn" && (
-              <EditableText
+              <RichTextField
                 value={step.warn ?? ""}
                 onChange={(v) => set("warn", v)}
                 ariaLabel={`Step ${index + 1} warning`}
-                className="rounded-md border border-outline bg-surface px-2.5 py-2 text-[13.5px] leading-relaxed"
-                rows={2}
+                className="text-[13.5px] leading-relaxed"
                 placeholder="What this could cost them — lost work, a wipe, a replacement."
               />
             )}

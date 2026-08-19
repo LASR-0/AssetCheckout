@@ -12,7 +12,7 @@ import type { TroubleshootingConfig } from "@/types/troubleshootingType";
 //  page. Same number, same wording decisions, one place to change them.
 //
 //  UNCONFIGURED IS A REAL STATE. With SUPPORT_PHONE unset the backend serves
-//  an "XXXX XXX XXX" placeholder, and this renders it as plain text rather
+//  an "XX XXXX XXXX" placeholder, and this renders it as plain text rather
 //  than a tel: link — a link that dials a row of X's is worse than an
 //  obvious blank, because it looks like it works. The call button hides
 //  itself for the same reason.
@@ -95,7 +95,13 @@ export function SupportEscapeCard({ config }: { config: TroubleshootingConfig })
         Nothing here fixing it?
       </span>
       <PhoneNumber config={config} className="text-lg font-bold" />
-      <span className="text-xs text-info-light">IT support · Mon–Fri, 7am–7pm</span>
+      {/* The hours came from a hardcoded "Mon–Fri, 7am–7pm" and now come from
+          SUPPORT_HOURS. Dropped entirely when unset rather than falling back
+          to the old string: hours nobody configured are a guess, and a wrong
+          one sends somebody to a phone that rings out. */}
+      <span className="text-xs text-info-light">
+        IT support{config.supportHours ? ` · ${config.supportHours}` : ""}
+      </span>
     </div>
   );
 }
@@ -137,6 +143,11 @@ export function SupportEscapeSection({
         <span className="text-sm text-info-light">
           Call <PhoneNumber config={config} className="font-semibold" /> to speak to an
           IT support admin. Have your asset tag ready.
+          {/* Named here as well as on the card, because this block is what
+              somebody reaches at the end of a failed article — the moment
+              they are most likely to ring, and so the moment worth knowing
+              whether anybody is there. */}
+          {config.supportHours && ` Open ${config.supportHours}.`}
         </span>
       </div>
 

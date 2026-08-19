@@ -28,5 +28,9 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Tests are not part of the app: they import node builtins the browser
+     build has no types for, and nothing in them is bundled. They are still
+     type-checked, by tsconfig.test.json. */
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

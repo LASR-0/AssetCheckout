@@ -216,16 +216,36 @@ function normalizeStandardAccessoriesEnv(raw: string): string | null {
  * somebody a blank message to post under their own name, which is worse than
  * any wording could be.
  */
+//  NO NAME AND NO ARTICLE LINK, deliberately — both were noise.
+//
+//  The name appeared twice, in the subject line and again in the sign-off,
+//  and Teams was already showing it a third time: the post carries the
+//  sender's identity, because they post it themselves from their own client.
+//  Three copies of an answer nobody asked for.
+//
+//  The article link went the same way. It addresses the page the sender has
+//  just finished failing to use, so it tells whoever picks the message up the
+//  one thing they can be sure did not work. The symptom is named in the first
+//  line, which is the part they actually triage on.
+//
+//  {article} went with them, though not because it was asked for: it resolves
+//  to the same symptom label {symptom} does, so the first two lines read
+//  "I need a hand with X on my phone. I followed X and it hasn't fixed it."
+//  Naming the symptom once and then saying the steps didn't work says the
+//  same thing without the reader parsing the same title twice.
+//
+//  {name}, {article} and {url} all still resolve — see MESSAGE_PLACEHOLDERS.
+//  They are gone from the default wording, not from the template language, so
+//  an org that wants them back only has to edit this setting.
 export const DEFAULT_MESSAGE_TEMPLATE = `Hi team — I need a hand with {symptom} on my {subject}.
 
-I followed {article} and it hasn't fixed it.
+I've been through the troubleshooting steps and it still isn't fixed.
 
 {stepsTried}
 
 {notes}
 
-Article: {url}
-— {name} ({email})`;
+— {email}`;
 
 const SETTING_DEFAULTS: SettingDefault[] = [
   // ---- Existing settings ----

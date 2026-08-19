@@ -19,11 +19,12 @@ import type { SupportMessageDraft } from "@/types/troubleshootingType";
 //  what the checkboxes are for, and it is the round-trip this saves.
 //
 //  THE PASTE STEP IS ANNOUNCED BEFORE THEY CLICK, not after. Teams cannot be
-//  opened with a message already in the box — the deep-link `message`
-//  parameter stopped working in the new client and never existed for channels
-//  at all. So the honest flow is: copy, open Teams, paste. A person who is not
-//  told that clicks the button, sees an empty compose box, and reasonably
-//  concludes it failed.
+//  opened with a message already in the box: ?message= and ?topicName= are
+//  documented for chat deep links only, and were tried twice on this channel
+//  link — form-encoded, then with %20 on a URL matching the documented
+//  channel format — and ignored both times. So the honest flow is copy, open
+//  Teams, paste. A person who is not told that clicks the button, sees an
+//  empty compose box, and reasonably concludes it failed.
 //
 //  THE MESSAGE IS SHOWN IN FULL, and that is not decoration either. It goes
 //  into a public channel under their own name, so they get to read it, edit
@@ -91,7 +92,22 @@ export default function SupportMessageDialog({
         : [...current, index].sort((a, b) => a - b)
     );
 
-  async function copyAndOpen() {
+  //  COPY ONLY — the anchor does the opening.
+  //
+  //  This used to end in window.open(), which meant the control had to be a
+  //  <button> and the destination was invisible until the tab was already
+  //  there. It is an <a href> now, so hovering shows the target in the status
+  //  bar and the browser's own "copy link address" and open-in-new-tab both
+  //  work. That matters more here than on an ordinary link: this one leaves
+  //  the app for Teams, carrying a message the person is about to post
+  //  publicly, and being able to see where it goes first is the difference
+  //  between trusting it and guessing.
+  //
+  //  Nothing is awaited before the navigation. writeText() is called inside
+  //  the click, which is what the clipboard permission actually requires, and
+  //  the anchor opens in a new tab — so the copy finishes on a page that is
+  //  still there either way.
+  async function copyDraft() {
     if (!draft) return;
 
     let ok = false;
@@ -107,13 +123,6 @@ export default function SupportMessageDialog({
 
     setCopied(ok ? "ok" : "failed");
     onSent();
-
-    // Opened regardless. Somebody who has to copy by hand still wants Teams in
-    // front of them, and holding the window back would leave them with a
-    // warning and nothing to do about it.
-    if (draft.channelUrl) {
-      window.open(draft.channelUrl, "_blank", "noopener,noreferrer");
-    }
   }
 
   return (
@@ -239,15 +248,34 @@ export default function SupportMessageDialog({
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={!draft}
-            onClick={() => void copyAndOpen()}
-            className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-brand hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+          {/* An anchor, not a button, so the destination is visible before it
+              is taken — see copyDraft. `href` is only present once the draft
+              has landed, which is what keeps the disabled state honest: a
+              hrefless <a> is not focusable and not activatable, so there is
+              no window where this looks ready and copies nothing.
+
+              rel="noopener noreferrer" because target="_blank" otherwise
+              hands Teams a live window.opener back into the app.
+
+              No `title`: it would duplicate what the status bar already shows
+              on hover, and a raw Teams channel URL is not a thing anybody
+              reads for reassurance. The destination is named in words
+              underneath instead. */}
+          <a
+            href={draft?.channelUrl ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!draft?.channelUrl}
+            onClick={() => void copyDraft()}
+            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-bold twilight-gradient text-white shadow-brand transition-all ${
+              draft?.channelUrl
+                ? "hover:opacity-90 active:scale-95 hover:cursor-pointer"
+                : "opacity-50 cursor-not-allowed"
+            }`}
           >
             <span className="material-symbols-outlined !text-[18px]">content_copy</span>
             Copy and open Teams
-          </button>
+          </a>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
@@ -256,6 +284,16 @@ export default function SupportMessageDialog({
             Close
           </button>
         </div>
+
+        {/* Says the destination in words, because the status bar only shows it
+            while the pointer is on the link and says it in a URL. This is a
+            link out of the app into a place the reader is about to post
+            something public — worth naming plainly. */}
+        {draft?.channelUrl && (
+          <span className="text-[12px] text-info-light">
+            Opens {channelName} on teams.microsoft.com in a new tab.
+          </span>
+        )}
       </DialogContent>
     </Dialog>
   );

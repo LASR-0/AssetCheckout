@@ -523,3 +523,56 @@ describe("subject picker derivation", () => {
     expect(known.length).toBeGreaterThan(0);
   });
 });
+
+describe("step links", () => {
+  ///  Every one of these is rendered into an href and opened in a new tab,
+  ///  so the failures worth catching are the ones that survive the schema:
+  ///  a URL that parses but that no browser will do anything sensible with.
+
+  const links = parseContent()
+    .articles.flatMap((article) =>
+      article.steps
+        .filter((step) => step.link)
+        .map((step) => ({ symptomId: article.symptomId, url: step.link!.url }))
+    );
+
+  it("are absolute URLs on http or https", () => {
+    expect(links.length).toBeGreaterThan(0);
+
+    for (const { symptomId, url } of links) {
+      expect(() => new URL(url), `${symptomId}: ${url}`).not.toThrow();
+      expect(new URL(url).protocol, `${symptomId}: ${url}`).toMatch(/^https?:$/);
+    }
+  });
+
+  it("pre-write the message on the ESS chat links", () => {
+    // Sue is a person, not a queue, and these two articles exist because the
+    // fix is "ask her". `message` is documented for /l/chat/ deep links —
+    // unlike the channel link the support-message dialog opens, where the
+    // same parameter was tried and ignored — so the reader arrives with the
+    // request already typed and only has to press send.
+    //
+    // Asserted decoded, not as a substring: an unencoded space or comma in
+    // there is exactly the mistake that would truncate somebody's message at
+    // the first character Teams choked on.
+    const expected: Record<string, string> = {
+      "ess-account-locked":
+        "Hi Sue, would you be able to unlock my ESS account. Thank you.",
+      "ess-2fa-code":
+        "Hi Sue, would you be able to remove the 2FA from my ESS account? I have lost my code. Thank you.",
+    };
+
+    for (const [symptomId, message] of Object.entries(expected)) {
+      const link = links.find((l) => l.symptomId === symptomId);
+      expect(link, `no link on ${symptomId}`).toBeDefined();
+
+      const url = new URL(link!.url);
+      expect(url.pathname, symptomId).toContain("/l/chat/");
+      expect(url.searchParams.get("message"), symptomId).toBe(message);
+      // The chat link's own parameter has to survive the addition.
+      expect(url.searchParams.get("context"), symptomId).toBe(
+        '{"contextType":"chat"}'
+      );
+    }
+  });
+});

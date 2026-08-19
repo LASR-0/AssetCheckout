@@ -257,6 +257,42 @@ export async function discardDraft(
 
 const IMAGE_SRC = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*\/[A-Za-z0-9._-]+$/;
 
+///  ── Links inside prose ────────────────────────────────────────────────────
+//
+//  Step bodies, notes, warnings, the summary and figure captions can carry
+//  inline markup: **bold**, *italic* and [label](url). The frontend owns the
+//  parser — see frontend/src/lib/richText.ts — because it is the thing that
+//  renders it, and there is no shared package to put it in.
+//
+//  ONLY THE LINK RULE IS MIRRORED HERE, and only the part that matters: a
+//  href that is not http or https must never reach a stored article. The
+//  editor already refuses one, but the editor is a browser and this is the
+//  gate — a request that skips the UI, a row seeded before this existed, or a
+//  module edited by hand all arrive through here.
+//
+//  Deliberately NOT a second parser. Reimplementing emphasis, escaping and
+//  nesting on this side would be two implementations of one grammar, drifting
+//  the first time either changed. This finds link targets and checks them;
+//  everything else about the markup is the renderer's business, and the worst
+//  a malformed run can do is show as the characters somebody typed.
+//
+//  An escaped bracket does not open a link, which is the one piece of the
+//  parser's logic worth repeating — otherwise "\[not a link](x)" would be
+//  reported as an unsafe href that the reader will never render as one.
+//
+//  A TARGET ENDS AT THE FIRST ")", here and in matchLink on the other side.
+//  So a URL containing a closing bracket — a Wikipedia article, mostly — is
+//  cut short rather than balanced. Both sides agree, which is what matters:
+//  the reader renders exactly the link this validated, and a truncated one
+//  still has to pass the scheme check.
+const PROSE_LINK = /(^|[^\\])\[(?:[^\]\\]|\\.)*\]\(([^)]*)\)/g;
+const SAFE_HREF = /^https?:\/\//i;
+
+/** Every link target in one stored string. */
+function proseLinks(text: string): string[] {
+  return [...text.matchAll(PROSE_LINK)].map((m) => m[2].trim());
+}
+
 /**
  * Everything content.test.ts used to guarantee at build time.
  *
@@ -273,6 +309,38 @@ function checkPublishable(
 ): { errors: { path: string; message: string }[]; warnings: string[] } {
   const errors: { path: string; message: string }[] = [];
   const warnings: string[] = [];
+
+  // Prose fields, checked as one: a bad link is the same mistake wherever it
+  // was typed, and reporting it by field is what makes it findable.
+  const prose: { where: string; text: string }[] = [
+    { where: "the summary", text: body.summary },
+    ...body.steps.flatMap((step, index) => [
+      { where: `step ${index + 1}`, text: step.body },
+      ...(step.note ? [{ where: `step ${index + 1} note`, text: step.note }] : []),
+      ...(step.warn ? [{ where: `step ${index + 1} warning`, text: step.warn }] : []),
+    ]),
+  ];
+
+  //  FIGURE CAPTIONS ARE NOT IN THAT LIST, and their absence is deliberate.
+  //  A caption is a navigation path — "Settings › Wi-Fi › Forget This
+  //  Network" — and it is edited and rendered as plain text, so nothing in it
+  //  is markup. Checking it here would refuse a path that happens to contain
+  //  brackets while the reader displays it, correctly, as the characters the
+  //  author typed. The gate validates the fields that render markup and no
+  //  others; a check the renderer does not honour is a rule nobody can act on.
+
+  for (const { where, text } of prose) {
+    for (const href of proseLinks(text)) {
+      if (!SAFE_HREF.test(href)) {
+        errors.push({
+          path: "links",
+          message:
+            `${where}: the link to "${href}" has to start with http:// or ` +
+            `https://. Anything else won't open for the reader.`,
+        });
+      }
+    }
+  }
 
   body.steps.forEach((step, index) => {
     const where = `step ${index + 1}`;

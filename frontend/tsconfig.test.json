@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    /* Tests read the article corpus off disk to prove the parser cannot
+       corrupt it — see richText.test.ts — so they need node's types, which
+       the browser build deliberately does not have. */
+    "types": ["vite/client", "node"]
+  },
+  /* All of src, not just the tests: a test project that listed only its own
+     files could not see the modules it imports. The app project excludes the
+     tests, so between the two every file is checked exactly once for the
+     environment it actually runs in. */
+  "include": ["src"],
+  "exclude": []
+}

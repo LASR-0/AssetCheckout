@@ -70,6 +70,7 @@ export default function FigureEditor({
 }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const captionId = useId();
   const lightRef = useRef<HTMLInputElement | null>(null);
   const darkRef = useRef<HTMLInputElement | null>(null);
 
@@ -86,7 +87,6 @@ export default function FigureEditor({
   }
 
   const images = figure.images ?? [];
-  const captionId = useId();
 
   async function upload() {
     const light = lightRef.current?.files?.[0];
@@ -159,6 +159,13 @@ export default function FigureEditor({
           rail above it: the labels line up, the fields line up. */}
       <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
         <FieldLabel htmlFor={captionId}>Caption path</FieldLabel>
+        {/* PLAIN, unlike the other prose fields, and it was tried the other
+            way first. A caption is a navigation path — "Settings › Wi-Fi ›
+            Forget This Network" — not a sentence: the monospace face and the
+            even spacing are what make it readable as a path, and nothing in
+            it wants emphasis or a link. A rich field here bought an author
+            three controls they would never press, in exchange for a field
+            that no longer looked like the thing it holds. */}
         <input
           id={captionId}
           value={figure.caption}

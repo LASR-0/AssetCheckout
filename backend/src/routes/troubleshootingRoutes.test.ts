@@ -122,7 +122,7 @@ describe("GET /config", () => {
     expect(status).toBe(200);
     // The env var is unset in test, which is the case worth pinning: the
     // page renders an obviously-blank number rather than breaking.
-    expect(body.supportPhone).toBe("XXXX XXX XXX");
+    expect(body.supportPhone).toBe("XX XXXX XXXX");
     expect(body.supportPhoneConfigured).toBe(false);
   });
 });

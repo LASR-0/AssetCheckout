@@ -143,7 +143,26 @@ export async function composeSupportMessage(
   // problem is turns a wall of similar-looking posts into a scannable list.
   // Teams will not accept it through the clipboard as a separate field, so it
   // rides along at the top with instructions for moving it.
-  const subject = `${symptom?.symptom.label ?? request.symptomId} — ${actor.name || "IT request"}`;
+  //
+  // THE SENDER'S NAME USED TO BE APPENDED HERE and is not any more. Teams
+  // stamps every post with who wrote it, directly above the subject, so the
+  // name in the subject was a second copy of a line the reader had already
+  // read — and it pushed the symptom, the only part worth scanning, further
+  // from the left edge of a narrow channel list.
+  //
+  // AND THE LINK CARRIES NOTHING BUT THE CHANNEL. ?topicName= and ?message=
+  // were tried here twice and Teams ignored them both times — once
+  // form-encoded, once with %20 the way the documentation and the working
+  // chat links do it, on a URL matching the documented standard-channel
+  // format exactly. That rules out both the encoding and the link shape, so
+  // the parameters are simply not read on a channel link; they are documented
+  // for /l/chat/ and that is where they work — see the ESS articles in
+  // content/troubleshooting/articles/ess, which do pre-fill.
+  //
+  // Left out rather than left in and inert: a URL carrying six hundred
+  // characters nothing reads is six hundred characters for the next person to
+  // work out the purpose of.
+  const subject = symptom?.symptom.label ?? request.symptomId;
 
   return {
     subject,

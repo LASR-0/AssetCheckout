@@ -44,9 +44,53 @@ describe("composing", () => {
 
     // The point of the whole feature: nothing left unexpanded.
     expect(text).not.toMatch(/\{[a-zA-Z]+\}/);
-    expect(text).toContain(ACTOR.name);
     expect(text).toContain(ACTOR.email);
+  });
+
+  it("resolves {name} and {url} for a template that still asks for them", async () => {
+    // Both left the DEFAULT wording, not the template language — an org that
+    // wants a signature or a link back can put either one back by editing the
+    // setting, and it has to still work when they do.
+    const original = (await getSetting("troubleshooting.messageTemplate")) ?? "";
+    await setSetting(
+      "troubleshooting.messageTemplate",
+      "{name} — {url}",
+      "admin@ksb.com"
+    );
+
+    const { text } = await composeSupportMessage(
+      { subjectKey, symptomId, stepsTried: [], notes: "" },
+      ACTOR,
+      BASE
+    );
+
+    expect(text).toContain(ACTOR.name);
     expect(text).toContain(`${BASE}/troubleshooting/${subjectKey}/${symptomId}`);
+
+    await setSetting("troubleshooting.messageTemplate", original, "admin@ksb.com");
+  });
+
+  it("names nobody by default — Teams already says who posted it", async () => {
+    // The name was in the subject line and again in the sign-off, on top of
+    // the one Teams stamps on the post itself.
+    const { text, subject } = await composeSupportMessage(
+      { subjectKey, symptomId, stepsTried: [], notes: "" },
+      ACTOR,
+      BASE
+    );
+
+    expect(text).not.toContain(ACTOR.name);
+    expect(subject).not.toContain(ACTOR.name);
+  });
+
+  it("does not link back to the article that just failed", async () => {
+    const { text } = await composeSupportMessage(
+      { subjectKey, symptomId, stepsTried: [], notes: "" },
+      ACTOR,
+      BASE
+    );
+
+    expect(text).not.toContain(`${BASE}/troubleshooting/`);
   });
 
   it("names the subject in the singular", async () => {
@@ -138,7 +182,9 @@ describe("composing", () => {
     );
 
     expect(text).not.toMatch(/\{[a-zA-Z]+\}/);
-    expect(text).toContain("Someone");
+    // The default template signs off with the email, so the unidentified case
+    // has to say something rather than trailing off after an em dash.
+    expect(text).toContain("no email recorded");
   });
 });
 
@@ -224,16 +270,19 @@ describe("the subject header", () => {
     expect(text.split("\n")[0]).toBe(subject);
   });
 
-  it("names the symptom and the person", async () => {
-    // A channel full of "IT request" tells nobody anything.
+  it("is the symptom, and only the symptom", async () => {
+    // A channel full of "IT request" tells nobody anything; a channel full of
+    // "<symptom> — <name>" repeats the name Teams has already put above it.
     const { subject } = await composeSupportMessage(
       { subjectKey, symptomId, stepsTried: [], notes: "" },
       ACTOR,
       BASE
     );
 
-    expect(subject).toContain(ACTOR.name);
-    expect(subject.length).toBeGreaterThan(ACTOR.name.length + 3);
+    const symptom = troubleshootingRepository.findSymptom(subjectKey, symptomId);
+
+    expect(subject).toBe(symptom!.symptom.label);
+    expect(subject).not.toContain(ACTOR.name);
   });
 
   it("marks where the instructions end with a rule they can delete to", async () => {
