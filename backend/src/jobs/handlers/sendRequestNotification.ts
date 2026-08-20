@@ -86,9 +86,27 @@ export async function sendRequestNotificationHandler(
     return { skipped: true, reason: "request_not_found", requestId, kind };
   }
 
-  // Absolute link into the app — appLink() picks the production or dev base
-  // URL from the environment, so localhost never leaks into real emails.
-  const reviewLink = appLink("/requests");
+  //  PINNED TO THIS REQUEST, not to the request log.
+  //
+  //  Every email used to land on /requests, which is the whole table. For a
+  //  requester that is a short list; for an approver with a department under
+  //  them it is not, and the request the email is actually about could be
+  //  anywhere in it. Catching up on a fortnight of approvals meant reading
+  //  the subject line, then hunting for the matching row — once per email.
+  //
+  //  ?requestId=<n> is the filter the home page's recent-requests links
+  //  already use: the table pins to that one row and shows a chip saying so,
+  //  which the reader can dismiss to get the full log back. So the email now
+  //  opens on the thing it is about, and the old destination is one click
+  //  away rather than the other way round.
+  //
+  //  Uses request.id rather than the payload's, which is only checked for
+  //  being a finite number — the row that was actually loaded is the one the
+  //  link should point at.
+  //
+  //  appLink() picks the production or dev base URL from the environment, so
+  //  localhost never leaks into a real email.
+  const reviewLink = appLink(`/requests?requestId=${request.id}`);
   const userFirst = firstNameFromDisplayName(request.userName);
   const category = esc(request.categoryName);
   const userName = esc(request.userName);
@@ -121,7 +139,7 @@ export async function sendRequestNotificationHandler(
           { label: "Requested by", value: userName },
         ],
         cta: { label: "Review request", url: reviewLink },
-        secondaryLink: { prefix: "Or open the request log directly:", label: reviewLink, url: reviewLink },
+        secondaryLink: { prefix: "Or paste this link into your browser:", label: reviewLink, url: reviewLink },
       };
       break;
     }
@@ -145,7 +163,7 @@ export async function sendRequestNotificationHandler(
           { label: "Requested by", value: userName },
         ],
         cta: { label: "Review request", url: reviewLink },
-        secondaryLink: { prefix: "Or open the request log directly:", label: reviewLink, url: reviewLink },
+        secondaryLink: { prefix: "Or paste this link into your browser:", label: reviewLink, url: reviewLink },
       };
       break;
     }
@@ -364,7 +382,7 @@ export async function sendRequestNotificationHandler(
         ],
         cta: { label: "Accept or decline", url: reviewLink },
         secondaryLink: {
-          prefix: "Or open the request log directly:",
+          prefix: "Or paste this link into your browser:",
           label: reviewLink,
           url: reviewLink,
         },
