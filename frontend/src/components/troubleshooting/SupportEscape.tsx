@@ -130,6 +130,7 @@ export function SupportEscapeSection({
   return (
     <section
       id="help"
+      data-tour="ts-escape"
       className="flex flex-col gap-4 rounded-lg border border-outline bg-surface p-5 scroll-mt-24 sm:flex-row sm:items-center"
     >
       <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-primary/10">

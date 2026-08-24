@@ -414,6 +414,12 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "true",
     description: "Whether the anonymous feedback feature is active (page, nudge, and CTA)"
   },
+  { key: "tours_enabled",
+    envVar: "TOURS_ENABLED",
+    defaultValue: "true",
+    description:
+      "Whether the first-visit product tours run. Turning this off stops tours starting; it does not erase who has already had one, so switching it back on does not replay them."
+  },
   { key: "troubleshooting_analytics_enabled",
     envVar: "TROUBLESHOOTING_ANALYTICS_ENABLED",
     defaultValue: "true",

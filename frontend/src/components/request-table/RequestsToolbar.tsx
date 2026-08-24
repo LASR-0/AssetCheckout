@@ -87,7 +87,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
               the width outright reproduces the original size and no longer
               depends on what the parent happens to be. shrink-0 keeps the chip
               from squeezing it. */}
-          <div className="relative w-full sm:w-80 sm:shrink-0">
+          <div data-tour="requests-search" className="relative w-full sm:w-80 sm:shrink-0">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <span className="material-symbols-outlined font-body !text-[16px]">
                 search
@@ -130,7 +130,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
+                          <button data-tour="requests-page-size" className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
 
                             <span className="material-symbols-outlined !text-info-light mr-2 !text-sm">
                               tune
@@ -172,7 +172,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
+                          <button data-tour="requests-filter" className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
                             <span className="material-symbols-outlined !text-info-light mr-2 !text-sm">
                                 filter_list
                             </span>

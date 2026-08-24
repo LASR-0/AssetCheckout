@@ -22,6 +22,7 @@ import ConfirmApprovalDialog from "@/components/dialogs/ConfirmApprovalDialog";
 import SendQuoteDialog from "@/components/dialogs/SendQuoteDialog";
 import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
+import { useTourReady } from "@/components/tour/TourProvider";
 
 /**
  * Filter values the status dropdown can hold — one per badge the table shows,
@@ -60,6 +61,9 @@ const SELECTABLE_STATUSES = [
 
 export default function RequestTablePage() {
   const [requests, setRequests] = useState<Request[]>([]);
+  /** Whether the first fetch has settled — the tour waits for it, so that a
+   *  step pointing at a row's actions has rows to find. */
+  const [loaded, setLoaded] = useState(false);
 
   // Seeded from the URL so widgets elsewhere can deep-link into a view:
   // ?status=IN_PROGRESS&q=<name> is what the home page's "In progress" tile
@@ -100,6 +104,7 @@ export default function RequestTablePage() {
   const [selectedTier, setSelectedTier] = useState<string>("STANDARD");
 
   const { role, name: currentUserName, userId: currentUserId } = useAuth();
+  useTourReady(loaded);
   const columnVisibility = getColumnVisibility(role);
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
@@ -181,6 +186,11 @@ export default function RequestTablePage() {
       setRequests(data.requests);
     } catch (err) {
       console.error("Failed to load requests", err);
+    } finally {
+      // Reported whether the fetch worked or not: the tour's fallbacks cover
+      // an empty table, and blocking it behind a failed request would leave
+      // the page permanently un-touchable.
+      setLoaded(true);
     }
   }
 

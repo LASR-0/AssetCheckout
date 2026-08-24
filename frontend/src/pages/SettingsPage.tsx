@@ -36,7 +36,12 @@ export default function SettingsPage() {
           title="Theme"
           description="Switch between light and dark visual interfaces."
         >
-          <ThemeSwitch />
+          {/* inline-flex, not `contents`: an element with display:contents has
+              no box, so getBoundingClientRect returns zeros and the tour's
+              visibility check would treat it as hidden. */}
+          <span data-tour="settings-theme" className="inline-flex">
+            <ThemeSwitch />
+          </span>
         </SettingsRow>
 
         {/* Below the toggle, not instead of it: a preset defines BOTH a light

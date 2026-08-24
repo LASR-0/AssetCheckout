@@ -1,0 +1,131 @@
+@import "driver.js/dist/driver.css";
+
+/*  +-----------------------------------------------------------------+
+ *  |                    THEMING THE TOUR                             |
+ *  +-----------------------------------------------------------------+
+ *
+ *  Imported from main.tsx AFTER index.css, so these rules win at equal
+ *  specificity by source order.
+ *
+ *  NO NEW TOKENS, WITH ONE EXCEPTION. The popover is a modal-family surface,
+ *  so it wears the modal palette that index.css already defines in both
+ *  :root and .dark and that every preset in presets.css already overrides.
+ *  That means a re-brand needs no tour work at all, and — because
+ *  collectThemedVarNames() in lib/theme-transition.ts discovers themed
+ *  properties by reading the .dark rule — the popover cross-fades on a theme
+ *  toggle for free. A token invented here and declared nowhere else would
+ *  jump while everything around it faded.
+ *
+ *  driver.js v1.8 sets its own colours as INLINE STYLES on the overlay path
+ *  (a.style.fill = …), which no stylesheet rule can beat. That is the one
+ *  place !important is load-bearing rather than lazy.
+ *
+ *  .driver-popover carries `all: unset`, so anything not restated here is
+ *  genuinely absent rather than inherited.
+ *  +-----------------------------------------------------------------+ */
+
+.driver-popover {
+  background-color: rgb(var(--modal-surface));
+  color: rgb(var(--modal-text-primary));
+  border: 1px solid rgb(var(--modal-border));
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-md);
+  padding: 1rem 1.125rem;
+
+  /* Capped against the viewport as well as in absolute terms: driver's own
+     300px maximum is wider than the usable width of a 360px screen once its
+     fixed positioning has placed it. */
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.driver-popover-title {
+  font-family: var(--font-headline, inherit);
+  font-size: 1rem;
+  font-weight: 800;
+  color: rgb(var(--modal-text-primary));
+}
+
+.driver-popover-description {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: rgb(var(--modal-text-secondary));
+}
+
+.driver-popover-progress-text {
+  font-size: 0.75rem;
+  color: rgb(var(--info-light));
+}
+
+.driver-popover-close-btn {
+  color: rgb(var(--info-light));
+}
+
+.driver-popover-close-btn:hover,
+.driver-popover-close-btn:focus {
+  color: rgb(var(--modal-text-primary));
+}
+
+.driver-popover-footer {
+  margin-top: 0.875rem;
+}
+
+.driver-popover-footer button {
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  /* driver ships a text-shadow that reads as a rendering fault on our type. */
+  text-shadow: none;
+  transition: opacity 0.15s ease;
+}
+
+.driver-popover-next-btn,
+.driver-popover-done-btn {
+  background-color: rgb(var(--primary));
+  color: rgb(var(--on-primary));
+  border: 1px solid rgb(var(--primary));
+}
+
+.driver-popover-next-btn:hover,
+.driver-popover-done-btn:hover {
+  background-color: rgb(var(--primary));
+  opacity: 0.9;
+}
+
+.driver-popover-prev-btn {
+  background-color: rgb(var(--modal-surface-accent));
+  color: rgb(var(--modal-text-accent));
+  border: 1px solid rgb(var(--modal-border));
+}
+
+.driver-popover-prev-btn:hover {
+  background-color: rgb(var(--modal-surface-accent));
+  opacity: 0.85;
+}
+
+/*  THE ARROW IS A BORDER, NOT A BACKGROUND. driver draws it as a CSS
+ *  triangle: a zero-size box with three transparent border edges and one
+ *  coloured one, in a class per side. Setting `background` on the popover
+ *  does nothing to it, so without these four rules it keeps driver's white
+ *  and shows as a bright pip against a dark popover. */
+.driver-popover-arrow-side-left {
+  border-left-color: rgb(var(--modal-surface));
+}
+.driver-popover-arrow-side-right {
+  border-right-color: rgb(var(--modal-surface));
+}
+.driver-popover-arrow-side-top {
+  border-top-color: rgb(var(--modal-surface));
+}
+.driver-popover-arrow-side-bottom {
+  border-bottom-color: rgb(var(--modal-surface));
+}
+
+/*  The scrim. !important because driver sets fill and opacity inline — see
+ *  the header. Styled in CSS rather than passed as `overlayColor` so that a
+ *  theme toggle mid-tour repaints it through the cascade, instead of leaving
+ *  the colour that was baked in when the tour opened. */
+.driver-overlay path {
+  fill: rgb(var(--tour-scrim)) !important;
+}

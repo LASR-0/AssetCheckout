@@ -611,3 +611,40 @@ model TroubleshootingArchivedArticle {
   @@index([subjectKey, symptomSlug])
   @@index([deletedAt])
 }
+
+/// +-----------------------------------------------------------------+
+/// |                      PRODUCT TOURS                              |
+/// +-----------------------------------------------------------------+
+///
+/// A CHECKLIST, NOT A ROSTER. One row per (person, tour), written the moment
+/// they have had it. There is no user table to keep in step with the
+/// directory, no seen/unseen flag to flip, and no row at all for somebody who
+/// has never opened the app. "Have they had the home tour?" is answered by the
+/// row's existence, which is the only question anything asks.
+///
+/// NOTHING PERSONAL IS STORED. The Snipe user id is the whole identity — no
+/// name, no email. Snipe is already the directory of record, so copying a
+/// display name in here would duplicate it into a table with no way of
+/// noticing when it changes, in service of nothing that reads it. To find out
+/// who a row belongs to, ask the directory: getSnipeUser(userId) in
+/// services/snipeitassets.ts. A leaver's row is then a bare integer.
+///
+/// A COMPOUND PRIMARY KEY, not a surrogate id: the pair IS the fact, there is
+/// nothing else to say about a row, and it makes recording an upsert with no
+/// second lookup — see markTourSeen, where the empty `update` is what makes a
+/// second completion a no-op that preserves the original completedAt.
+model TourCompletion {
+  /// Snipe user id, from resolveActorUserId(email).
+  userId      Int
+
+  /// Which tour. A string rather than an enum: tours are frontend content and
+  /// are added and retired far more often than the schema should move.
+  /// Validated against TOUR_IDS in services/tours.ts, so an unknown id is a
+  /// 400 rather than a row nobody will ever read.
+  tourId      String
+
+  completedAt DateTime @default(now())
+
+  @@id([userId, tourId])
+  @@index([tourId])
+}

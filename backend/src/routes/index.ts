@@ -14,6 +14,7 @@ import feedbackRoutes from "./feedbackRoutes.js"
 import sharepointRoutes from "./sharepointRoutes.js";
 import holdingsRoutes from "./holdingsRoutes.js";
 import troubleshootingRoutes from "./troubleshootingRoutes.js";
+import tourRoutes from "./tourRoutes.js";
 import troubleshootingAdminRoutes from "./troubleshootingAdminRoutes.js";
 
 
@@ -26,6 +27,7 @@ router.use("/accessories", accessoryRoutes);
 router.use("/users", userRoutes);
 router.use("/approval", approvalRoutes);
 router.use("/auth", authRoutes);
+router.use("/tours", tourRoutes);
 router.use("/", categoryRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/snipe", snipeRoutes);

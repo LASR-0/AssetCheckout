@@ -21,6 +21,7 @@ import {
   summariseAssetHoldings,
   summariseAccessoryHoldings,
 } from "@/lib/holdings";
+import { useTourReady } from "@/components/tour/TourProvider";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     HOME PAGE (internal tool)                   |
@@ -198,6 +199,12 @@ export default function LandingPage() {
   const { holdings, resolved, assetsByCategory, accessoriesByCategory } =
     useMyHoldings();
 
+  // The tour resolves its steps against the DOM once, when it starts. Half of
+  // what it points at — the holdings grid, a status badge — does not exist
+  // until these two land, so starting before then would silently drop those
+  // steps and produce a tour that looks fine and teaches half as much.
+  useTourReady(!loading && resolved);
+
   return (
     <div className="bg-landing-bg text-on-background flex-grow">
       <main className="w-full max-w-[1160px] mx-auto px-6 md:px-8 pb-16">
@@ -279,7 +286,10 @@ function HomeHead({
   const inProgress = stages.length - completed - rejected;
 
   return (
-    <section className="pt-14 md:pt-20 pb-10 flex flex-col md:flex-row md:items-end gap-8 md:gap-12">
+    <section
+      data-tour="home-greeting"
+      className="scroll-mt-24 pt-14 md:pt-20 pb-10 flex flex-col md:flex-row md:items-end gap-8 md:gap-12"
+    >
       <div className="flex flex-col gap-2 flex-grow">
         <p className="font-mono text-[13px] uppercase tracking-wider text-info-light">
           {formattedDate()}
@@ -298,8 +308,9 @@ function HomeHead({
           share the space equally (centred, equal side padding);
           desktop: unchanged flex row. */}
       <div
-        className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0"
+        className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0 scroll-mt-24"
         aria-label="Your request summary"
+        data-tour="home-stats"
       >
         {/* Each tile links to the requests table pre-filtered to the rows it
             counted: its status, scoped to this person by name. Only linked
@@ -622,7 +633,7 @@ function QuickStart({
   }, []);
 
   return (
-    <section className={`${CARD} shadow-sm mb-8`}>
+    <section data-tour="home-request-assets" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
       <SectionHeader
         title="Start a request"
         subtitle="Pick what you need to get going."
@@ -630,6 +641,7 @@ function QuickStart({
           <button
             type="button"
             onClick={() => setHoldingsOpen(true)}
+            data-tour="home-see-all-devices"
             className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
           >
             See all my devices →
@@ -742,7 +754,7 @@ function RecentRequests({
     .slice(0, 4);
 
   return (
-    <section className={`${CARD} shadow-sm mb-8`} id="requests">
+    <section className={`${CARD} shadow-sm mb-8 scroll-mt-24`} id="requests" data-tour="home-recent-requests">
       <SectionHeader
         title="Your recent requests"
         subtitle="The last few things you've asked for."
@@ -784,7 +796,7 @@ function RecentRequests({
           )}
 
           {!loading &&
-            recent.map((r) => (
+            recent.map((r, index) => (
               // Deep-links to just this row. NOT `?q=${r.id}` — the table's
               // free-text filter deliberately skips `id` and every `*Id` key
               // (see isNoiseKey in RequestsTable), so a numeric search would
@@ -808,7 +820,11 @@ function RecentRequests({
                 <span className="hidden sm:block text-on-surface-variant">
                   {r.userName === name ? "Yourself" : r.userName}
                 </span>
-                <span>
+                <span
+                  // The first row's badge only — the tour explains what a
+                  // status means, and one example is the explanation.
+                  data-tour={index === 0 ? "home-status-badge" : undefined}
+                >
                   <StatusBadge status={deriveStage(r)} />
                 </span>
               </Link>
@@ -843,6 +859,7 @@ function QuickLinks() {
       title: "Troubleshooting",
       desc: "Fix common device problems before raising a ticket.",
       to: "/troubleshooting",
+      tour: "home-troubleshooting",
     },
     {
       icon: "settings",
@@ -855,6 +872,7 @@ function QuickLinks() {
       title: "Feedback",
       desc: "Let us know if this service is an improvement.",
       to: "/feedback",
+      tour: "home-feedback",
     },
         {
       icon: "keyboard",
@@ -865,7 +883,7 @@ function QuickLinks() {
   ];
 
   return (
-    <section id="links">
+    <section id="links" data-tour="home-quick-links" className="scroll-mt-24">
       <div className="mb-4">
         <h2 className="font-headline font-bold text-xl">Go somewhere</h2>
       </div>
@@ -875,6 +893,7 @@ function QuickLinks() {
           <Link
             key={l.title}
             to={l.to}
+            data-tour={l.tour}
             className={`${RAISED} group flex items-center gap-4 px-5 py-4 hover:border-primary transition-all`}
           >
             <span className="w-10 h-10 rounded-lg grid place-items-center shrink-0 bg-modal-surface-accent text-modal-text-accent">
@@ -940,7 +959,7 @@ function AccessoryQuickStart({
   if (!loaded || categories.length === 0) return null;
 
   return (
-    <section className={`${CARD} shadow-sm mb-8`}>
+    <section data-tour="home-request-accessories" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
       <SectionHeader
         title="Accessories for your devices"
         subtitle={
@@ -961,6 +980,7 @@ function AccessoryQuickStart({
           <button
             type="button"
             onClick={() => setHoldingsOpen(true)}
+            data-tour="home-see-all-accessories"
             className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
           >
             See all my accessories →
@@ -1105,7 +1125,7 @@ function MyStuff({
   if (!resolved) return null;
 
   return (
-    <section className={`${CARD} shadow-sm mb-8`}>
+    <section data-tour="home-my-stuff" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
       <SectionHeader
         title="What you already have"
         subtitle="Assigned to you in our records. Something look wrong? Select it and tell us."
@@ -1154,11 +1174,12 @@ function MyStuff({
         {items.length === 0 ? (
           // Not a dead end: holding nothing is itself often the wrong record,
           // and this is the one place that says so.
-          <div className="py-6 text-sm text-info-light">
+          <div data-tour="home-my-stuff-empty" className="py-6 text-sm text-info-light">
             <p>Nothing is assigned to you in our records.</p>
             <button
               type="button"
               onClick={() => setBrowse("ASSET")}
+              data-tour="home-report-unlogged"
               className="mt-2 font-semibold text-on-background underline hover:cursor-pointer"
             >
               Have something that isn't listed? Tell us →
@@ -1166,12 +1187,15 @@ function MyStuff({
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {items.map((item) => (
+            {items.map((item, index) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setOpenFor(item)}
                 title={`Report a problem with ${item.title}`}
+                // The first tile only: the tour needs one node to point at,
+                // and every tile behaves identically.
+                data-tour={index === 0 ? "home-my-stuff-item" : undefined}
                 className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-3 text-left hover:border-primary hover:-translate-y-px transition-all hover:cursor-pointer`}
               >
                 <div className="flex flex-1 flex-col items-center my-4 justify-center gap-2 text-center">

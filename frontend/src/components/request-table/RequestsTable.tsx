@@ -177,7 +177,7 @@ export default function RequestsTable({
   const totalCols = table.getVisibleLeafColumns().length;
 
   return (
-    <div className="bg-surface-container-lowest overflow-hidden">
+    <div data-tour="requests-table" className="bg-surface-container-lowest overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-[100px] w-7xl max-w-7xl text-left border-collapse">
           <thead>
@@ -188,6 +188,9 @@ export default function RequestsTable({
                   return (
                     <th
                       key={header.id}
+                      data-tour={
+                        header.column.id === "actions" ? "requests-actions-header" : undefined
+                      }
                       className={`px-6 py-4 text-xs font-semibold font-mono uppercase tracking-wider text-on-surface-variant ${headerExtra}`}
                     >
                       {header.isPlaceholder
@@ -204,6 +207,7 @@ export default function RequestsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
+                  data-tour="requests-empty"
                   colSpan={totalCols}
                   className="px-6 py-10 text-center text-sm text-info-light"
                 >
@@ -211,7 +215,7 @@ export default function RequestsTable({
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, rowIndex) => (
                 <tr
                   key={row.id}
                   // Every row carries a left accent naming its KIND, so the
@@ -248,7 +252,17 @@ export default function RequestsTable({
                   {row.getVisibleCells().map((cell) => {
                     const tdExtra = cell.column.columnDef.meta?.tdClass ?? "";
                     return (
-                      <td key={cell.id} className={`px-6 py-5 align-center ${tdExtra}`}>
+                      <td
+                        key={cell.id}
+                        // First row's actions cell only — one example is the
+                        // explanation, and every row behaves the same.
+                        data-tour={
+                          rowIndex === 0 && cell.column.id === "actions"
+                            ? "requests-row-actions"
+                            : undefined
+                        }
+                        className={`px-6 py-5 align-center ${tdExtra}`}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     );

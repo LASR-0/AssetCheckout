@@ -252,7 +252,7 @@ export default function TroubleshootingPage() {
       config={config}
       sidebar={sidebar}
     >
-      <section id="subject" className="scroll-mt-24 rounded-lg border border-outline bg-surface p-5">
+      <section data-tour="ts-subject" id="subject" className="scroll-mt-24 rounded-lg border border-outline bg-surface p-5">
         <h2 className="mb-4 text-lg font-bold">What are you having trouble with?</h2>
         {subjects.length > 0 ? (
           <SubjectPicker
@@ -267,7 +267,7 @@ export default function TroubleshootingPage() {
         )}
       </section>
 
-      <section id="symptoms" className="scroll-mt-24">
+      <section data-tour="ts-symptoms" id="symptoms" className="scroll-mt-24">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-bold">What&apos;s happening?</h2>
           {!subjectKey && (

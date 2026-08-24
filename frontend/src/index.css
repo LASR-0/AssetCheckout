@@ -154,6 +154,12 @@
     --twilight-gradient: linear-gradient(145deg, rgb(187, 149, 214) 0%, rgb(80, 37, 186) 100%);
     --not-found: linear-gradient(145deg, rgb(195, 16, 250) 0%, rgb(80, 37, 186) 100%);
 
+    /* The tour scrim. Declared here AND in .dark with the same value on
+       purpose: collectThemedVarNames() in lib/theme-transition.ts discovers
+       which properties are themed by reading the .dark rule, so a token
+       missing from it would jump while the rest of the page cross-faded.
+       Identical values make that interpolation a no-op. */
+    --tour-scrim: 0 0 0;
     --tooltip-bg: 43 29 32;
     --tooltip-text: 255 255 255;
 
@@ -275,6 +281,7 @@
     --twilight-gradient: linear-gradient(145deg, rgb(195, 16, 250) 0%, rgb(80, 37, 186) 100%);
     --not-found: linear-gradient(145deg, rgb(250, 16, 172) 0%, rgb(186, 37, 37) 100%);
 
+    --tour-scrim: 0 0 0;
     --tooltip-bg: 13 8 30;
     --tooltip-text: 255 241 219;
 

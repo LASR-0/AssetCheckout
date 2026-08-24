@@ -16,6 +16,7 @@ import TroubleshootingArticlePage from "./pages/TroubleshootingArticlePage";
 import { TROUBLESHOOTING_ROUTES } from "./lib/troubleshootingRoutes";
 import Footer from "./components/footer/Footer";
 import { syncOrgPreset } from "./hooks/usePreset";
+import TourProvider from "./components/tour/TourProvider";
 
 function App() {
   // Once, at boot. The palette the org defaults to has to reach everybody, and
@@ -26,7 +27,9 @@ function App() {
   }, []);
 
   return (
-    <>
+    // Above the navbar and the routes both, because the tour button and the
+    // page have to agree on which tour applies here — see TourProvider.
+    <TourProvider>
       <Navbar />
       <div className="pt-16">
         <Routes>
@@ -73,7 +76,7 @@ function App() {
         </Routes>
       </div>
       <Footer />
-    </>
+    </TourProvider>
   );
 }
 

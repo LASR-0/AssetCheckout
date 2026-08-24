@@ -24,6 +24,7 @@ export default function ThemePresetPicker() {
     <div
       role="radiogroup"
       aria-label="Colour palette"
+      data-tour="settings-palette"
       className="flex flex-wrap items-center gap-2"
     >
       {PRESETS.map((option) => (

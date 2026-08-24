@@ -1,6 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import TourButton from "@/components/tour/TourButton";
+import { ICON_BUTTON } from "./iconButton";
 import { withThemeReveal } from "@/lib/theme-transition";
 
 export default function Navbar() {
@@ -27,13 +29,8 @@ export default function Navbar() {
 
   const isDark = resolvedTheme === "dark";
 
-  // Shared style for the square icon buttons (theme toggle + settings) —
-  // rounded-md square, outline border, house shadow, 22px icon.
-  const ICON_BUTTON =
-    "w-10 h-10 grid place-items-center rounded-md border border-outline shadow-sm hover:cursor-pointer transition";
-
   return (
-    <header className="fixed top-0 z-50 w-full">
+    <header data-tour-region="navbar" className="fixed top-0 z-50 w-full">
 
       {/* PRIMARY BAR */}
       <div className="bg-footer-bg shadow-md border-b border-outline flex justify-between items-center w-full px-8 h-16">
@@ -73,6 +70,7 @@ export default function Navbar() {
 
             <Link
               to="/assets"
+              data-tour="nav-assets"
               className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/assets")
                   ? "text-nav-tab-selected after:bg-underline"
@@ -89,6 +87,7 @@ export default function Navbar() {
 
             <Link
               to="/accessories"
+              data-tour="nav-accessories"
               className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/accessories")
                   ? "text-nav-tab-selected after:bg-underline"
@@ -105,6 +104,7 @@ export default function Navbar() {
 
             <Link
               to="/requests"
+              data-tour="nav-requests"
               className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
                 isActive("/requests")
                   ? "text-nav-tab-selected after:bg-underline"
@@ -144,6 +144,7 @@ export default function Navbar() {
             onClick={() => setMobileNavOpen((open) => !open)}
             aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileNavOpen}
+            data-tour="nav-menu"
             className={`md:hidden hover:cursor-pointer transition ${
               mobileNavOpen
                 ? "text-nav-tab-selected"
@@ -158,6 +159,10 @@ export default function Navbar() {
             </span>
           </button>
 
+          {/* Re-runs this page's tour. Renders nothing where there isn't
+              one — see TourButton. */}
+          <TourButton />
+
           {/* Theme toggle — icon shows the CURRENT theme (sun = light,
               moon = dark). Gated on mounted so the icon can't flash the
               wrong theme before resolvedTheme is known. */}
@@ -171,6 +176,7 @@ export default function Navbar() {
                 withThemeReveal(next, () => setTheme(next), e.currentTarget);
               }}
               aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              data-tour="nav-theme"
               className={`${ICON_BUTTON} text-nav-tab hover:text-nav-tab-selected`}
             >
 
@@ -188,6 +194,7 @@ export default function Navbar() {
           <Link
             to="/settings"
             aria-label="Settings"
+            data-tour="nav-settings"
             className={`${ICON_BUTTON} ${
               isActive("/settings")
                 ? "text-nav-tab-selected"

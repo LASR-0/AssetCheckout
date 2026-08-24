@@ -96,6 +96,7 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     title,
     border,
     onClick,
+    tour,
   }: {
     icon: string;
     label: string;
@@ -104,6 +105,8 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     title: string;
     border: string;
     onClick: () => void;
+    /** Tour anchor, on the handful of actions a tour explains. */
+    tour?: string;
   }) {
     // Swap the icon for a spinner briefly on click, so EVERY row action
     // acknowledges the press. The mutations themselves are fast and the table
@@ -136,6 +139,7 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
           <TooltipTrigger asChild>
             <button
               onClick={handleClick}
+              data-tour={tour}
               className={`group/icon ${color} ${hoverBg} ${border} border-2 rounded-lg shadow-sm px-3 py-1 gap-1.5 hover:cursor-pointer transition-colors inline-flex items-center hover:shadow-md justify-center whitespace-nowrap text-xs font-semibold`}
             >
               {clicked ? (
@@ -493,9 +497,11 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
         <ActionRow>
           <ActionButton icon="check_circle" label="Approve" color="text-intent-done" hoverBg="hover:bg-intent-done/10"
             border="border-intent-done/40" title="Approve this request"
+            tour="requests-approve"
             onClick={() => meta.onApprove(request)} />
           <ActionButton icon="cancel" label="Reject" color="text-intent-stop" hoverBg="hover:bg-intent-stop/10"
             border="border-intent-stop/40" title="Reject this request"
+            tour="requests-reject"
             onClick={() => meta.onReject(request)} />
         </ActionRow>
       );
