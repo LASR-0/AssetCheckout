@@ -81,10 +81,25 @@ type NotificationKind =
   | "DEVICE_ASSIGNED"
   | "DEVICE_READY_FOR_COLLECTION"
   | "DEVICE_SHIPPED"
-  | "REQUEST_REJECTED";
+  | "REQUEST_REJECTED"
+  | "REQUEST_EDITED";
 
-function notify(requestId: number, kind: NotificationKind): void {
-  enqueue("SEND_REQUEST_NOTIFICATION", { requestId, kind }).catch((err) =>
+/**
+ * `extra` is merged into the job payload for the handful of kinds that need
+ * more than the request id to render — currently only REQUEST_EDITED, which
+ * carries `editId` so the email quotes the diff of THAT edit rather than
+ * whichever one happens to be newest when the job finally runs.
+ *
+ * It also keeps the queue's payload-dedup honest: two edits in quick
+ * succession differ by editId, so the second is not swallowed as a duplicate
+ * of the first.
+ */
+function notify(
+  requestId: number,
+  kind: NotificationKind,
+  extra?: Record<string, unknown>
+): void {
+  enqueue("SEND_REQUEST_NOTIFICATION", { requestId, kind, ...extra }).catch((err) =>
     console.error(`[notify] enqueue failed (${kind} for request ${requestId}):`, err)
   );
 }
@@ -445,6 +460,578 @@ async function createAccessoryRequest(
       request.requestType === "STANDARD"
         ? "Request submitted for approval"
         : "Non-standard request submitted for approval",
+  };
+}
+
+///  +-----------------------------------------------------------------+
+///  |                             EDIT                                |
+///  +-----------------------------------------------------------------+
+//
+//  Correcting a request that was filed wrong, in place.
+//
+//  WHY THIS EXISTS. The guard rails on the two forms stop malformed requests,
+//  not mistaken ones: a requester who picks "Mobile Phone / non-standard" when
+//  they meant "Phone case" has filled the form in perfectly. The only answer
+//  before this was to reject and ask them to file it again, which costs the
+//  requester the wait, the approver a second approval, and the log a dead row
+//  for every honest mistake.
+//
+//  IT DOES NOT MOVE THE REQUEST. Every workflow column — status, approvedBy /
+//  approvedAt, adminApprovedBy / adminApprovedAt, the fulfilment timestamps —
+//  is left exactly as it was. A manager who has already approved does not
+//  approve again, because what was wrong was the DESCRIPTION of the thing, not
+//  the decision to allow it. That is the whole point of editing rather than
+//  re-filing, and it is why this function writes no status of any kind.
+//
+//  WHAT IT WILL NOT DO. Two things are refused rather than half-done:
+//
+//    - Corrections (requestKind CORRECTION). They carry their own detail row
+//      and their own admin dialog, and none of the fields below apply to one.
+//    - Requests that are finished (COMPLETED) or dead (REJECTED). A completed
+//      request has hardware checked out against it in Snipe; editing the paper
+//      afterwards changes nothing real and would only make the two disagree.
+//
+//  And one thing is refused conditionally: once a request has a Snipe artefact
+//  keyed to its shape — a model, a skeleton asset, a linked accessory — or a
+//  quote raised against it, the SHAPE stops being editable (kind, category,
+//  spec level, accessory option). Those artefacts were created FROM those
+//  fields, so silently rewriting them would leave the request describing one
+//  thing and pointing at another. The softer fields (approver, reason,
+//  preferred model, phone options) stay editable throughout. See
+//  `isShapeCommitted` below.
+///  +-----------------------------------------------------------------+
+
+/**
+ * One field's before/after, already rendered for display. Stored on
+ * RequestEdit.changes and quoted back to the requester in the email — see the
+ * model's comment for why it is stored rather than recomputed.
+ */
+export type RequestChange = {
+  /** The column that moved. Nothing branches on it today; it is here so a
+   *  later reader can group or filter without re-parsing the label. */
+  field: string;
+  /** How the field is named to a human. */
+  label: string;
+  from: string;
+  to: string;
+};
+
+/** The subset of a request the diff reads. Keeps describeRequestChanges
+ *  callable with either the row from the database or the object about to
+ *  replace it. */
+type RequestShape = Pick<
+  Request,
+  | "requestKind"
+  | "requestType"
+  | "categoryId"
+  | "categoryName"
+  | "accessoryOption"
+  | "reason"
+  | "preferredModel"
+  | "manager"
+  | "managerId"
+  | "callText"
+  | "needsData"
+  | "numberOption"
+  | "reuseNumberFromEmail"
+  | "reuseNumberPhone"
+>;
+
+export type EditRequestInput = {
+  requestKind?: "ASSET" | "ACCESSORY";
+  categoryId?: number;
+  categoryName?: string;
+  requestType?: "STANDARD" | "NON_STANDARD";
+  accessoryOption?: string | null;
+  reason?: string | null;
+  preferredModel?: string | null;
+  manager?: string | null;
+  managerId?: number;
+  callText?: boolean;
+  needsData?: boolean;
+  numberOption?: "NEW" | "REUSE" | "NONE" | null;
+  reuseNumberFromEmail?: string | null;
+  reuseNumberPhone?: string | null;
+};
+
+export type EditRequestResponse = {
+  success: true;
+  request: Request;
+  /** Empty when the submitted values matched the row — see below, nothing is
+   *  written and no email goes out in that case. */
+  changes: RequestChange[];
+  message: string;
+};
+
+const NUMBER_OPTION_LABELS: Record<string, string> = {
+  NEW: "New number required",
+  REUSE: "Use an existing number",
+  NONE: "No number required",
+};
+
+/** Blank, whitespace-only and null all mean "the user did not answer", so they
+ *  render as one thing rather than as an empty cell in the email. */
+function orNotSet(value: string | null | undefined, notSet = "Not set"): string {
+  const trimmed = (value ?? "").trim();
+  return trimmed.length > 0 ? trimmed : notSet;
+}
+
+/**
+ * The before/after list, in the order it reads best to the requester: what the
+ * request is FOR first, then how it was specified, then who approves it, then
+ * the per-kind details.
+ *
+ * FIELDS THAT DO NOT APPLY TO THE RESULT ARE SKIPPED, not diffed. Switching a
+ * mobile-phone request to a phone case nulls callText, needsData and
+ * numberOption as a mechanical consequence — listing those as three separate
+ * changes would bury the one change that actually happened under the paperwork
+ * of it. So the asset options are described only when the result is an asset,
+ * and the accessory option only when the result is an accessory.
+ */
+function describeRequestChanges(
+  before: RequestShape,
+  after: RequestShape
+): RequestChange[] {
+  const changes: RequestChange[] = [];
+
+  const push = (field: string, label: string, from: string, to: string) => {
+    if (from !== to) changes.push({ field, label, from, to });
+  };
+
+  const kindLabel = (k: RequestShape["requestKind"]) =>
+    k === "ACCESSORY" ? "Accessory" : "Asset";
+  push("requestKind", "Request type", kindLabel(before.requestKind), kindLabel(after.requestKind));
+
+  const typeLabel = (t: RequestShape["requestType"]) =>
+    t === "NON_STANDARD" ? "Non-standard" : "Standard";
+  push("requestType", "Specification", typeLabel(before.requestType), typeLabel(after.requestType));
+
+  // Diffed on the id, reported by the name: two categories can share a name in
+  // Snipe (one on the asset side, one on the accessory side), and that pair is
+  // exactly what a phone-to-phone-case edit crosses.
+  if (before.categoryId !== after.categoryId) {
+    changes.push({
+      field: "categoryId",
+      label: "Item",
+      from: orNotSet(before.categoryName),
+      to: orNotSet(after.categoryName),
+    });
+  }
+
+  if (before.managerId !== after.managerId) {
+    changes.push({
+      field: "managerId",
+      label: "Approver",
+      from: orNotSet(before.manager),
+      to: orNotSet(after.manager),
+    });
+  }
+
+  push("reason", "Reason", orNotSet(before.reason, "None given"), orNotSet(after.reason, "None given"));
+  push(
+    "preferredModel",
+    "Preferred model",
+    orNotSet(before.preferredModel, "No preference"),
+    orNotSet(after.preferredModel, "No preference")
+  );
+
+  if (after.requestKind === "ACCESSORY") {
+    // Null means "Something else" on an accessory request — the requester
+    // explicitly chose the escape hatch, which is not the same as not being
+    // asked. See createAccessoryRequest.
+    const optionLabel = (o: string | null) => orNotSet(o, "Something else");
+    push(
+      "accessoryOption",
+      "Option",
+      optionLabel(before.requestKind === "ACCESSORY" ? before.accessoryOption : null),
+      optionLabel(after.accessoryOption)
+    );
+  } else {
+    const yesNo = (v: boolean) => (v ? "Yes" : "No");
+    push("callText", "Call & text", yesNo(before.callText), yesNo(after.callText));
+    push("needsData", "Mobile data", yesNo(before.needsData), yesNo(after.needsData));
+    push(
+      "numberOption",
+      "Phone number",
+      before.numberOption ? NUMBER_OPTION_LABELS[before.numberOption] : "Not applicable",
+      after.numberOption ? NUMBER_OPTION_LABELS[after.numberOption] : "Not applicable"
+    );
+
+    // One line, not two: the email address is how the number is looked up and
+    // the number is what the reader recognises, so they are the same fact told
+    // twice. Prefer the number, fall back to whoever it came from.
+    const reuseLabel = (r: RequestShape) =>
+      orNotSet(r.reuseNumberPhone ?? r.reuseNumberFromEmail, "Not set");
+    push("reuseNumber", "Existing number", reuseLabel(before), reuseLabel(after));
+  }
+
+  return changes;
+}
+
+/**
+ * Has anything downstream been built from this request's shape?
+ *
+ * A ModelRequest exists from the moment a non-standard request is approved and
+ * is empty at that point, so its mere presence proves nothing. What proves it
+ * is a Snipe id on it — a model, a skeleton asset or a linked accessory — or a
+ * quote, which is a supplier's price for one specific item.
+ */
+function isShapeCommitted(request: {
+  modelRequest: ModelRequest | null;
+  quoteDetail: { id: number } | null;
+}): boolean {
+  const mr = request.modelRequest;
+  const linked =
+    !!mr &&
+    (mr.snipeModelId !== null ||
+      mr.linkedAssetId !== null ||
+      mr.snipeAccessoryId !== null);
+  return linked || request.quoteDetail !== null;
+}
+
+/**
+ * Apply an admin's corrections to a request.
+ *
+ * Every field is optional: an absent key means "leave it alone", so a caller
+ * that only wants to swap the approver sends only the approver. `null` is a
+ * real value for the nullable columns and clears them.
+ *
+ * NORMALISATION MIRRORS CREATION, deliberately. The same rules that
+ * createRequest / createAccessoryRequest apply on the way in are applied again
+ * here — accessory requests hard-null the phone model, asset requests hard-null
+ * the accessory option, call & text implies data, blank preferred-model becomes
+ * null. An edited request is therefore indistinguishable from one that had been
+ * filed correctly in the first place, which is the entire promise of the
+ * feature.
+ *
+ * Re-validation is scoped to what MOVED. The category allow-list and the
+ * accessory option list are checked only when the category, kind or option
+ * actually changes: an admin fixing the approver on a year-old request must not
+ * be blocked because the category was retired from the request forms in the
+ * meantime.
+ *
+ * NOTHING IS WRITTEN when the submitted values match the row. The edit log
+ * stays free of no-op rows and — more importantly — the requester is not
+ * emailed to be told that nothing about their request changed.
+ */
+export async function editRequest(
+  requestId: number,
+  actor: Actor,
+  input: EditRequestInput
+): Promise<EditRequestResponse> {
+  // ADMINS ONLY, CHECKED HERE — not only at the route.
+  //
+  // The PATCH endpoint is already behind requireAdmin, and the table only
+  // renders the pencil for admins. Neither of those travels: a script, a bulk
+  // tool or a second endpoint added later calls this function directly and
+  // inherits nothing from either. This is one person rewriting somebody else's
+  // request, so the privilege check belongs with the write, where it cannot be
+  // routed around.
+  //
+  // FIRST, before the row is even loaded. A non-admin must not be able to use
+  // this as an oracle for which request ids exist — a 404 and a 403 are
+  // different answers.
+  if (!actor.isAdmin) {
+    throw new AppError("Only IT can edit a request.", 403);
+  }
+
+  if (!actor.name?.trim()) {
+    // editedBy is the whole audit trail. An edit that cannot say who made it
+    // is worse than one that did not happen.
+    throw new AppError("Missing actor identity", 401);
+  }
+
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: { modelRequest: true, quoteDetail: true },
+  });
+
+  if (!request) {
+    throw new AppError("Request not found", 404);
+  }
+
+  if (request.requestKind === "CORRECTION" || request.requestType === "CORRECTION") {
+    throw new AppError(
+      "Record corrections are managed from their own dialog and can't be edited here.",
+      400
+    );
+  }
+
+  if (request.status === "COMPLETED" || request.status === "REJECTED") {
+    throw new AppError(
+      request.status === "COMPLETED"
+        ? "This request has already been fulfilled and can no longer be edited."
+        : "This request was rejected and can no longer be edited.",
+      409
+    );
+  }
+
+  // ---- Resolve the new shape, field by field ----
+
+  const requestKind: "ASSET" | "ACCESSORY" =
+    input.requestKind ?? (request.requestKind as "ASSET" | "ACCESSORY");
+  if (requestKind !== "ASSET" && requestKind !== "ACCESSORY") {
+    throw new AppError("Invalid requestKind", 400);
+  }
+
+  const requestType: "STANDARD" | "NON_STANDARD" =
+    input.requestType ?? (request.requestType as "STANDARD" | "NON_STANDARD");
+  if (requestType !== "STANDARD" && requestType !== "NON_STANDARD") {
+    throw new AppError("Invalid requestType", 400);
+  }
+
+  const categoryId = input.categoryId ?? request.categoryId;
+  if (typeof categoryId !== "number" || categoryId <= 0) {
+    throw new AppError("categoryId is required", 400);
+  }
+  // The name is a copy of a Snipe record, so it travels with the id. A caller
+  // that moves the id without the name would leave the row displaying the old
+  // category everywhere the name is what's rendered.
+  const categoryName =
+    input.categoryId !== undefined && input.categoryId !== request.categoryId
+      ? (input.categoryName ?? "").trim()
+      : input.categoryName?.trim() || request.categoryName;
+  if (!categoryName) {
+    throw new AppError("categoryName is required when the category changes", 400);
+  }
+
+  const managerId = input.managerId ?? request.managerId;
+  if (typeof managerId !== "number" || managerId <= 0) {
+    throw new AppError("managerId is required", 400);
+  }
+  const manager =
+    input.managerId !== undefined && input.managerId !== request.managerId
+      ? (input.manager ?? "").trim()
+      : input.manager?.trim() || request.manager;
+  if (!manager) {
+    throw new AppError("An approver name is required when the approver changes", 400);
+  }
+  // Nobody approves their own request. Both request forms refuse it and so
+  // does the edit dialog, but this is the only one of the three that is not a
+  // courtesy — createRequest does NOT check it server-side, so a crafted
+  // create payload still gets through today. Worth knowing if that path is
+  // ever hardened: the rule is written here, and there is where it is missing.
+  //
+  // KNOWN COST: an older request that WAS created self-approved cannot have
+  // its other fields corrected without also being given a real approver,
+  // because this fires on the resulting state rather than on what moved.
+  // That is the right trade — the alternative is an edit path that can leave a
+  // request in a state the forms would refuse to produce.
+  if (managerId === request.userId) {
+    throw new AppError("The requester can't be their own approver.", 400);
+  }
+
+  const reason =
+    input.reason === undefined
+      ? request.reason
+      : (input.reason ?? "").trim() || null;
+
+  const preferredModel =
+    input.preferredModel === undefined
+      ? request.preferredModel
+      : normalisePreferredModel(input.preferredModel);
+
+  const categoryMoved =
+    categoryId !== request.categoryId || requestKind !== request.requestKind;
+
+  // ---- Per-kind normalisation, mirroring the create paths ----
+
+  let accessoryOption: string | null = null;
+  let callText = false;
+  let needsData = false;
+  let numberOption: "NEW" | "REUSE" | "NONE" | null = null;
+  let reuseNumberFromEmail: string | null = null;
+  let reuseNumberPhone: string | null = null;
+
+  if (requestKind === "ACCESSORY") {
+    if (categoryMoved && !(await isAccessoryCategoryRequestable(categoryId))) {
+      throw new AppError(
+        "That accessory type isn't currently available for requests.",
+        403
+      );
+    }
+
+    const raw =
+      input.accessoryOption === undefined
+        ? request.requestKind === "ACCESSORY"
+          ? request.accessoryOption
+          : null
+        : input.accessoryOption;
+    accessoryOption =
+      typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+
+    // Only re-checked when the pair actually moves — an option configured away
+    // since the request was filed must not block an unrelated edit.
+    const optionMoved =
+      categoryMoved || accessoryOption !== request.accessoryOption;
+    if (optionMoved) {
+      const labels = await getAccessoryOptionLabels(categoryId);
+      if (labels.length === 0) {
+        accessoryOption = null;
+      } else if (accessoryOption !== null && !labels.includes(accessoryOption)) {
+        throw new AppError(
+          "That option is no longer available for this accessory type. Please reopen the request and pick again.",
+          400
+        );
+      } else if (accessoryOption === null && requestType === "STANDARD") {
+        // "Something else" is by definition not in the catalogue, so it cannot
+        // be a standard request — the same contradiction the accessory form
+        // refuses to let a requester submit.
+        throw new AppError(
+          "An option must be chosen for a standard request in this accessory type.",
+          400
+        );
+      }
+    }
+    // Phone mechanics are asset-only and are dropped outright, exactly as
+    // createAccessoryRequest drops them.
+  } else {
+    if (categoryMoved && !(await isCategoryRequestable(categoryId))) {
+      throw new AppError(
+        "That asset type isn't currently available for requests.",
+        403
+      );
+    }
+
+    callText = input.callText ?? (request.requestKind === "ASSET" ? request.callText : false);
+    const manualData =
+      input.needsData ?? (request.requestKind === "ASSET" ? request.needsData : false);
+    // Call & text implies data, one-way — the same derivation the form shows.
+    needsData = callText ? true : manualData;
+
+    const rawNumber =
+      input.numberOption === undefined
+        ? request.requestKind === "ASSET"
+          ? request.numberOption
+          : null
+        : input.numberOption;
+    numberOption =
+      rawNumber === "NEW" || rawNumber === "REUSE" || rawNumber === "NONE"
+        ? rawNumber
+        : null;
+
+    if (numberOption === "REUSE") {
+      const email =
+        input.reuseNumberFromEmail === undefined
+          ? request.reuseNumberFromEmail
+          : input.reuseNumberFromEmail;
+      const phone =
+        input.reuseNumberPhone === undefined
+          ? request.reuseNumberPhone
+          : input.reuseNumberPhone;
+      reuseNumberFromEmail = (email ?? "").trim() || null;
+      reuseNumberPhone = (phone ?? "").trim() || null;
+      if (!reuseNumberFromEmail) {
+        throw new AppError(
+          "Choose whose number is being reused, or pick a different number option.",
+          400
+        );
+      }
+    }
+    // Leaving REUSE discards whose number it was, so a later reader can't
+    // mistake a stale name for the current decision.
+  }
+
+  // ---- Refuse shape changes the workflow has already built on ----
+
+  const shapeMoved =
+    requestKind !== request.requestKind ||
+    requestType !== request.requestType ||
+    categoryId !== request.categoryId ||
+    accessoryOption !== request.accessoryOption;
+
+  if (shapeMoved && isShapeCommitted(request)) {
+    throw new AppError(
+      "IT has already started fulfilling this request, so what's being requested can no longer be changed — only the approver, reason and preferred model. Reject it and ask for a new request instead.",
+      409
+    );
+  }
+
+  const next: RequestShape = {
+    requestKind,
+    requestType,
+    categoryId,
+    categoryName,
+    accessoryOption,
+    reason,
+    preferredModel,
+    manager,
+    managerId,
+    callText,
+    needsData,
+    numberOption,
+    reuseNumberFromEmail,
+    reuseNumberPhone,
+  };
+
+  const changes = describeRequestChanges(request, next);
+
+  if (changes.length === 0) {
+    return {
+      success: true,
+      request,
+      changes,
+      message: "Nothing was changed.",
+    };
+  }
+
+  const managerChanged = managerId !== request.managerId;
+
+  // The row and its edit-log entry land together or not at all: an edit that
+  // committed without its log line would be a silent rewrite of somebody
+  // else's request, which is the one outcome this feature must never produce.
+  const [updated, edit] = await prisma.$transaction([
+    prisma.request.update({
+      where: { id: requestId },
+      data: {
+        requestKind,
+        requestType,
+        categoryId,
+        categoryName,
+        accessoryOption,
+        reason,
+        preferredModel,
+        manager,
+        managerId,
+        callText,
+        needsData,
+        numberOption,
+        // Legacy bridge for readers that predate numberOption — kept in step
+        // rather than accepted from the caller, so the two cannot disagree.
+        newNumber: numberOption === "NEW",
+        reuseNumberFromEmail,
+        reuseNumberPhone,
+        // Every workflow column is conspicuously absent. See the banner above.
+      },
+    }),
+    prisma.requestEdit.create({
+      data: {
+        requestId,
+        editedBy: actor.name,
+        changes: JSON.stringify(changes),
+      },
+    }),
+  ]);
+
+  // The requester is told what was done to their request, always.
+  notify(requestId, "REQUEST_EDITED", { editId: edit.id });
+
+  // A request still waiting on its first approval, whose approver just moved,
+  // has nobody expecting it: the original approver was emailed and the new one
+  // was not. Re-sending the approval request is what makes fixing a wrong
+  // approver actually fix anything.
+  //
+  // Deliberately PENDING-only. Past that stage the approval has already
+  // happened and must not be asked for again — see the banner.
+  if (managerChanged && updated.status === "PENDING") {
+    notify(requestId, "MANAGER_APPROVAL_NEEDED");
+  }
+
+  return {
+    success: true,
+    request: updated,
+    changes,
+    message: `Request updated — ${changes.length} change${changes.length === 1 ? "" : "s"} saved.`,
   };
 }
 

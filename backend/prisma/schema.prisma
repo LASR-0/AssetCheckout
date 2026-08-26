@@ -67,6 +67,7 @@ model Request {
   modelRequest   ModelRequest?
   correctionDetail CorrectionDetail?
   quoteDetail    QuoteDetail?
+  edits          RequestEdit[]
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -96,6 +97,44 @@ model ModelRequest {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+/* ===================== REQUEST EDITS ===================== */
+// An admin's correction to a request that was filed wrong — the phone that
+// was meant to be a phone case, the approver who isn't the requester's
+// manager. One row per edit, so this is a LIST on Request rather than the
+// 1:1 detail tables above.
+//
+// A LOG, NOT A STATE. Editing deliberately leaves the workflow columns
+// untouched: a request that a manager has already approved stays approved,
+// because what was wrong was the description of the thing, not the decision
+// to allow it. Nothing downstream reads these rows to decide anything — they
+// exist to answer "who changed this, when, and from what", and to give the
+// requester's notification something to quote.
+//
+// THE DIFF IS STORED, NOT RECOMPUTED. `changes` is the rendered before/after
+// list as it stood at the moment of the edit, JSON-encoded — same precedent
+// as Setting.value and BackgroundJob.payload. Recomputing it later is not
+// possible in principle: the previous values are gone the instant the update
+// commits, and the category and approver names are copies of directory
+// records that move on their own.
+model RequestEdit {
+  id        Int      @id @default(autoincrement())
+
+  requestId Int
+  request   Request  @relation(fields: [requestId], references: [id])
+
+  /// The admin's display name, as the other actor columns on Request record it.
+  editedBy  String
+
+  /// JSON array of { field, label, from, to } — see describeRequestChanges
+  /// in services/request.ts. Never empty: an edit that changed nothing is
+  /// not written at all.
+  changes   String
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId, createdAt])
 }
 
 /* ===================== SETTINGS ===================== */

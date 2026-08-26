@@ -22,6 +22,7 @@ import ConfirmApprovalDialog from "@/components/dialogs/ConfirmApprovalDialog";
 import SendQuoteDialog from "@/components/dialogs/SendQuoteDialog";
 import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
+import EditRequestDialog from "@/components/dialogs/EditRequestDialog";
 import { useTourReady } from "@/components/tour/TourProvider";
 
 /**
@@ -113,6 +114,7 @@ export default function RequestTablePage() {
   const [standardResultOpen, setStandardResultOpen] = useState(false);
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
   const [manageCorrectionOpen, setManageCorrectionOpen] = useState(false);
+  const [editRequestOpen, setEditRequestOpen] = useState(false);
   const [sendQuoteOpen, setSendQuoteOpen] = useState(false);
   const [reviewQuoteOpen, setReviewQuoteOpen] = useState(false);
 
@@ -490,6 +492,14 @@ export default function RequestTablePage() {
     setManageCorrectionOpen(true);
   }
 
+  // Correcting a request that was filed wrong. Not a stage action: it's
+  // offered at every stage the request can still be edited at, so it arrives
+  // here from rows that have no other action at all.
+  function handleEdit(request: Request) {
+    setSelectedRequest(request);
+    setEditRequestOpen(true);
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
@@ -547,6 +557,7 @@ export default function RequestTablePage() {
             columnVisibility={columnVisibility}
             onMarkReadyForCollection={handleMarkReadyForCollection}
             onManageCorrection={handleManageCorrection}
+            onEdit={handleEdit}
           />
           {/* DIALOGS */}
           <RejectionReasonDialog
@@ -658,6 +669,18 @@ export default function RequestTablePage() {
           <FeedbackNudgeDialog
             open={feedbackNudgeOpen}
             onOpenChange={setFeedbackNudgeOpen}
+          />
+
+          <EditRequestDialog
+            request={selectedRequest}
+            open={editRequestOpen}
+            onOpenChange={(next) => {
+              setEditRequestOpen(next);
+              if (!next) setSelectedRequest(null);
+            }}
+            // Only fires when something was actually written — the dialog
+            // stays quiet on a cancel, or on a save that changed nothing.
+            onSuccess={loadRequests}
           />
 
           <ManageCorrectionDialog

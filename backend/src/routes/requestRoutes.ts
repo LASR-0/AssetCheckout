@@ -10,15 +10,37 @@ import { findSnipeUserByEmail, resolveActorUserId } from "../services/snipeitass
 import { getStandardAccessories } from "../services/settings.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
-import { createRequest, createCorrectionRequest } from "../services/request.js";
+import {
+  createRequest,
+  createCorrectionRequest,
+  editRequest,
+} from "../services/request.js";
 import {
   getActorName,
   getActorEmail,
   isAdminEmail,
   canSeeRequest,
 } from "../config/auth.js";
+import { requireAdmin } from "../middleware/requireAdmin.js";
 
 const router = express.Router();
+
+/**
+ * Decode a RequestEdit.changes blob for the wire. The column is written only
+ * by describeRequestChanges, so the happy path is an array of
+ * { field, label, from, to } — but a JSON column is a JSON column, and a row
+ * that can't be read must not take the whole request log down with it. An
+ * unreadable blob becomes an empty list, which renders as "edited" with no
+ * detail.
+ */
+function safeParseChanges(raw: string): unknown[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 ///  +-----------------------------------------------------------------+
 ///  |                     POST REQUEST                                |
@@ -78,6 +100,68 @@ router.post("/corrections", async (req, res, next) => {
   }
 });
 
+
+///  +-----------------------------------------------------------------+
+///  |                        EDIT REQUEST                             |
+///  +-----------------------------------------------------------------+
+//
+//  Correct a request that was filed wrong, without moving it in the workflow.
+//  All the reasoning lives on editRequest in services/request.ts.
+//
+//  ADMINS ONLY, IN THREE PLACES, and none of them is redundant:
+//
+//    1. The table hides the column entirely for non-admins (permissions.ts).
+//       A courtesy — it decides what is OFFERED, never what is allowed.
+//    2. requireAdmin here, through the shared middleware rather than another
+//       inlined isAdminEmail check — this is a new surface, which is exactly
+//       the case that middleware was written for and left waiting on. It turns
+//       a non-admin call away before the body is even looked at.
+//    3. editRequest itself refuses a non-admin actor. THIS is the one that
+//       makes it true: the middleware guards this route, and a second caller
+//       added later — a script, a bulk tool, another endpoint — would inherit
+//       nothing from it. So the actor's real privilege is derived here and
+//       passed through rather than asserted as `true`, and the service checks
+//       it for itself.
+//
+//  Being admin-only is the deliberate scope: this is IT correcting somebody
+//  else's request on their behalf, which is why the requester is emailed a
+//  diff afterwards. A requester rewriting their own pending request is a
+//  different feature with a different audit story, and is not this one.
+//
+//  PATCH, not PUT: the body is a sparse set of fields to change, and an
+//  omitted key means "leave it alone" rather than "clear it".
+
+router.patch("/:requestId", requireAdmin, async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (!Number.isInteger(requestId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid requestId" });
+    }
+
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Missing actor identity" });
+    }
+
+    const result = await editRequest(
+      requestId,
+      // Derived, not assumed. requireAdmin has already established this is an
+      // admin, so the value is the same one either way — but hardcoding `true`
+      // here would mean the service's own check could only ever pass, which
+      // makes it decoration rather than a guard.
+      { name: actorName, isAdmin: isAdminEmail(getActorEmail(req)) },
+      req.body ?? {}
+    );
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 ///  +-----------------------------------------------------------------+
 ///  |                         CHECKOUT                                |
@@ -213,6 +297,15 @@ router.get("/", async (req, res, next) => {
         // limits non-admins to their own requests and the ones they approve,
         // and the approving manager is precisely who the quote is for.
         quoteDetail: true,
+        // The most recent correction an admin made to the row, if any. One
+        // row, newest first — the table only ever shows "this was edited, by
+        // whom, when", and the full history is not something the log renders.
+        // Same visibility reasoning as above; an edit is a change to a
+        // request the viewer can already see in full.
+        edits: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
     });
 
@@ -278,10 +371,25 @@ router.get("/", async (req, res, next) => {
       }
     }
 
-    const enriched = visible.map((r) => {
+    const enriched = visible.map(({ edits, ...r }) => {
+      // The `edits` relation collapses to a single decoded `lastEdit`, so the
+      // client never has to know that `changes` is a JSON string on disk. Null
+      // for the overwhelming majority of rows, which have never been edited.
+      const lastEdit = edits[0]
+        ? {
+            editedBy: edits[0].editedBy,
+            editedAt: edits[0].createdAt,
+            // Written by describeRequestChanges and read straight back. A row
+            // that somehow holds unparseable JSON degrades to "edited, details
+            // unavailable" rather than failing the whole request list.
+            changes: safeParseChanges(edits[0].changes),
+          }
+        : null;
+
       if (r.requestKind !== "ACCESSORY") {
         return {
           ...r,
+          lastEdit,
           accessoryRemaining: null,
           accessoryLocationName: null,
           accessoryOptionDisplay: null,
@@ -317,6 +425,7 @@ router.get("/", async (req, res, next) => {
 
       return {
         ...r,
+        lastEdit,
         accessoryRemaining: stock ? stock.remaining : null,
         accessoryLocationName: stock ? stock.locationName : null,
         accessoryOptionDisplay,

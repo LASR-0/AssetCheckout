@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { isPhoneCategory, isTabletCategory } from "@/lib/categoryIcon";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import UserSelect, { type User } from "./UserSelect";
@@ -32,6 +32,9 @@ type Props = {
   formState: any;
   setFormState: React.Dispatch<React.SetStateAction<any>>;
   users: User[];
+  /** Section heading. Defaults to the asset form's numbered one; the edit
+   *  dialog has no numbered sequence to fit into. */
+  label?: string;
 };
 
 const RADIO_LABELS: Record<NumberOptionValue, string> = {
@@ -40,7 +43,12 @@ const RADIO_LABELS: Record<NumberOptionValue, string> = {
   NONE: "No number required",
 };
 
-export default function AssetOptionsSection({ formState, setFormState, users }: Props) {
+export default function AssetOptionsSection({
+  formState,
+  setFormState,
+  users,
+  label = "3. Asset Specific Options",
+}: Props) {
   const isPhone = isPhoneCategory(formState.categoryName ?? "");
   const isTablet = isTabletCategory(formState.categoryName ?? "");
   const showOptions = isPhone || isTablet;
@@ -59,7 +67,23 @@ export default function AssetOptionsSection({ formState, setFormState, users }: 
   // FIXED: category change always resets the section — previously tablets
   // inherited callText/needsData from a prior phone selection (carriedSim).
   // Now every category starts clean; phones get their implicit callText.
+  //
+  // A CHANGE, not the first render. The reset used to fire on mount too, which
+  // is invisible on the create form (it mounts with no category and the reset
+  // writes the values the form already starts with) but destructive anywhere
+  // the section mounts against an EXISTING request — the edit dialog would
+  // blank the very options it opened to show. The ref records what was mounted
+  // with, so only a genuine category change clears the section.
+  const seenCategory = useRef<string | null>(null);
   useEffect(() => {
+    const category = formState.categoryName ?? "";
+    if (seenCategory.current === null) {
+      seenCategory.current = category;
+      return;
+    }
+    if (seenCategory.current === category) return;
+    seenCategory.current = category;
+
     setFormState((prev: any) => ({
       ...prev,
       callText: isPhone,
@@ -106,7 +130,7 @@ export default function AssetOptionsSection({ formState, setFormState, users }: 
   return (
     <div>
       <h3 className="text-xs font-medium tracking-wider mb-5 uppercase text-on-surface-variant">
-        3. Asset Specific Options
+        {label}
       </h3>
 
       <div className="p-6 bg-surface-container/40 rounded-xl border border-outline space-y-5">

@@ -130,3 +130,94 @@ describe("the link in a notification email", () => {
     expect(linked).toBeGreaterThan(0);
   });
 });
+
+///  +-----------------------------------------------------------------+
+///  |        THE EDIT NOTICE IS THE DIFF, OR IT IS NOTHING            |
+///  +-----------------------------------------------------------------+
+//
+//  Every other kind here tells the requester what has HAPPENED to their
+//  request. This one tells them their request is no longer the one they
+//  submitted — somebody in IT rewrote it. An email that says so without
+//  saying WHAT is a support call, so the failure mode worth guarding is a
+//  notice that goes out with the diff missing or unreadable.
+///  +-----------------------------------------------------------------+
+
+describe("the request-edited notice", () => {
+  it("quotes the recorded before-and-after in both bodies", async () => {
+    const id = await seedRequest();
+    const edit = await prisma.requestEdit.create({
+      data: {
+        requestId: id,
+        editedBy: "Jordan Ellis",
+        changes: JSON.stringify([
+          { field: "requestKind", label: "Request type", from: "Asset", to: "Accessory" },
+          { field: "categoryId", label: "Item", from: "Mobile Phone", to: "Phone Case" },
+        ]),
+      },
+    });
+
+    await sendRequestNotificationHandler({ requestId: id, kind: "REQUEST_EDITED", editId: edit.id });
+
+    expect(sent).toHaveLength(1);
+    for (const body of [sent[0].html, sent[0].text]) {
+      expect(body).toContain("Mobile Phone");
+      expect(body).toContain("Phone Case");
+      expect(body).toContain("Jordan Ellis");
+    }
+
+    await prisma.requestEdit.delete({ where: { id: edit.id } });
+  });
+
+  it("reports the edit it was told about, not whichever is newest", async () => {
+    const id = await seedRequest();
+    const first = await prisma.requestEdit.create({
+      data: {
+        requestId: id,
+        editedBy: "Jordan Ellis",
+        changes: JSON.stringify([
+          { field: "categoryId", label: "Item", from: "Mobile Phone", to: "Phone Case" },
+        ]),
+      },
+    });
+    const second = await prisma.requestEdit.create({
+      data: {
+        requestId: id,
+        editedBy: "Jordan Ellis",
+        changes: JSON.stringify([
+          { field: "managerId", label: "Approver", from: "Ali Rahman", to: "Robin Vale" },
+        ]),
+      },
+    });
+
+    // Two edits in quick succession queue two emails. Each must report its
+    // own, or the requester is told the same thing twice and never hears
+    // about the first change at all.
+    await sendRequestNotificationHandler({ requestId: id, kind: "REQUEST_EDITED", editId: first.id });
+
+    expect(sent[0].text).toContain("Phone Case");
+    expect(sent[0].text).not.toContain("Robin Vale");
+
+    await prisma.requestEdit.deleteMany({ where: { id: { in: [first.id, second.id] } } });
+  });
+
+  it("stays silent rather than announcing an unreadable change", async () => {
+    const id = await seedRequest();
+    const edit = await prisma.requestEdit.create({
+      // editRequest never writes an empty diff, so this can only be a corrupt
+      // or hand-inserted row — and "your request changed" with nothing to show
+      // is worse than no email at all.
+      data: { requestId: id, editedBy: "Jordan Ellis", changes: "not json" },
+    });
+
+    const result = await sendRequestNotificationHandler({
+      requestId: id,
+      kind: "REQUEST_EDITED",
+      editId: edit.id,
+    });
+
+    expect(result.skipped).toBe(true);
+    expect(sent).toHaveLength(0);
+
+    await prisma.requestEdit.delete({ where: { id: edit.id } });
+  });
+});

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
-import { isApprover, isRequestee } from "@/lib/permissions";
+import { canEditRequest, isApprover, isRequestee } from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
 import { StatusBadge, deriveFulfilment, deriveStage } from "@/components/ui/statusbadge";
@@ -35,6 +35,8 @@ export type RequestsTableMeta = {
   onMarkReceived: (request: Request) => void;
   onMarkReadyForCollection: (request: Request) => void;
   onManageCorrection: (request: Request) => void;
+  /** Admin-only: correct a request that was filed wrong, in place. */
+  onEdit: (request: Request) => void;
 };
 
 // --- Sort indicator ---
@@ -164,6 +166,48 @@ function StaticHeader({ icon, label, align = "start" }: { icon: string; label: s
     );
   }
 
+  /**
+   * Icon-only sibling of ActionButton, for a utility that sits OUT OF FLOW
+   * beside the stage actions rather than in the row with them. No label; the
+   * tooltip carries the meaning.
+   *
+   * Deliberately quieter than ActionButton — no border, muted until hover.
+   * Correcting a request is not a step in the workflow, and it must not read
+   * like the buttons that actually advance the row.
+   *
+   * `className` is how the caller places it. See ActionsCell.
+   */
+  function IconAction({
+    icon,
+    title,
+    onClick,
+    className = "",
+  }: {
+    icon: string;
+    title: string;
+    onClick: () => void;
+    className?: string;
+  }) {
+    return (
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onClick}
+              aria-label={title}
+              className={`inline-flex items-center justify-center h-8 w-8 rounded-full text-info-light/60 hover:text-on-surface hover:bg-surface-container hover:cursor-pointer transition-colors ${className}`}
+            >
+              <span className="material-symbols-outlined !text-[18px]">{icon}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[220px] text-center">
+            {title}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
 // --- Status badge with tooltip ---
 type StatusBadgeStatus = React.ComponentProps<typeof StatusBadge>["status"];
 
@@ -201,8 +245,19 @@ function BadgeWithTooltip({ status, tip }: { status: StatusBadgeStatus; tip?: st
   );
 }
 
-// --- Actions / Status cell ---
-function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> }) {
+// --- Stage actions / status badge ---
+//
+// Everything a row offers BECAUSE OF WHERE IT IS: approve, sign off, create a
+// model, ship, collect — or, when the viewer has nothing to do at this stage,
+// the badge saying what it is waiting on. Exactly one of those comes back, and
+// nothing else belongs in here.
+//
+// Split out from ActionsCell below, which wraps it, because Edit is the first
+// affordance that does NOT belong to a stage: an admin can correct a request
+// wherever it has got to, including the several states this function answers
+// with a bare badge. Threading it through a dozen early returns would have
+// meant touching every one of them.
+function StageActions({ row, table }: { row: Row<Request>; table: Table<Request> }) {
   const meta = table.options.meta as RequestsTableMeta;
   const request = row.original;
   const role = meta.role;
@@ -678,6 +733,88 @@ function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> 
   return <BadgeWithTooltip status={deriveStage(request)} />;
 }
 
+// --- "Edited by IT" marker ---
+//
+// Sits in the Reason column beside the Standard / Non-standard badge, in the
+// neutral kind-indicator token rather than a lifecycle colour: an edit is not
+// a stage, and it must not read as one.
+//
+// The changes hang off the tooltip rather than the row. A row that printed
+// four before/after lines would push the actions column off the screen for the
+// handful of requests that were edited, at the cost of every request that
+// wasn't — and the detail is only ever wanted when somebody is asking "why
+// does this say phone case?".
+function EditedMarker({ edit }: { edit: NonNullable<Request["lastEdit"]> }) {
+  const when = new Date(edit.editedAt).toLocaleDateString();
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-kind-indicator/10 text-kind-indicator border border-kind-indicator/30 cursor-default">
+            <span className="material-symbols-outlined !text-[11px]">edit_note</span>
+            Edited
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[280px]">
+          <p className="font-semibold mb-1">
+            Corrected by {edit.editedBy} on {when}
+          </p>
+          {edit.changes.length > 0 ? (
+            <ul className="space-y-0.5">
+              {edit.changes.map((c) => (
+                <li key={c.field}>
+                  <span className="opacity-70">{c.label}:</span> {c.from} &rarr;{" "}
+                  {c.to}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="opacity-70">Details unavailable.</p>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// --- Actions cell ---
+//
+// The stage's own actions, plus Edit — which is pinned to the top-right corner
+// of the cell and taken OUT OF FLOW.
+//
+// That is the whole point of the absolute positioning. Edit is offered
+// wherever a request has got to, including the many stages this cell answers
+// with a bare badge, so laying it out in the row with the others would move
+// Approve and Reject sideways on every row that has them, to leave room for a
+// control most rows never use. Out of flow, the buttons land in exactly the
+// same place whether the pencil is there or not, and it sits above them rather
+// than beside them.
+//
+// The td carries `relative` (see the column's tdClass below) — without it this
+// would position against the page instead of the cell.
+//
+// canEditRequest decides whether it appears at all: admins only, and not on a
+// request that is finished, rejected, or a record correction. A courtesy —
+// editRequest refuses all of it server-side, and that is what makes it true.
+function ActionsCell({ row, table }: { row: Row<Request>; table: Table<Request> }) {
+  const meta = table.options.meta as RequestsTableMeta;
+  const request = row.original;
+
+  return (
+    <>
+      <StageActions row={row} table={table} />
+      {canEditRequest(request, meta.role) && (
+        <IconAction
+          className="absolute top-1 right-1"
+          icon="edit_note"
+          title="Correct this request — it keeps its place in the queue and the requester is emailed what changed"
+          onClick={() => meta.onEdit(request)}
+        />
+      )}
+    </>
+  );
+}
+
 // --- Column definitions ---
 export const columns: ColumnDef<Request>[] = [
   {
@@ -850,6 +987,13 @@ export const columns: ColumnDef<Request>[] = [
               : row.original.reason
           }
         />
+        {/* This row is not the request that was submitted — IT corrected it.
+            Said on the row rather than left to the email, because the email
+            went to the requester and the people reading this column are the
+            approver and IT, who would otherwise have no way of knowing the
+            row moved under them. The tooltip carries the same diff the
+            requester was sent. */}
+        {row.original.lastEdit && <EditedMarker edit={row.original.lastEdit} />}
         {/* What the requester said they had in mind. Sits under the reason
             because it's the same free-text answer split in two, and an admin
             reads both together when deciding what to issue. */}
@@ -906,6 +1050,12 @@ export const columns: ColumnDef<Request>[] = [
     enableSorting: false,
     header: () => <StaticHeader icon="menu" label="Actions" align="center" />,
     cell: ActionsCell,
-    meta: { headerClass: "text-center", tdClass: "text-center whitespace-nowrap" },
+    // `relative` is load-bearing: it is what the Edit pencil positions against.
+    // Without it the pencil escapes to the nearest positioned ancestor and
+    // lands somewhere on the page rather than in this cell's corner.
+    meta: {
+      headerClass: "text-center",
+      tdClass: "relative text-center whitespace-nowrap",
+    },
   },
 ];

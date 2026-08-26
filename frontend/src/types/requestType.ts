@@ -78,6 +78,29 @@ export type CorrectionDetail = {
   applyError?: string | null;
 };
 
+/**
+ * One field's before/after from an admin's edit, already rendered for display
+ * by the backend (describeRequestChanges). The frontend never re-derives
+ * these: the previous values are gone the moment the edit commits.
+ */
+export type RequestChange = {
+  field: string;
+  label: string;
+  from: string;
+  to: string;
+};
+
+/**
+ * The most recent correction an admin made to a request. Attached by the
+ * requests-list endpoint; null for the overwhelming majority of rows, which
+ * have never been edited.
+ */
+export type RequestLastEdit = {
+  editedBy: string;
+  editedAt: string;
+  changes: RequestChange[];
+};
+
 export interface Request {
   id: number;
   userId: number;
@@ -113,6 +136,10 @@ export interface Request {
   correctionDetail?: CorrectionDetail | null;
   /** Present only on non-standard ACCESSORY rows past the quote stage. */
   quoteDetail?: QuoteDetail | null;
+
+  /** The last time IT corrected this request, if they ever did. Drives the
+   *  "Edited" marker in the Reason column. */
+  lastEdit?: RequestLastEdit | null;
   manager?: string;
   managerId: number;
 

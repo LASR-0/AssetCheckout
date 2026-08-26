@@ -21,6 +21,9 @@ type Props = {
   lockedTo?: "STANDARD" | "NON_STANDARD";
   /** Shown under the toggle while locked. */
   lockedHint?: string;
+  /** Section heading. Defaults to the forms' numbered one; the edit dialog
+   *  has no numbered sequence to fit into. */
+  label?: string;
 };
 
 export default function SpecLevelToggle({
@@ -32,6 +35,7 @@ export default function SpecLevelToggle({
   onPreferredModelChange,
   lockedTo,
   lockedHint,
+  label = "4. Specification Level",
 }: Props) {
   // While locked, display the pinned value regardless of the user's own
   // (preserved) choice — same display-the-derived-state pattern as the
@@ -42,7 +46,7 @@ export default function SpecLevelToggle({
   return (
     <section className="space-y-4">
       <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-4">
-        4. Specification Level
+        {label}
       </label>
 
       <div className="inline-flex p-1 bg-surface-container rounded-lg">

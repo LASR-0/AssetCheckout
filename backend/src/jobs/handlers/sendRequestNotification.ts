@@ -25,6 +25,7 @@ const KINDS = [
   "SHIPMENT_REMINDER",
   "SHIPMENT_OVERDUE",
   "QUOTE_APPROVAL_NEEDED",
+  "REQUEST_EDITED",
 ] as const;
 type NotificationKind = (typeof KINDS)[number];
 
@@ -43,6 +44,36 @@ function parseRejectionReason(reason: string | null): string {
  *  lead-in so the email doesn't open with a bare comma. */
 function greeting(firstName: string | null): string {
   return firstName ? `Hi ${esc(firstName)},` : "Hi there,";
+}
+
+/**
+ * Read a RequestEdit.changes blob back into the before/after list the email
+ * quotes. Written by describeRequestChanges in services/request.ts.
+ *
+ * Every entry is re-checked rather than trusted: this is a JSON column, and
+ * the alternative to dropping a malformed entry is rendering `undefined →
+ * undefined` into somebody's inbox. Entries that don't hold three strings are
+ * skipped; if that leaves nothing, the caller skips the send entirely.
+ */
+function parseEditChanges(
+  raw: string
+): { label: string; from: string; to: string }[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const { label, from, to } = entry as Record<string, unknown>;
+    if (typeof label !== "string" || typeof from !== "string" || typeof to !== "string") {
+      return [];
+    }
+    return [{ label, from, to }];
+  });
 }
 
 /** "$1,234.56" — quotes are in AUD and always shown to the cent, because this
@@ -381,6 +412,84 @@ export async function sendRequestNotificationHandler(
             : []),
         ],
         cta: { label: "Accept or decline", url: reviewLink },
+        secondaryLink: {
+          prefix: "Or paste this link into your browser:",
+          label: reviewLink,
+          url: reviewLink,
+        },
+      };
+      break;
+    }
+    case "REQUEST_EDITED": {
+      //  THE ONE EMAIL THAT REPORTS A CHANGE SOMEBODY ELSE MADE.
+      //
+      //  Everything else here tells the requester what has HAPPENED to their
+      //  request. This tells them their request is no longer the one they
+      //  submitted: IT corrected it — usually because the form was filled in
+      //  for the wrong thing — and they are entitled to see exactly what moved.
+      //
+      //  So the diff IS the email. Without it this is a notification that
+      //  something unspecified was altered on their behalf, which is worse
+      //  than no email at all.
+      to = await resolveUserEmail(request.userId);
+
+      // Pinned by id, so two edits in quick succession each report their own
+      // diff rather than both reporting whichever landed last. Falls back to
+      // the newest edit for a job enqueued before editId existed.
+      const editId = Number(payload.editId);
+      const edit = Number.isFinite(editId)
+        ? await prisma.requestEdit.findUnique({ where: { id: editId } })
+        : await prisma.requestEdit.findFirst({
+            where: { requestId: request.id },
+            orderBy: { createdAt: "desc" },
+          });
+
+      // No edit row, or one belonging to a different request, means the job
+      // was enqueued against the wrong thing. Nothing a retry fixes.
+      if (!edit || edit.requestId !== request.id) {
+        return { skipped: true, reason: "no_edit_record", requestId, kind };
+      }
+
+      const changes = parseEditChanges(edit.changes);
+      if (changes.length === 0) {
+        // editRequest never writes a no-op edit, so this is a corrupt or
+        // hand-inserted row. Sending "your request changed" with nothing to
+        // show would just generate a support call.
+        return { skipped: true, reason: "no_changes_recorded", requestId, kind };
+      }
+
+      const editedBy = esc(edit.editedBy);
+
+      subject = `Your ${request.categoryName} request has been updated`;
+      text =
+        `${edit.editedBy} has corrected your request in KSB Checkout.\n\n` +
+        `What changed:\n` +
+        changes.map((c) => `  ${c.label}: ${c.from} → ${c.to}`).join("\n") +
+        `\n\nYour request keeps its place in the queue — nothing needs approving again ` +
+        `and there's nothing for you to do.\n\n` +
+        `If any of this doesn't look right, let IT know: ${reviewLink}`;
+
+      content = {
+        eyebrow: "Updated",
+        title: "Your request has been corrected",
+        paragraphs: [
+          greeting(userFirst),
+          `<strong style="color:#27242e; font-weight:600;">${editedBy}</strong> has corrected your request in KSB Checkout. Here's exactly what changed.`,
+          `Your request <strong style="color:#27242e; font-weight:600;">keeps its place in the queue</strong> — nothing needs approving again, and there's nothing for you to do.`,
+          `If any of this doesn't look right, let IT know and we'll sort it out.`,
+        ],
+        // Old value struck through, new value plain — the row reads
+        // left-to-right as "this became that" without needing a legend.
+        detailRows: changes.map((c) => ({
+          // Escaped like the values, even though every label describeRequestChanges
+          // emits is one of our own constants: this side of the wire reads them
+          // out of a JSON column, and nothing downstream re-escapes a label.
+          label: esc(c.label),
+          value:
+            `<span style="color:#9b97a3; text-decoration:line-through;">${esc(c.from)}</span>` +
+            `<span style="color:#9b97a3;"> &rarr; </span>${esc(c.to)}`,
+        })),
+        cta: { label: "View my request", url: reviewLink },
         secondaryLink: {
           prefix: "Or paste this link into your browser:",
           label: reviewLink,

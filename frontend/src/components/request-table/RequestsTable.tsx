@@ -36,6 +36,8 @@ type Props = {
   columnVisibility: Record<string, boolean>;
   onMarkReadyForCollection: (request: Request) => void;
   onManageCorrection: (request: Request) => void;
+  /** Admin-only: correct a request that was filed wrong, in place. */
+  onEdit: (request: Request) => void;
 };
 
 /**
@@ -129,6 +131,7 @@ export default function RequestsTable({
   columnVisibility,
   onMarkReadyForCollection,
   onManageCorrection,
+  onEdit,
 }: Props) {
   // Default sort: newest first
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -163,7 +166,8 @@ export default function RequestsTable({
       onMarkShipped,
       onMarkReceived,
       onMarkReadyForCollection,
-      onManageCorrection
+      onManageCorrection,
+      onEdit,
     } as RequestsTableMeta,
   });
 

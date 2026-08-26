@@ -40,6 +40,9 @@ type Props = {
   onChange: (selectedOption: string | null, somethingElse: boolean) => void;
   /** Reports the loaded labels so the parent can validate proportionally. */
   onOptionsLoaded: (labels: string[]) => void;
+  /** Section heading. Defaults to the accessory form's numbered one; the edit
+   *  dialog has no numbered sequence to fit into. */
+  label?: string;
 };
 
 export default function AccessoryOptionsSection({
@@ -48,6 +51,7 @@ export default function AccessoryOptionsSection({
   somethingElse,
   onChange,
   onOptionsLoaded,
+  label = "3. What Do You Need?",
 }: Props) {
   const [labels, setLabels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,7 +114,7 @@ export default function AccessoryOptionsSection({
   return (
     <div>
       <h3 className="text-xs font-medium tracking-wider mb-2 uppercase text-on-surface-variant">
-        3. What Do You Need?
+        {label}
       </h3>
       <p className="mb-5 text-xs text-info-light">
         (if your expected option is not listed, then state your needs with "Something else" in the reasoning text field)

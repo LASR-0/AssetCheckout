@@ -39,6 +39,61 @@ export function isApprover(
 }
 
 
+///  +-----------------------------------------------------------------+
+///  |                      WHO CAN EDIT A REQUEST                     |
+///  +-----------------------------------------------------------------+
+//
+//  Mirrors the guards in the backend's editRequest. These two must agree, or
+//  the row offers a pencil the API then refuses — the same contract the
+//  approver checks above are held to.
+//
+//  The backend is what MAKES it true; this is what stops the UI lying about
+//  it. Neither is redundant.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Can this request be corrected at all?
+ *
+ * Admins only: editing is IT fixing somebody else's request on their behalf,
+ * which is why the requester gets emailed the diff afterwards.
+ *
+ * Corrections are excluded (they carry their own detail row and their own
+ * dialog, and none of the editable fields apply). So are finished and rejected
+ * requests: a completed request has hardware checked out against it in Snipe,
+ * and editing the paperwork afterwards only makes the two disagree.
+ */
+export function canEditRequest(request: Request, role: Role): boolean {
+  if (role !== "ADMIN") return false;
+  if (request.requestKind === "CORRECTION" || request.requestType === "CORRECTION") {
+    return false;
+  }
+  return request.status !== "COMPLETED" && request.status !== "REJECTED";
+}
+
+/**
+ * Can WHAT is being requested still change — the kind, the category, the spec
+ * level, the accessory option?
+ *
+ * False once IT has built something from those fields: a Snipe model, a
+ * skeleton asset, a linked accessory, or a supplier's quote for one specific
+ * item. Rewriting them then would leave the request describing one thing and
+ * pointing at another. The softer fields (approver, reason, preferred model,
+ * phone options) stay editable either way.
+ *
+ * A bare ModelRequest with no Snipe id on it does NOT count: one is created
+ * the moment a non-standard request is approved, and it is empty at that
+ * point.
+ */
+export function canEditRequestShape(request: Request): boolean {
+  const mr = request.modelRequest;
+  const linked =
+    !!mr &&
+    ((mr.snipeModelId ?? null) !== null ||
+      (mr.linkedAssetId ?? null) !== null ||
+      (mr.snipeAccessoryId ?? null) !== null);
+  return !linked && !request.quoteDetail;
+}
+
 export const ALL_COLUMN_IDS = [
   "userName",
   "requestType",
@@ -63,6 +118,10 @@ export type ColumnId = (typeof ALL_COLUMN_IDS)[number];
 //  the collect/receive button is behind ownership. A requester who is not
 //  the owner, or is at a stage with nothing to do, gets the stage badge —
 //  which is what the column already showed everyone else.
+//
+//  The Edit pencil floats in that same column's top-right corner, out of flow,
+//  and gates itself on canEditRequest — admins only. So there is no column to
+//  add here for it, and no per-role visibility to keep in step.
 const ROLE_COLUMNS: Record<NonNullable<Role>, ColumnId[]> = {
   ADMIN: ["userName", "requestType", "assetDetails", "reason", "manager", "createdAt", "actions"],
   MANAGER: ["userName", "requestType", "reason", "manager", "createdAt", "actions"],

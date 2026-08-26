@@ -1,5 +1,5 @@
 import { apiFetch } from "@/api/client";
-import type { Request } from "@/types/requestType";
+import type { Request, RequestChange } from "@/types/requestType";
 
 type GetRequestsParams = {
   status?: string;
@@ -26,6 +26,53 @@ export async function getRequests(params?: GetRequestsParams): Promise<GetReques
 
   const qs = query.toString();
   return apiFetch<GetRequestsResponse>(`/api/requests${qs ? `?${qs}` : ""}`);
+}
+
+/**
+ * A sparse set of corrections to an existing request. An omitted key means
+ * "leave it alone"; `null` is a real value and clears the column.
+ *
+ * Deliberately narrower than the create payload: the requester, the status and
+ * every approval timestamp are not here, because editing must not move the
+ * request in the workflow. See editRequest in the backend service.
+ */
+export type EditRequestPayload = {
+  requestKind?: "ASSET" | "ACCESSORY";
+  categoryId?: number;
+  categoryName?: string;
+  requestType?: "STANDARD" | "NON_STANDARD";
+  accessoryOption?: string | null;
+  reason?: string | null;
+  preferredModel?: string | null;
+  manager?: string | null;
+  managerId?: number;
+  callText?: boolean;
+  needsData?: boolean;
+  numberOption?: "NEW" | "REUSE" | "NONE" | null;
+  reuseNumberFromEmail?: string | null;
+  reuseNumberPhone?: string | null;
+};
+
+export type EditRequestResponse = {
+  success: boolean;
+  request: Request;
+  /** Empty when nothing actually moved — the backend writes nothing and sends
+   *  no email in that case, so the caller should say so rather than claim a
+   *  save. */
+  changes: RequestChange[];
+  message: string;
+};
+
+/** Admin-only. Corrects a request in place, leaving its workflow position
+ *  untouched and emailing the requester the diff. */
+export async function editRequest(
+  id: number,
+  payload: EditRequestPayload
+): Promise<EditRequestResponse> {
+  return apiFetch<EditRequestResponse>(`/api/requests/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
 }
 
 /**
