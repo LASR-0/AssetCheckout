@@ -160,6 +160,43 @@ export const SELECT_ITEM =
 export const MENU_ITEM_DANGER =
   "text-error focus:bg-error-background focus:text-error data-[highlighted]:bg-error-background";
 
+///  +-----------------------------------------------------------------+
+///  |            THE RAIL COLLAPSES ON A NARROW SCREEN                |
+///  +-----------------------------------------------------------------+
+//
+//  The gutter rail is two columns: a fixed label column, then the field. It is
+//  what makes the editor readable on a laptop — every row names itself in the
+//  same place, so the eye finds the warning without reading it.
+//
+//  ON A PHONE IT IS THE WHOLE PROBLEM. There are TWO of these grids nested:
+//  the block rail (6.5rem) and, inside a figure or a link, the field grid
+//  (5.5rem). Together with their gaps that is around 13rem of label before any
+//  field starts — over half a 375px screen — leaving the URL box and the size
+//  select a strip too narrow to hold their own content. They overflowed it
+//  instead, and the panel scrolled sideways.
+//
+//  So below `sm` both grids become one column and the label sits ABOVE its
+//  field. The label costs a line it did not cost before and gives back the
+//  full width, which is the right trade at that size: on a phone you scroll
+//  down anyway, and you should never have to scroll across.
+//
+//  DEFINED ONCE, HERE, because the two grids appear in five files between them
+//  and had already drifted apart by a gap value. Written as literal class
+//  strings for the reason at the top of this file — Tailwind reads source text,
+//  so a composed class name is one that exists in the DOM and nowhere in the
+//  stylesheet.
+///  +-----------------------------------------------------------------+
+
+/** The block rail: type label and hint, then the panel. */
+export const RAIL_GRID =
+  "grid grid-cols-1 gap-y-1.5 " +
+  "sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-0";
+
+/** The inner field grid inside a figure, link or branch panel. */
+export const FIELD_GRID =
+  "grid grid-cols-1 gap-y-1.5 " +
+  "sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-x-3 sm:gap-y-2.5";
+
 type Props = {
   kind: BlockKind;
   children: ReactNode;
@@ -185,8 +222,12 @@ export default function BlockRow({
   const style = BLOCK_STYLES[kind];
 
   return (
-    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-4 border-t border-outline/30 pt-3.5">
-      <div className="flex flex-col items-start gap-1 pt-0.5">
+    <div className={`${RAIL_GRID} border-t border-outline/30 pt-3.5`}>
+      {/* Stacked in the gutter on a wide screen; laid out as one wrapping line
+          on a phone, where the gutter has become a heading above the panel. A
+          three-line vertical stack up there would cost the height the collapsed
+          rail was meant to buy back. */}
+      <div className="flex flex-row flex-wrap items-center gap-x-2 gap-y-0.5 sm:flex-col sm:items-start sm:gap-1 sm:pt-0.5">
         <span className={`material-symbols-outlined !text-[17px] ${style.accent}`}>
           {style.icon}
         </span>
@@ -243,10 +284,14 @@ export default function BlockRow({
 }
 
 /** The gutter label for a row that is not an optional block — the step's own
- *  title and body. Same column, same type scale, so the rail reads as one. */
+ *  title and body. Same column, same type scale, so the rail reads as one.
+ *
+ *  The top padding is what lines it up with the field beside it, so it only
+ *  applies once there IS a field beside it; sitting above one, it would just
+ *  be a gap. */
 export function RailLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-info-light">
+    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-info-light sm:pt-2">
       {children}
     </div>
   );

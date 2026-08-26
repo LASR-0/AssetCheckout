@@ -45,6 +45,43 @@ const Combobox = ComboboxPrimitive.Root
 
 const stopWheelPropagation = (event: WheelEvent) => event.stopPropagation()
 
+///  +-----------------------------------------------------------------+
+///  |   CONFINED BY THE VIEWPORT, NOT BY WHATEVER BOX THE INPUT IS IN  |
+///  +-----------------------------------------------------------------+
+//
+//  Base UI's positioner defaults `collisionBoundary` to `'clipping-ancestors'`,
+//  which it hands straight to Floating UI: the popup is squeezed to fit inside
+//  the nearest ancestor of the ANCHOR that clips — any `overflow: auto/hidden`
+//  box, however small.
+//
+//  That is wrong for a popup that is portaled to <body>. It is not laid out
+//  inside that box and cannot be clipped by it, so there is nothing for it to
+//  be confined to except the screen.
+//
+//  WHAT IT LOOKED LIKE. Put a combobox inside a scrollable dialog body and the
+//  scroll box becomes the boundary. Scroll the input near the bottom of it and
+//  `--available-height` — which ComboboxList's max-height is derived from —
+//  collapses to a few dozen pixels. The list gets a sliver, and since
+//  `collisionAvoidance.side` is `"none"` it cannot flip above the input to
+//  escape either. The options are there and the wheel does nothing, because
+//  there is no room to scroll rather than no permission to.
+//
+//  Passing the document element as the boundary restores the sane thing:
+//  Floating UI always intersects the boundary with its root boundary, which is
+//  the viewport, so the popup gets the space actually on screen.
+//
+//  A NO-OP WHERE NOTHING CLIPS. On the request forms the anchor has no clipping
+//  ancestor, so clipping-ancestors already resolved to the viewport and the
+//  measurement is unchanged. Only the case that was broken moves.
+//
+//  Callers can still override it — the settings selectors deliberately confine
+//  some popups, and this is a default, not a rule.
+///  +-----------------------------------------------------------------+
+
+function viewportBoundary(): HTMLElement | undefined {
+  return typeof document === "undefined" ? undefined : document.documentElement
+}
+
 /** Ref callback for the popup element. The popup mounts only while the
  *  combobox is open, so this has to be a ref callback — an effect keyed on
  *  mount would run while the node is still absent and never see it. Relies on
@@ -135,11 +172,12 @@ function ComboboxContent({
   align = "start",
   alignOffset = 0,
   anchor,
+  collisionBoundary,
   ...props
 }: ComboboxPrimitive.Popup.Props &
   Pick<
     ComboboxPrimitive.Positioner.Props,
-    "side" | "align" | "sideOffset" | "alignOffset" | "anchor" 
+    "side" | "align" | "sideOffset" | "alignOffset" | "anchor" | "collisionBoundary"
   >) {
   const stopWheelRef = useStopWheel()
 
@@ -151,6 +189,9 @@ function ComboboxContent({
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
+        // See viewportBoundary above — the default would confine the popup to
+        // whatever scrollable box the input happens to sit in.
+        collisionBoundary={collisionBoundary ?? viewportBoundary()}
         collisionAvoidance={{ side: "none", align: "shift", fallbackAxisSide: "none" }}
         className="isolate z-50"
       >

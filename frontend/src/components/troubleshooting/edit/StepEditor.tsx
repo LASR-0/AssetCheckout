@@ -6,6 +6,7 @@ import BranchEditor from "./BranchEditor";
 import LinkEditor from "./LinkEditor";
 import BlockRow, {
   RailLabel,
+  RAIL_GRID,
   BLOCK_STYLES,
   MENU_PANEL,
   MENU_ITEM,
@@ -39,6 +40,10 @@ import type { Step, SymptomListing } from "@/types/troubleshootingType";
 //  previous version stacked all five fields as identical white boxes, so
 //  nothing said which was the warning — see BlockRow for why that matters more
 //  than it sounds.
+//
+//  The rail is two columns only above `sm`; below it the label sits above its
+//  field instead, because the column is a luxury a 375px screen cannot afford.
+//  RAIL_GRID in BlockRow owns that, and the reasoning is there.
 //
 //  MOVE AND DELETE SIT ON THE STEP, not in a separate reordering mode. The
 //  ordering of these articles is load-bearing — the house rule is cheapest step
@@ -106,7 +111,7 @@ export default function StepEditor({
 
   return (
     <section className="scroll-mt-24 rounded-xl border border-outline bg-surface-container-lowest p-5">
-      <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-4">
+      <div className={RAIL_GRID}>
         <RailLabel>Step {index + 1}</RailLabel>
 
         <div className="flex items-center gap-2 border-b border-outline/60 pb-1.5">
@@ -248,7 +253,7 @@ export default function StepEditor({
       </div>
 
       {available.length > 0 && (
-        <div className="mt-3.5 grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-4 border-t border-outline/30 pt-3.5">
+        <div className={`mt-3.5 ${RAIL_GRID} border-t border-outline/30 pt-3.5`}>
           <RailLabel>Insert</RailLabel>
           <div className="flex flex-wrap gap-2 pt-1">
             {available.map((kind) => (

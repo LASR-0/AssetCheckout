@@ -58,7 +58,12 @@ export default function TroubleshootingLayout({
 
   return (
     <main className="min-h-screen bg-landing-bg text-on-background">
-      <div className="mx-auto max-w-6xl px-4 pb-20 pt-8 md:px-8">
+      {/* Same phone gutter as Home and Settings. This one starts from `px-4`
+          rather than `px-6`, so it gives back less — but the editing view
+          stacks a step card's own padding on top of it, and the two together
+          were what left the figure and link fields short. Only the phone case
+          moves; `sm` up is untouched. */}
+      <div className="mx-auto max-w-6xl px-3 pb-20 pt-8 sm:px-4 md:px-8">
         <nav
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-info-light"

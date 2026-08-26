@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SELECT_TRIGGER, SELECT_CONTENT, SELECT_ITEM } from "./BlockRow";
+import { FIELD_GRID, SELECT_TRIGGER, SELECT_CONTENT, SELECT_ITEM } from "./BlockRow";
 import type { Branch, SymptomListing } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -110,7 +110,7 @@ export default function BranchEditor({
 
       {/* The same label grid the figure block uses — they are siblings in the
           rail now, and the prototype lays both out this way. */}
-      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+      <div className={FIELD_GRID}>
         <span className="text-[12px] text-info-light">Reads as</span>
         <EditableText
           value={branch.label}

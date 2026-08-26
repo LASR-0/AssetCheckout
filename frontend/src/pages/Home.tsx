@@ -207,7 +207,12 @@ export default function LandingPage() {
 
   return (
     <div className="bg-landing-bg text-on-background flex-grow">
-      <main className="w-full max-w-[1160px] mx-auto px-6 md:px-8 pb-16">
+      {/* The gutter halves on a phone. The cards below already carry modest
+          padding of their own (px-5 and less), so unlike Settings there is
+          nothing inside them worth trimming — the 24px each side of the page
+          itself was the only real cost, and on a 375px screen it was 13% of
+          the viewport spent on empty margin. */}
+      <main className="w-full max-w-[1160px] mx-auto px-3 pb-16 sm:px-6 md:px-8">
         <HomeHead requests={requests} loading={loading} />
         <QuickStart holdingsByCategory={assetsByCategory} />
         <AccessoryQuickStart holdingsByCategory={accessoriesByCategory} />

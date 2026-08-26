@@ -205,8 +205,16 @@ export default function SettingsPage() {
 
   return (
     <main className="w-full min-h-[calc(100vh-4rem)] bg-landing-bg">
+      {/* THE GUTTER IS HALVED ON A PHONE, and so is the padding inside every
+          card (see SettingsSection). They compound: 24px of page gutter plus
+          32px of card padding is 112px of empty margin on a 375px screen —
+          under a third of it gone before any content starts, which is what was
+          squeezing the selectors and tables inside.
+          Halving both gives back 56px, about a fifth of the viewport. On a
+          desktop the space is affordable and the breathing room is worth
+          having, so nothing changes there. */}
       <div
-        className={`${isAdmin ? "max-w-3xl lg:max-w-[1600px]" : "max-w-3xl"} py-12 px-6 mx-auto`}
+        className={`${isAdmin ? "max-w-3xl lg:max-w-[1600px]" : "max-w-3xl"} py-8 px-3 mx-auto sm:py-12 sm:px-6`}
       >
         {/* Page header */}
         <div className="mb-10 text-center">
@@ -253,8 +261,11 @@ type SectionProps = {
 
 function SettingsSection({ icon, title, children }: SectionProps) {
   return (
-    <section className="bg-surface-container-lowest shadow-md rounded-xl p-8 shadow-sm">
-      <div className="flex items-center gap-3 mb-6">
+    // Padding halved below `sm` — the other half of the squeeze described on
+    // the page container above. Every section on the page is one of these, so
+    // this is the single place that decides it.
+    <section className="bg-surface-container-lowest shadow-md rounded-xl p-4 shadow-sm sm:p-8">
+      <div className="flex items-center gap-3 mb-4 sm:mb-6">
         <span className="material-symbols-outlined text-on-background">{icon}</span>
         <h2 className="font-headline text-xl font-bold text-on-background">{title}</h2>
       </div>

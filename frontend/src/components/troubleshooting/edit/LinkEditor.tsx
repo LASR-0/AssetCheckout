@@ -1,5 +1,6 @@
 import { useId } from "react";
 import EditableText from "./EditableText";
+import { FIELD_GRID } from "./BlockRow";
 import type { ExternalLink } from "@/types/troubleshootingType";
 
 ///  +-----------------------------------------------------------------+
@@ -32,7 +33,7 @@ export default function LinkEditor({ link, onChange }: Props) {
   const invalid = current.url.length > 0 && !/^https?:\/\//i.test(current.url);
 
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+    <div className={FIELD_GRID}>
       <span className="text-[12px] text-info-light">Reads as</span>
       <EditableText
         value={current.label}

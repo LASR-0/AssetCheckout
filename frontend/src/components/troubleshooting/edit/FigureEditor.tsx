@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SELECT_TRIGGER, SELECT_CONTENT, SELECT_ITEM } from "./BlockRow";
+import { FIELD_GRID, SELECT_TRIGGER, SELECT_CONTENT, SELECT_ITEM } from "./BlockRow";
 import { uploadTroubleshootingImage } from "@/api/troubleshooting";
 import type { Figure } from "@/types/troubleshootingType";
 
@@ -157,7 +157,7 @@ export default function FigureEditor({
       {/* A label column and a field column, so the four things a figure has
           read as one form rather than four unrelated controls. Matches the
           rail above it: the labels line up, the fields line up. */}
-      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+      <div className={FIELD_GRID}>
         <FieldLabel htmlFor={captionId}>Caption path</FieldLabel>
         {/* PLAIN, unlike the other prose fields, and it was tried the other
             way first. A caption is a navigation path — "Settings › Wi-Fi ›
@@ -181,7 +181,7 @@ export default function FigureEditor({
             type="file"
             accept="image/png,image/jpeg,image/webp"
             aria-label="Light image"
-            className="text-[12px] file:mr-2 file:rounded-md file:border file:border-outline file:bg-surface file:px-2.5 file:py-1 file:text-[12px] hover:file:cursor-pointer"
+            className="w-full min-w-0 text-[12px] file:mr-2 file:rounded-md file:border file:border-outline file:bg-surface file:px-2.5 file:py-1 file:text-[12px] hover:file:cursor-pointer"
           />
         </div>
 
@@ -192,7 +192,7 @@ export default function FigureEditor({
             type="file"
             accept="image/png,image/jpeg,image/webp"
             aria-label="Dark image"
-            className="text-[12px] file:mr-2 file:rounded-md file:border file:border-outline file:bg-surface file:px-2.5 file:py-1 file:text-[12px] hover:file:cursor-pointer"
+            className="w-full min-w-0 text-[12px] file:mr-2 file:rounded-md file:border file:border-outline file:bg-surface file:px-2.5 file:py-1 file:text-[12px] hover:file:cursor-pointer"
           />
           {/* Said here rather than in the label, because it is a fact about
               this field and not part of its name. */}
@@ -216,7 +216,11 @@ export default function FigureEditor({
           >
             <SelectTrigger
               aria-label="Figure size"
-              className={`h-8 w-[19rem] text-[12.5px] ${SELECT_TRIGGER}`}
+              // 19rem is the width the three option labels want; on a phone it is
+              // wider than the whole content box, and it was the single biggest
+              // contributor to the sideways scroll. Full width below `sm`, its
+              // intended width above.
+              className={`h-8 w-full text-[12.5px] sm:w-[19rem] ${SELECT_TRIGGER}`}
             >
               <SelectValue />
             </SelectTrigger>
@@ -248,14 +252,14 @@ export default function FigureEditor({
           {images.map((image, i) => (
             <div
               key={image.src}
-              className="flex items-center gap-2 rounded-md border border-outline bg-surface px-2 py-1"
+              className="flex min-w-0 max-w-full items-center gap-2 rounded-md border border-outline bg-surface px-2 py-1"
             >
               <img
                 src={`/troubleshooting/${image.src}`}
                 alt=""
                 className="h-10 w-10 rounded object-cover"
               />
-              <span className="max-w-[16rem] truncate text-[11px] text-info-light">
+              <span className="min-w-0 flex-1 truncate text-[11px] text-info-light sm:max-w-[16rem] sm:flex-none">
                 {image.src.split("/").pop()}
                 {image.srcDark ? " + dark" : ""}
               </span>
@@ -297,7 +301,8 @@ export default function FigureEditor({
   );
 }
 
-/** A right-aligned label in the figure's own two-column grid. */
+/** A label in the figure's own field grid — beside its field on a wide screen,
+ *  above it on a narrow one. See FIELD_GRID in BlockRow. */
 function FieldLabel({
   children,
   htmlFor,
