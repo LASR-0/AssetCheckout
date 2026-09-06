@@ -27,6 +27,8 @@ type Props = {
   /** Non-standard accessory quote stage: IT sends it, the manager answers. */
   onSendQuote: (request: Request) => void;
   onReviewQuote: (request: Request) => void;
+  /** IT decides the item is too cheap to be worth a supplier quote. */
+  onSkipQuote: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   globalFilter: string;
@@ -36,6 +38,13 @@ type Props = {
   columnVisibility: Record<string, boolean>;
   onMarkReadyForCollection: (request: Request) => void;
   onManageCorrection: (request: Request) => void;
+  /** Admin hands procurement off to the requester instead of selecting an
+   *  accessory. */
+  onMarkUserProcured: (request: Request) => void;
+  /** The requester reports what they bought. */
+  onSubmitSelfProcuredDetails: (request: Request) => void;
+  /** Admin reviews what was bought and completes the request. */
+  onReviewSelfProcured: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
 };
@@ -122,6 +131,7 @@ export default function RequestsTable({
   onAddAccessoryStock,
   onSendQuote,
   onReviewQuote,
+  onSkipQuote,
   onMarkShipped,
   onMarkReceived,
   globalFilter,
@@ -131,6 +141,9 @@ export default function RequestsTable({
   columnVisibility,
   onMarkReadyForCollection,
   onManageCorrection,
+  onMarkUserProcured,
+  onSubmitSelfProcuredDetails,
+  onReviewSelfProcured,
   onEdit,
 }: Props) {
   // Default sort: newest first
@@ -163,10 +176,14 @@ export default function RequestsTable({
       onAddAccessoryStock,
       onSendQuote,
       onReviewQuote,
+      onSkipQuote,
       onMarkShipped,
       onMarkReceived,
       onMarkReadyForCollection,
       onManageCorrection,
+      onMarkUserProcured,
+      onSubmitSelfProcuredDetails,
+      onReviewSelfProcured,
       onEdit,
     } as RequestsTableMeta,
   });

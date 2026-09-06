@@ -78,6 +78,11 @@ export async function acceptQuote(requestId: number): Promise<QuoteResponse> {
   });
 }
 
+/** IT decides this item is too cheap to be worth chasing a supplier quote for. */
+export async function skipQuote(requestId: number): Promise<{ success: boolean; message: string }> {
+  return apiFetch(`/api/approval/${requestId}/quote/skip`, { method: "POST" });
+}
+
 /** The manager rejects the quoted price. Terminal for the request. */
 export async function rejectQuote(
   requestId: number,

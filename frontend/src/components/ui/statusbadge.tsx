@@ -135,6 +135,7 @@ export type StageInput = FulfilmentInput & {
   adminApprovedAt?: string | null;
   quoteDetail?: { status?: string | null } | null;
   modelRequest?: { status?: string | null } | null;
+  selfProcured?: { status?: string | null } | null;
 };
 
 export function deriveStage(request: StageInput): string {
@@ -161,6 +162,16 @@ export function deriveStage(request: StageInput): string {
     if (request.requestType === "STANDARD" && !request.adminApprovedAt)
       return "AWAITING_IT";
     if (request.modelRequest?.status === "PENDING") return "AWAITING_IT";
+
+    // Handed off to the requester instead of an accessory being selected —
+    // waiting on them to report what they bought, then on IT to review it.
+    // Checked before APPROVED falls through below, on the same terms as
+    // AWAITING_QUOTE above: a request sitting here would otherwise just read
+    // as a bare "Approved" with nothing to say why.
+    if (request.selfProcured?.status === "AWAITING_DETAILS")
+      return "AWAITING_SELF_PROCUREMENT";
+    if (request.selfProcured?.status === "AWAITING_REVIEW")
+      return "AWAITING_PROCUREMENT_REVIEW";
 
     // Past IT sign-off, still being provisioned: creating the model, filling in
     // asset details, selecting the accessory, waiting on stock. Deliberately
@@ -239,6 +250,10 @@ const labelMap: Record<string, string> = {
   // rather than a plain "Approved", because the request is stalled on someone
   // outside IT and the row should say so.
   AWAITING_QUOTE: "Quote with manager",
+  // Non-standard accessory IT has handed off to the requester instead of
+  // selecting a Snipe accessory — see selfProcurement.ts.
+  AWAITING_SELF_PROCUREMENT: "Awaiting purchase",
+  AWAITING_PROCUREMENT_REVIEW: "Awaiting IT review",
   READY_TO_COLLECT: "Ready to collect",
   READY_TO_SHIP: "Ready to ship",
   SHIPPED: "Shipped",
@@ -277,6 +292,8 @@ const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
   PENDING: { ...PROGRESS, icon: "schedule" },
   AWAITING_IT: { ...PROGRESS, icon: "shield_person" },
   AWAITING_QUOTE: { ...PROGRESS, icon: "request_quote" },
+  AWAITING_SELF_PROCUREMENT: { ...PROGRESS, icon: "shopping_cart" },
+  AWAITING_PROCUREMENT_REVIEW: { ...PROGRESS, icon: "fact_check" },
   READY_TO_COLLECT: { ...DONE, icon: "package_2" },
   READY_TO_SHIP: { ...DONE, icon: "local_shipping" },
   SHIPPED: { ...DONE, icon: "local_shipping" },

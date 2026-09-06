@@ -150,6 +150,12 @@ async function loadRequestAtQuote(
       400
     );
   }
+  if (request.quoteSkippedAt) {
+    throw new AppError(
+      "The quote for this request was already skipped — the quote stage has passed",
+      400
+    );
+  }
 
   return request as Request & { modelRequest: ModelRequest; quoteDetail: null };
 }
@@ -251,6 +257,37 @@ export async function createQuoteForRequest(
     success: true,
     quote,
     message: `Quote sent to ${request.manager || "the approving manager"} for approval.`,
+  };
+}
+
+/**
+ * IT decides the item is too cheap to be worth chasing a supplier quote for
+ * at all — the phone-case case. Reuses loadRequestAtQuote's preconditions
+ * verbatim: this is an alternative to sending a quote, not a different stage,
+ * so it must be offered and guarded identically.
+ *
+ * Sets a bare marker rather than a QuoteDetail row — a skip has no supplier,
+ * amount or document, and QuoteDetail requires all three. Selection then
+ * unblocks off this marker exactly as it would off an accepted quote; see
+ * loadAccessoryRequestAtSelection in request.ts.
+ */
+export async function skipQuoteForRequest(
+  requestId: number,
+  actorName: string
+): Promise<{ success: true; message: string }> {
+  await loadRequestAtQuote(requestId);
+
+  await prisma.request.update({
+    where: { id: requestId },
+    data: {
+      quoteSkippedAt: new Date(),
+      quoteSkippedBy: actorName,
+    },
+  });
+
+  return {
+    success: true,
+    message: "Quote skipped — the accessory can now be selected and ordered.",
   };
 }
 

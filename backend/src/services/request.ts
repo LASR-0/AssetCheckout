@@ -298,6 +298,50 @@ function normalisePreferredModel(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * True when the person submitting the request is the requestee's immediate
+ * manager, as Snipe-IT records it — the signal a manager filing a request for
+ * one of their own reports doesn't need to be asked to approve it a second
+ * time. `submitterId` is resolved server-side from the signed-in actor (see
+ * the POST / route), never taken from the form body, since the approver field
+ * on the form is free text and proves nothing on its own.
+ */
+async function isAutoApproveEligible(
+  requesteeUserId: number,
+  submitterId: number | null | undefined
+): Promise<boolean> {
+  if (submitterId == null) return false;
+  const requestee = await getSnipeUser(requesteeUserId);
+  return requestee?.manager?.id === submitterId;
+}
+
+/**
+ * Dispatches a freshly created PENDING request to either the manager's inbox
+ * (the normal path) or straight through the manager stage (when
+ * isAutoApproveEligible matched at creation time and `autoApproved` is
+ * already stamped on the row). Reuses handleStandardApproval /
+ * handleNonStandardApproval verbatim — an auto-approval takes exactly the
+ * same code path a manual one does, only the trigger differs, so
+ * approvedBy/approvedAt and the ADMIN_APPROVAL_NEEDED notification are
+ * identical either way.
+ */
+async function finalizeNewRequest(request: Request): Promise<Request> {
+  if (!request.autoApproved) {
+    notify(request.id, "MANAGER_APPROVAL_NEEDED");
+    return request;
+  }
+
+  const approval =
+    request.requestType === "STANDARD"
+      ? await handleStandardApproval(request, request.manager ?? "")
+      : await handleNonStandardApproval(
+          request as Request & { modelRequest: ModelRequest | null },
+          request.manager ?? ""
+        );
+
+  return approval.request;
+}
+
 export async function createRequest(input: CreateRequestInput): Promise<CreateResponse> {
 
   if (typeof input.categoryId !== "number" || input.categoryId === 0) {
@@ -329,8 +373,9 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   }
 
   const needsData = input.callText ? true : (input.needsData ?? false);
+  const autoApproved = await isAutoApproveEligible(input.userId, input.submittedById);
 
-  const request = await prisma.request.create({
+  let request = await prisma.request.create({
     data: {
       userId: input.userId,
       userName: input.userName,
@@ -352,11 +397,11 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
       reuseNumberFromEmail: input.reuseNumberFromEmail ?? null,
       reuseNumberPhone: input.reuseNumberPhone ?? null,
       status: "PENDING",
+      autoApproved,
     },
   });
 
-  // New request → the nominated manager needs to approve it.
-  notify(request.id, "MANAGER_APPROVAL_NEEDED");
+  request = await finalizeNewRequest(request);
 
   return {
     success: true,
@@ -424,7 +469,9 @@ async function createAccessoryRequest(
     );
   }
 
-  const request = await prisma.request.create({
+  const autoApproved = await isAutoApproveEligible(input.userId, input.submittedById);
+
+  let request = await prisma.request.create({
     data: {
       userId: input.userId,
       userName: input.userName,
@@ -444,13 +491,11 @@ async function createAccessoryRequest(
       reuseNumberFromEmail: null,
       reuseNumberPhone: null,
       status: "PENDING",
+      autoApproved,
     },
   });
 
-  // New request → the nominated manager needs to approve it. Same first hop
-  // as assets; per-kind downstream branching (emails, admin fulfilment) is
-  // phase 3b/3d work.
-  notify(request.id, "MANAGER_APPROVAL_NEEDED");
+  request = await finalizeNewRequest(request);
 
   return {
     success: true,
@@ -1878,11 +1923,13 @@ async function loadAccessoryRequestAtSelection(
     );
   }
   // The department pays for a non-standard accessory, so nothing gets ordered
-  // before the manager has accepted the quoted price. This is the enforcement
-  // point for that ordering — the row action hides itself until the quote is
-  // accepted, but the guard is what makes it true. Standard accessories are
-  // stocked and cost the department nothing, so they never reach here.
-  if (request.requestType === "NON_STANDARD") {
+  // before the manager has accepted the quoted price — unless IT decided the
+  // cost was too trivial to bother quoting at all (quoteSkippedAt). This is
+  // the enforcement point for that ordering — the row action hides itself
+  // until one of the two is true, but the guard is what makes it true.
+  // Standard accessories are stocked and cost the department nothing, so
+  // they never reach here.
+  if (request.requestType === "NON_STANDARD" && !request.quoteSkippedAt) {
     if (!request.quoteDetail) {
       throw new AppError(
         "No quote has been sent for this request — the manager has to accept a quoted price before a non-standard accessory can be ordered",

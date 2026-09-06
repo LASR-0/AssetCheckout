@@ -17,7 +17,13 @@ import {
   acceptQuoteForRequest,
   rejectQuoteForRequest,
   getQuoteDocument,
+  skipQuoteForRequest,
 } from "../services/quote.js";
+import {
+  markUserProcured,
+  submitSelfProcuredDetails,
+  reviewSelfProcuredDetails,
+} from "../services/selfProcurement.js";
 import {
   searchModelsByManufacturer,
   searchModelsForCorrection,
@@ -1049,6 +1055,36 @@ router.post(
   }
 );
 
+/**
+ * IT decides this item is too cheap to be worth chasing a supplier quote for.
+ * Admin only — same gate as attaching a quote, since this is the alternative
+ * to it, not a different actor's decision.
+ */
+router.post("/:requestId/quote/skip", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({
+        success: false,
+        message: "Only an admin can skip a quote for a request",
+      });
+    }
+
+    const result = await skipQuoteForRequest(requestId, actorName);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** The manager accepts the quoted price. Theirs alone — see resolveQuoteActor. */
 router.post("/:requestId/quote/accept", async (req, res, next) => {
   try {
@@ -1140,6 +1176,150 @@ router.get("/:requestId/quote/document", async (req, res, next) => {
       `inline; filename="${doc.name.replace(/"/g, "")}"`
     );
     res.send(doc.buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |               SELF-PROCUREMENT ROUTES                           |
+///  +-----------------------------------------------------------------+
+//
+//  The alternative to accessory selection for a non-standard accessory too
+//  cheap to be worth IT procuring — see services/selfProcurement.ts. Three
+//  routes, three actors: IT hands it off, the requester reports back, IT
+//  reviews and completes.
+///  +-----------------------------------------------------------------+
+
+/** IT hands procurement off to the requester instead of selecting an accessory. */
+router.post("/:requestId/self-procured/mark", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({
+        success: false,
+        message: "Only an admin can hand procurement off to the requester",
+      });
+    }
+
+    const result = await markUserProcured(requestId, actorName);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * The requester reports what they bought. Ownership-gated the same way
+ * /receive is: the actor must be the request's user, or an admin on their
+ * behalf.
+ */
+router.post("/:requestId/self-procured/details", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { userId: true, userName: true },
+    });
+    if (!request) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    const actorEmail = getActorEmail(req);
+    let actorId: number | null = null;
+    if (actorEmail) {
+      try {
+        actorId = await resolveActorUserId(actorEmail);
+      } catch (err) {
+        console.error(
+          "[approvals] could not resolve actor to a Snipe user, falling back to name matching:",
+          err
+        );
+      }
+    }
+
+    const isAdmin = isAdminEmail(actorEmail);
+    const isOwner = isRequestee(request, { id: actorId, name: actorName });
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: "Only the request's owner or an admin can report what was bought",
+      });
+    }
+
+    const { itemName, cost } = req.body ?? {};
+    if (typeof itemName !== "string" || !itemName.trim()) {
+      return res.status(400).json({ success: false, message: "itemName is required" });
+    }
+    if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "cost is required and must be a non-negative number",
+      });
+    }
+
+    const result = await submitSelfProcuredDetails(requestId, { itemName, cost });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** IT reviews what was bought and completes the request. Admin only. */
+router.post("/:requestId/self-procured/review", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({
+        success: false,
+        message: "Only an admin can review a self-procured item",
+      });
+    }
+
+    const { recordInSnipe, locationId } = req.body ?? {};
+    if (typeof recordInSnipe !== "boolean") {
+      return res.status(400).json({ success: false, message: "recordInSnipe is required" });
+    }
+    if (
+      recordInSnipe &&
+      (typeof locationId !== "number" || !Number.isFinite(locationId) || locationId <= 0)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "locationId is required and must be a positive number when recording in Snipe",
+      });
+    }
+
+    const result = await reviewSelfProcuredDetails(requestId, actorName, {
+      recordInSnipe,
+      locationId: typeof locationId === "number" ? locationId : undefined,
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }

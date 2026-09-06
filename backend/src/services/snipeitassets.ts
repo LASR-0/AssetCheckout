@@ -1410,6 +1410,12 @@ export async function getSnipeUser(userId: number): Promise<SnipeUserDetail | nu
     location: data.location
       ? { id: data.location.id, name: data.location.name }
       : null,
+    // Defensive: a user with no manager set returns manager: null from Snipe,
+    // but treat anything malformed the same way rather than trust the shape.
+    manager:
+      data.manager && typeof data.manager.id === "number"
+        ? { id: data.manager.id, name: data.manager.name ?? "" }
+        : null,
   };
 }
 
@@ -1497,6 +1503,10 @@ export async function findSnipeUserByEmail(email: string): Promise<SnipeUserDeta
     name: match.name ?? "",
     email: match.email?.trim() ?? null,
     location: match.location ? { id: match.location.id, name: match.location.name } : null,
+    manager:
+      match.manager && typeof match.manager.id === "number"
+        ? { id: match.manager.id, name: match.manager.name ?? "" }
+        : null,
   };
 }
 
@@ -1598,6 +1608,8 @@ export async function createSnipeUser(input: CreateSnipeUserInput): Promise<Snip
     name: payload.name ?? `${input.firstName} ${input.lastName}`.trim(),
     email,
     location: null,
+    // A freshly created user has no manager assigned in Snipe yet.
+    manager: null,
   };
 }
 

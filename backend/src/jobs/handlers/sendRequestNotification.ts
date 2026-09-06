@@ -26,6 +26,8 @@ const KINDS = [
   "SHIPMENT_OVERDUE",
   "QUOTE_APPROVAL_NEEDED",
   "REQUEST_EDITED",
+  "SELF_PROCUREMENT_NEEDED",
+  "SELF_PROCUREMENT_SUBMITTED",
 ] as const;
 type NotificationKind = (typeof KINDS)[number];
 
@@ -111,7 +113,7 @@ export async function sendRequestNotificationHandler(
 
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    include: { quoteDetail: true },
+    include: { quoteDetail: true, selfProcured: true },
   });
   if (!request) {
     return { skipped: true, reason: "request_not_found", requestId, kind };
@@ -495,6 +497,62 @@ export async function sendRequestNotificationHandler(
           label: reviewLink,
           url: reviewLink,
         },
+      };
+      break;
+    }
+
+    case "SELF_PROCUREMENT_NEEDED": {
+      // IT decided this is cheap enough for the requester to just go and buy
+      // it themselves. Told to the requester, not the manager — they're the
+      // one with something to do next.
+      to = await resolveUserEmail(request.userId);
+      subject = `Go ahead and buy your ${request.categoryName} yourself`;
+      text =
+        `IT has approved your ${request.categoryName} request, but this item is simple enough ` +
+        `that you can go and purchase it yourself rather than waiting on IT to source it.\n\n` +
+        `Once you have it, come back to AssetCheckout and enter what you bought and what it cost: ${reviewLink}`;
+      content = {
+        eyebrow: "Action required",
+        title: "Go ahead and get this yourself",
+        paragraphs: [
+          greeting(userFirst),
+          `Your ${category} request has been approved, but it's simple enough that you can go and purchase it yourself rather than waiting on IT.`,
+          `Once you have it, come back and enter what you bought and what it cost.`,
+        ],
+        cta: { label: "Enter item details", url: reviewLink },
+      };
+      break;
+    }
+
+    case "SELF_PROCUREMENT_SUBMITTED": {
+      const detail = request.selfProcured;
+      if (!detail || detail.itemName == null || detail.cost == null) {
+        return { skipped: true, reason: "no_self_procured_detail", requestId, kind };
+      }
+
+      to = ADMIN_EMAILS.length ? ADMIN_EMAILS : null;
+      const itemName = esc(detail.itemName);
+      const cost = money(detail.cost);
+      subject = `Review needed: ${request.userName} bought their own ${request.categoryName}`;
+      text =
+        `${request.userName} has reported what they bought for their ${request.categoryName} request.\n\n` +
+        `Item: ${detail.itemName}\n` +
+        `Cost: ${cost}\n\n` +
+        `Review it and decide whether to record it in Snipe: ${reviewLink}`;
+      content = {
+        eyebrow: "Action required",
+        title: "Self-procured item ready for review",
+        paragraphs: [
+          greeting(null),
+          `<strong style="color:#27242e; font-weight:600;">${userName}</strong> has reported what they bought for their ${category} request.`,
+          `Review it and decide whether it's worth a Snipe record, or just a Checkout one.`,
+        ],
+        detailRows: [
+          { label: "Requested by", value: userName },
+          { label: "Item", value: itemName },
+          { label: "Cost", value: cost },
+        ],
+        cta: { label: "Review and complete", url: reviewLink },
       };
       break;
     }

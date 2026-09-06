@@ -48,7 +48,19 @@ function safeParseChanges(raw: string): unknown[] {
 
 router.post("/", async (req, res, next) => {
   try {
-    const result = await createRequest(req.body);
+    // Resolved server-side, never trusted from the body: this is what
+    // isAutoApproveEligible compares against the requestee's Snipe manager.
+    const actorEmail = getActorEmail(req);
+    let submittedById: number | null = null;
+    if (actorEmail) {
+      try {
+        submittedById = await resolveActorUserId(actorEmail);
+      } catch (err) {
+        console.error("[requests] could not resolve submitter to a Snipe user:", err);
+      }
+    }
+
+    const result = await createRequest({ ...req.body, submittedById });
 
     res.json(result);
   } catch (err) {
@@ -297,6 +309,11 @@ router.get("/", async (req, res, next) => {
         // limits non-admins to their own requests and the ones they approve,
         // and the approving manager is precisely who the quote is for.
         quoteDetail: true,
+        // Null for everything but a non-standard accessory IT has handed off
+        // to the requester instead of selecting an accessory. Drives the
+        // "Enter item details" / "Review procurement" actions and badge.
+        // Same visibility reasoning as quoteDetail above.
+        selfProcured: true,
         // The most recent correction an admin made to the row, if any. One
         // row, newest first — the table only ever shows "this was edited, by
         // whom, when", and the full history is not something the log renders.

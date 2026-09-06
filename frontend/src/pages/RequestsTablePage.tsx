@@ -23,6 +23,11 @@ import SendQuoteDialog from "@/components/dialogs/SendQuoteDialog";
 import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 import EditRequestDialog from "@/components/dialogs/EditRequestDialog";
+import ConfirmActionDialog from "@/components/dialogs/ConfirmActionDialog";
+import EnterSelfProcuredDetailsDialog from "@/components/dialogs/EnterSelfProcuredDetailsDialog";
+import ReviewSelfProcuredDialog from "@/components/dialogs/ReviewSelfProcuredDialog";
+import { skipQuote } from "@/api/quotes";
+import { markUserProcured } from "@/api/selfProcurement";
 import { useTourReady } from "@/components/tour/TourProvider";
 
 /**
@@ -48,6 +53,8 @@ const SELECTABLE_STATUSES = [
   "AWAITING_IT",
   "APPROVED",
   "AWAITING_QUOTE",
+  "AWAITING_SELF_PROCUREMENT",
+  "AWAITING_PROCUREMENT_REVIEW",
   "ASSIGNED",
   "READY_TO_COLLECT",
   "SHIPPED",
@@ -117,6 +124,18 @@ export default function RequestTablePage() {
   const [editRequestOpen, setEditRequestOpen] = useState(false);
   const [sendQuoteOpen, setSendQuoteOpen] = useState(false);
   const [reviewQuoteOpen, setReviewQuoteOpen] = useState(false);
+
+  // Skip quote / hand-off-to-requester confirmations. Same shape as the
+  // manager-stage approval confirmation below — pending/error live beside the
+  // open flag so a failure keeps the dialog open with the reason.
+  const [skipQuoteOpen, setSkipQuoteOpen] = useState(false);
+  const [skipQuotePending, setSkipQuotePending] = useState(false);
+  const [skipQuoteError, setSkipQuoteError] = useState<string | null>(null);
+  const [markUserProcuredOpen, setMarkUserProcuredOpen] = useState(false);
+  const [markUserProcuredPending, setMarkUserProcuredPending] = useState(false);
+  const [markUserProcuredError, setMarkUserProcuredError] = useState<string | null>(null);
+  const [enterSelfProcuredOpen, setEnterSelfProcuredOpen] = useState(false);
+  const [reviewSelfProcuredOpen, setReviewSelfProcuredOpen] = useState(false);
 
   // Manager-stage approval confirmation — on-behalf, department budget, or
   // both. Separate from the misnamed `approveDialogOpen` above, which drives
@@ -485,6 +504,70 @@ export default function RequestTablePage() {
     setReviewQuoteOpen(true);
   }
 
+  // Too cheap to be worth chasing a supplier quote for.
+  function handleSkipQuote(request: Request) {
+    setSelectedRequest(request);
+    setSkipQuoteError(null);
+    setSkipQuoteOpen(true);
+  }
+
+  async function handleConfirmSkipQuote() {
+    if (!selectedRequest) return;
+    setSkipQuotePending(true);
+    setSkipQuoteError(null);
+    try {
+      await skipQuote(selectedRequest.id);
+      setSkipQuoteOpen(false);
+      setSelectedRequest(null);
+      await loadRequests();
+    } catch (err) {
+      setSkipQuoteError(
+        err instanceof Error && err.message ? err.message : "Failed to skip the quote. Please try again."
+      );
+    } finally {
+      setSkipQuotePending(false);
+    }
+  }
+
+  // Hand procurement off to the requester instead of selecting an accessory.
+  function handleMarkUserProcured(request: Request) {
+    setSelectedRequest(request);
+    setMarkUserProcuredError(null);
+    setMarkUserProcuredOpen(true);
+  }
+
+  async function handleConfirmMarkUserProcured() {
+    if (!selectedRequest) return;
+    setMarkUserProcuredPending(true);
+    setMarkUserProcuredError(null);
+    try {
+      await markUserProcured(selectedRequest.id);
+      setMarkUserProcuredOpen(false);
+      setSelectedRequest(null);
+      await loadRequests();
+    } catch (err) {
+      setMarkUserProcuredError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Failed to hand this off to the requester. Please try again."
+      );
+    } finally {
+      setMarkUserProcuredPending(false);
+    }
+  }
+
+  // The requester reports what they bought.
+  function handleSubmitSelfProcuredDetails(request: Request) {
+    setSelectedRequest(request);
+    setEnterSelfProcuredOpen(true);
+  }
+
+  // IT reviews what was bought and completes the request.
+  function handleReviewSelfProcured(request: Request) {
+    setSelectedRequest(request);
+    setReviewSelfProcuredOpen(true);
+  }
+
   // Corrections get one row action — Manage — and both verbs live inside the
   // dialog. They never reach handleApprove's provisioning paths.
   function handleManageCorrection(request: Request) {
@@ -548,6 +631,7 @@ export default function RequestTablePage() {
             onAddAccessoryStock={handleAddAccessoryStock}
             onSendQuote={handleSendQuote}
             onReviewQuote={handleReviewQuote}
+            onSkipQuote={handleSkipQuote}
             onMarkShipped={handleMarkShipped}
             onMarkReceived={handleMarkReceived}
             globalFilter={search}
@@ -557,6 +641,9 @@ export default function RequestTablePage() {
             columnVisibility={columnVisibility}
             onMarkReadyForCollection={handleMarkReadyForCollection}
             onManageCorrection={handleManageCorrection}
+            onMarkUserProcured={handleMarkUserProcured}
+            onSubmitSelfProcuredDetails={handleSubmitSelfProcuredDetails}
+            onReviewSelfProcured={handleReviewSelfProcured}
             onEdit={handleEdit}
           />
           {/* DIALOGS */}
@@ -615,6 +702,77 @@ export default function RequestTablePage() {
               !!selectedRequest &&
               !isApprover(selectedRequest, currentUserId, currentUserName)
             }
+            onSuccess={loadRequests}
+          />
+
+          <ConfirmActionDialog
+            open={skipQuoteOpen}
+            onOpenChange={(next) => {
+              setSkipQuoteOpen(next);
+              if (!next) {
+                setSkipQuoteError(null);
+                setSelectedRequest(null);
+              }
+            }}
+            icon="fast_forward"
+            title="Skip the quote?"
+            description={
+              <>
+                <strong className="text-modal-text-primary">{selectedRequest?.userName}</strong>'s{" "}
+                {selectedRequest?.categoryName} will skip straight to accessory selection — no
+                supplier quote, and no further sign-off from{" "}
+                {selectedRequest?.manager || "the manager"}.
+              </>
+            }
+            confirmLabel="Skip quote"
+            pendingLabel="Skipping..."
+            pending={skipQuotePending}
+            error={skipQuoteError}
+            onConfirm={handleConfirmSkipQuote}
+          />
+
+          <ConfirmActionDialog
+            open={markUserProcuredOpen}
+            onOpenChange={(next) => {
+              setMarkUserProcuredOpen(next);
+              if (!next) {
+                setMarkUserProcuredError(null);
+                setSelectedRequest(null);
+              }
+            }}
+            icon="storefront"
+            title="Hand off to the requester?"
+            description={
+              <>
+                <strong className="text-modal-text-primary">{selectedRequest?.userName}</strong> will
+                be asked to buy their own {selectedRequest?.categoryName} and report back what it
+                cost. No accessory will be selected through IT for this request.
+              </>
+            }
+            confirmLabel="Hand off procurement"
+            pendingLabel="Sending..."
+            pending={markUserProcuredPending}
+            error={markUserProcuredError}
+            onConfirm={handleConfirmMarkUserProcured}
+          />
+
+          <EnterSelfProcuredDetailsDialog
+            request={selectedRequest}
+            open={enterSelfProcuredOpen}
+            onOpenChange={(next) => {
+              setEnterSelfProcuredOpen(next);
+              if (!next) setSelectedRequest(null);
+            }}
+            onSuccess={loadRequests}
+          />
+
+          <ReviewSelfProcuredDialog
+            request={selectedRequest}
+            open={reviewSelfProcuredOpen}
+            onOpenChange={(next) => {
+              setReviewSelfProcuredOpen(next);
+              if (!next) setSelectedRequest(null);
+            }}
             onSuccess={loadRequests}
           />
 

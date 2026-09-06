@@ -99,6 +99,10 @@ export type SnipeUserDetail = {
   name: string;
   email: string | null;
   location: { id: number; name: string } | null;
+  /// The user's immediate manager, as recorded in Snipe-IT. Null for anyone
+  /// with no manager on file. Drives auto-approval — see
+  /// isAutoApproveEligible in services/request.ts.
+  manager: { id: number; name: string } | null;
 };
 
 export type ModelSearchResult = Model & { hasAvailable: boolean };

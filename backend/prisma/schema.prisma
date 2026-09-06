@@ -55,6 +55,20 @@ model Request {
   /// other row stays null forever.
   loggedToCapexAt      DateTime?
 
+  /// IT chose not to seek a quote for this non-standard accessory — the cost
+  /// is trivial enough that a supplier quote and a manager sign-off on it
+  /// would be theatre. Same "exactly-once marker" shape as adminApprovedAt:
+  /// null means not skipped, and it is mutually exclusive with quoteDetail
+  /// ever being created (see loadRequestAtQuote in quote.ts).
+  quoteSkippedAt     DateTime?
+  quoteSkippedBy     String?
+
+  /// True when this request's manager stage was skipped because the
+  /// submitter is the requestee's immediate manager in Snipe-IT — see
+  /// isAutoApproveEligible in request.ts. approvedBy/approvedAt are still
+  /// stamped as normal; this just records WHY no one had to click Approve.
+  autoApproved       Boolean   @default(false)
+
   reminderStage      Int       @default(0)
 
   approvedBy        String?
@@ -67,6 +81,7 @@ model Request {
   modelRequest   ModelRequest?
   correctionDetail CorrectionDetail?
   quoteDetail    QuoteDetail?
+  selfProcured   SelfProcuredDetail?
   edits          RequestEdit[]
 
   createdAt      DateTime @default(now())
@@ -284,6 +299,43 @@ model QuoteDetail {
   updatedAt      DateTime @updatedAt
 }
 
+/* ================= SELF-PROCURED ACCESSORIES ================= */
+// The escape hatch for a non-standard accessory too cheap to be worth IT
+// procuring at all — a phone case is the case this exists for. Instead of
+// selecting a Snipe accessory, IT hands the purchase to the user, the user
+// reports back what they bought, and IT decides whether it's worth a Snipe
+// record at all.
+//
+// Hung off Request 1:1 exactly as QuoteDetail is, and for the same reason:
+// every column here is null on the overwhelming majority of rows, since only
+// a request IT has explicitly chosen this path for ever gets one.
+model SelfProcuredDetail {
+  id             Int      @id @default(autoincrement())
+
+  requestId      Int      @unique
+  request        Request  @relation(fields: [requestId], references: [id])
+
+  /// The admin who chose "User Procured" over selecting an accessory.
+  markedBy       String
+  markedAt       DateTime @default(now())
+
+  /// What the requester says they bought. Null until they report back.
+  itemName       String?
+  cost           Float?
+  submittedAt    DateTime?
+
+  /// IT's call at review: put it in Snipe, or keep the record here only.
+  /// Null until reviewed.
+  recordInSnipe  Boolean?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+
+  status         SelfProcuredStatus @default(AWAITING_DETAILS)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 /* ===================== ENUMS ===================== */
 enum RequestType {
   STANDARD
@@ -349,6 +401,15 @@ enum QuoteStatus {
   SENT
   ACCEPTED
   REJECTED
+}
+
+/// Where a self-procured item sits between IT marking it and the request
+/// completing. Deliberately not a RequestStatus, on the same terms as
+/// QuoteStatus above — the request stays APPROVED throughout.
+enum SelfProcuredStatus {
+  AWAITING_DETAILS
+  AWAITING_REVIEW
+  COMPLETED
 }
 
 enum RequestKind {

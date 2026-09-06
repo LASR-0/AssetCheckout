@@ -77,6 +77,13 @@ export type CreateRequestInput = {
   numberOption?: "NEW" | "REUSE" | "NONE";
   reuseNumberFromEmail?: string | null;
   reuseNumberPhone?: string | null;
+  /**
+   * Snipe id of whoever is filling in the form, resolved server-side from
+   * the signed-in actor — never trusted from the request body directly.
+   * Drives auto-approval: see isAutoApproveEligible in services/request.ts.
+   * Null when the actor couldn't be resolved to a Snipe user.
+   */
+  submittedById?: number | null;
 };
 
 export type CreateResponse = {

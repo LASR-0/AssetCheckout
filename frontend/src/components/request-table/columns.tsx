@@ -31,10 +31,19 @@ export type RequestsTableMeta = {
   /** Non-standard accessory quote stage: IT sends it, the manager answers. */
   onSendQuote: (request: Request) => void;
   onReviewQuote: (request: Request) => void;
+  /** IT decides the item is too cheap to be worth a supplier quote. */
+  onSkipQuote: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
   onMarkReadyForCollection: (request: Request) => void;
   onManageCorrection: (request: Request) => void;
+  /** Admin hands procurement off to the requester instead of selecting an
+   *  accessory. */
+  onMarkUserProcured: (request: Request) => void;
+  /** The requester reports what they bought. */
+  onSubmitSelfProcuredDetails: (request: Request) => void;
+  /** Admin reviews what was bought and completes the request. */
+  onReviewSelfProcured: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
 };
@@ -336,24 +345,38 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
   // of its own: the request stays APPROVED throughout and the stage comes off
   // the quote's own status.
   const quote = request.quoteDetail ?? null;
+  const quoteSkipped = !!request.quoteSkippedAt;
   const isAtQuoteStage =
     isAccessory &&
     request.requestType === "NON_STANDARD" &&
     requestStatus === "APPROVED" &&
     modelRequestStatus === "APPROVED" &&
     snipeAccessoryId === null;
-  const isAwaitingQuote = isAtQuoteStage && !quote;
+  const isAwaitingQuote = isAtQuoteStage && !quote && !quoteSkipped;
   const isAwaitingQuoteResponse = isAtQuoteStage && quote?.status === "SENT";
 
-  // Selection now waits on an accepted quote. The backend enforces this too
-  // (loadAccessoryRequestAtSelection) — hiding the action is the courtesy,
-  // the guard is what makes it true.
+  // Selection now waits on an accepted (or skipped) quote. The backend
+  // enforces this too (loadAccessoryRequestAtSelection) — hiding the action
+  // is the courtesy, the guard is what makes it true. Also hidden once the
+  // request has been handed off for self-procurement instead — that's an
+  // alternative to selection, not a step before it.
   const isAccessoryAwaitingSelection =
     isAccessory &&
     requestStatus === "APPROVED" &&
     modelRequestStatus === "APPROVED" &&
     snipeAccessoryId === null &&
-    (request.requestType !== "NON_STANDARD" || quote?.status === "ACCEPTED");
+    !request.selfProcured &&
+    (request.requestType !== "NON_STANDARD" || quote?.status === "ACCEPTED" || quoteSkipped);
+
+  // The self-procurement hand-off — offered alongside Select accessory, for
+  // non-standard accessories only. A standard accessory is IT-stocked, so
+  // there's nothing to hand off.
+  const isAwaitingUserProcuredOffer =
+    isAccessoryAwaitingSelection && request.requestType === "NON_STANDARD";
+
+  const selfProcured = request.selfProcured ?? null;
+  const isAwaitingSelfProcuredDetails = selfProcured?.status === "AWAITING_DETAILS";
+  const isAwaitingProcurementReview = selfProcured?.status === "AWAITING_REVIEW";
 
   // Accessory FULFILMENT stage: an accessory has been selected (linked) but
   // the request hasn't completed. That is the whole condition — the live stock
@@ -543,6 +566,20 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
     return <BadgeWithTooltip status={completedBadgeKey} tip={completedTip} />;
   }
 
+  // Owner reporting back on a self-procured item — takes precedence over
+  // role, same reasoning as the receipt actions above: an admin who is also
+  // the requester still needs to be the one who reports what they bought.
+  if (isOwner && isAwaitingSelfProcuredDetails) {
+    return (
+      <ActionRow>
+        <ActionButton icon="shopping_cart" label="Enter item details" color="text-intent-progress"
+          hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
+          title="Tell IT what you bought and what it cost"
+          onClick={() => meta.onSubmitSelfProcuredDetails(request)} />
+      </ActionRow>
+    );
+  }
+
   // ──────────────────────────────────────────────────
   // MANAGER VIEW (non-completed states)
   // ──────────────────────────────────────────────────
@@ -658,8 +695,9 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
       );
     }
     // Quote stage, IT's half: chase a supplier quote and send it to the
-    // manager. Ordered ahead of the selection branch below, which is now
-    // gated on that quote being accepted.
+    // manager, or skip the quote entirely when the item is too cheap to be
+    // worth it — the phone-case case. Ordered ahead of the selection branch
+    // below, which is now gated on the quote being accepted OR skipped.
     if (isAwaitingQuote) {
       return (
         <ActionRow>
@@ -667,6 +705,10 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
             hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
             title="Record the supplier's quote and send it to the manager to approve"
             onClick={() => meta.onSendQuote(request)} />
+          <ActionButton icon="fast_forward" label="Skip" color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
+            title="Too cheap to be worth a supplier quote — skip straight to selecting the accessory"
+            onClick={() => meta.onSkipQuote(request)} />
         </ActionRow>
       );
     }
@@ -698,12 +740,30 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
         </ActionRow>
       );
     }
+    // Waiting on IT's review of a self-procured item. Ordered ahead of the
+    // selection branch below — selfProcured existing already excludes that
+    // branch, but this reads clearer placed where the row's history put it.
+    if (isAwaitingProcurementReview) {
+      return (
+        <ActionRow>
+          <ActionButton icon="fact_check" label="Review procurement" color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10" border="border-intent-progress/40"
+            title="Review what the requester bought and decide whether to record it in Snipe"
+            onClick={() => meta.onReviewSelfProcured(request)} />
+        </ActionRow>
+      );
+    }
     if (isAccessoryAwaitingSelection) {
       return (
         <ActionRow>
           <ActionButton icon="cable" label="Select accessory" color="text-intent-progress" hoverBg="hover:bg-intent-progress/10"
             border="border-intent-progress/40" title="Select or create the accessory for this request"
             onClick={() => meta.onSelectAccessory(request)} />
+          {isAwaitingUserProcuredOffer && (
+            <ActionButton icon="storefront" label="User Procured" color="text-intent-progress" hoverBg="hover:bg-intent-progress/10"
+              border="border-intent-progress/40" title="Too cheap to procure through IT — let the requester buy it themselves"
+              onClick={() => meta.onMarkUserProcured(request)} />
+          )}
         </ActionRow>
       );
     }
@@ -771,6 +831,33 @@ function EditedMarker({ edit }: { edit: NonNullable<Request["lastEdit"]> }) {
           ) : (
             <p className="opacity-70">Details unavailable.</p>
           )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// --- "Auto-approved" marker ---
+//
+// Same pill treatment as EditedMarker above — small uppercase pill, neutral
+// token, tooltip carries the detail — but placed under the Approver's name
+// rather than in the Reason column: this is a fact ABOUT the approver (they
+// didn't have to click Approve), not about the reason the request exists.
+function AutoApprovedMarker({ request }: { request: Request }) {
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-kind-indicator/10 text-kind-indicator border border-kind-indicator/30 cursor-default">
+            <span className="material-symbols-outlined !text-[11px]">bolt</span>
+            Auto-approved
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[280px]">
+          <p>
+            {request.manager || "The approver"} is {request.userName}'s direct
+            manager in Snipe-IT, so this step didn't need a manual approval.
+          </p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -1028,6 +1115,7 @@ export const columns: ColumnDef<Request>[] = [
           </div>
           <div>
             <div className="text-sm font-semibold text-on-surface-variant">{row.original.manager}</div>
+            {row.original.autoApproved && <AutoApprovedMarker request={row.original} />}
           </div>
         </div>
       );
@@ -1053,9 +1141,12 @@ export const columns: ColumnDef<Request>[] = [
     // `relative` is load-bearing: it is what the Edit pencil positions against.
     // Without it the pencil escapes to the nearest positioned ancestor and
     // lands somewhere on the page rather than in this cell's corner.
+    // min-w gives two full-width pills (e.g. "Send quote" + "Skip", or
+    // "Select accessory" + "User Procured") room to sit side by side without
+    // feeling cramped now that some stages offer a second action.
     meta: {
       headerClass: "text-center",
-      tdClass: "relative text-center whitespace-nowrap",
+      tdClass: "relative text-center whitespace-nowrap min-w-[260px]",
     },
   },
 ];

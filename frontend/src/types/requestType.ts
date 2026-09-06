@@ -56,6 +56,30 @@ export type QuoteDetail = {
   respondedOnBehalf?: boolean;
 };
 
+/**
+ * Where a self-procured item sits between IT handing it off and the request
+ * completing. Deliberately not a RequestStatus, on the same terms as
+ * QuoteStatus — the request stays APPROVED throughout.
+ */
+export type SelfProcuredStatus = "AWAITING_DETAILS" | "AWAITING_REVIEW" | "COMPLETED";
+
+/**
+ * Present only on non-standard ACCESSORY rows IT has handed off to the
+ * requester instead of selecting a Snipe accessory — the "too cheap to be
+ * worth procuring" escape hatch (a phone case is the case this exists for).
+ */
+export type SelfProcuredDetail = {
+  markedBy: string;
+  markedAt: string;
+  itemName?: string | null;
+  cost?: number | null;
+  submittedAt?: string | null;
+  recordInSnipe?: boolean | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  status: SelfProcuredStatus;
+};
+
 export type CorrectionDetail = {
   correctionKind: CorrectionKind;
   subjectKind: CorrectionSubject;
@@ -136,12 +160,23 @@ export interface Request {
   correctionDetail?: CorrectionDetail | null;
   /** Present only on non-standard ACCESSORY rows past the quote stage. */
   quoteDetail?: QuoteDetail | null;
+  /** IT decided this item was too cheap to be worth a supplier quote. */
+  quoteSkippedAt?: string | null;
+  quoteSkippedBy?: string | null;
+  /** Present only on non-standard ACCESSORY rows IT has handed off to the
+   *  requester instead of selecting an accessory. */
+  selfProcured?: SelfProcuredDetail | null;
 
   /** The last time IT corrected this request, if they ever did. Drives the
    *  "Edited" marker in the Reason column. */
   lastEdit?: RequestLastEdit | null;
   manager?: string;
   managerId: number;
+
+  /** True when the manager stage was skipped because the submitter is the
+   *  requestee's immediate manager in Snipe-IT. Drives the "Auto-approved"
+   *  marker under the approver's name. */
+  autoApproved?: boolean;
 
   callText?: boolean;
   newNumber?: boolean;
