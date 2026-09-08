@@ -4,6 +4,7 @@ import {
   getRequestableAccessoryCategoryIds,
   getStandardAccessoriesForCategory,
   getAllConfiguredStandardAccessoryIds,
+  findAccessoryOption,
 } from "./settings.js";
 import type {
   SnipeAccessory,
@@ -353,8 +354,12 @@ function chooseSibling(
  * record to check out.
  *
  * Chain (mirrors the asset flow's primary → backup → scan-any):
- *   1. Look up the category's configured options. Find the option whose
- *      label matches the request's accessoryOption.
+ *   1. Look up the category's configured options and find the one this
+ *      request was filed under — BY ID. It used to be by label, which meant
+ *      an admin renaming an option in settings silently unbound every
+ *      in-flight request that referenced it: no option matched, this returned
+ *      null, and the caller reported "no accessory stock available" for a
+ *      standard that was sitting in stock. See findAccessoryOption.
  *   2. Try that option's primary id → expand to location-siblings →
  *      chooseSibling. If it yields a record, done.
  *   3. Else try the option's backup id the same way.
@@ -374,6 +379,7 @@ function chooseSibling(
  */
 export async function resolveAccessoryForRequest(
   categoryId: number,
+  accessoryOptionId: string | null,
   accessoryOption: string | null,
   userId: number
 ): Promise<AccessoryResolution | null> {
@@ -384,13 +390,15 @@ export async function resolveAccessoryForRequest(
 
   // ---- Configured-option path ----
   if (config.options.length > 0) {
-    // A standard request in a configured category must carry a matching
-    // option label (createAccessoryRequest enforces this at submit; we
-    // re-check rather than assume). No match → nothing to resolve here.
-    const option =
-      accessoryOption !== null
-        ? config.options.find((o) => o.label === accessoryOption)
-        : undefined;
+    // A standard request in a configured category must resolve to a live
+    // option (createAccessoryRequest enforces this at submit; we re-check
+    // rather than assume). No match → nothing to resolve here. The label is
+    // consulted only for rows with no id — see findAccessoryOption.
+    const option = await findAccessoryOption(
+      categoryId,
+      accessoryOptionId,
+      accessoryOption
+    );
 
     if (!option) return null;
 

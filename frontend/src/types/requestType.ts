@@ -138,6 +138,12 @@ export interface Request {
 
   // Accessories chapter
   requestKind?: RequestKind;
+  /** The chosen standard option's stable id — what the request is actually
+   *  bound to, so renaming the option in settings does not orphan it. Null on
+   *  non-standard rows and on rows filed before ids existed. */
+  accessoryOptionId?: string | null;
+  /** What that option was called when the request was filed. Display snapshot;
+   *  never the thing matched on. */
   accessoryOption?: string | null;
 
   // Derived (not stored) — attached by the requests-list endpoint for

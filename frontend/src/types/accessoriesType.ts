@@ -15,6 +15,10 @@ export type AccessoryCategory = {
 ///  +-----------------------------------------------------------------+
 
 export type AccessoryOptionConfig = {
+  /** Stable identity, minted by the server. Absent only on a row the admin has
+   *  just added and not yet saved. MUST be round-tripped untouched on save — it
+   *  is what binds in-flight requests to this option across a rename. */
+  id?: string;
   label: string;
   displayLabel?: string | null;
   accessoryLabel?: string | null;

@@ -1,0 +1,15 @@
+-- Bind a standard accessory request to its option's STABLE ID rather than to
+-- the option's display name. Renaming an option in settings previously
+-- orphaned every in-flight request that referenced it — fulfilment matched on
+-- the name, found nothing, and reported "no accessory stock available" for a
+-- standard that was in stock.
+--
+-- accessoryOption is deliberately left in place as the display snapshot: it is
+-- what the requester actually chose, it is what the notification emails already
+-- quoted, and it is the only record that survives an option being deleted.
+--
+-- Backfill is NOT done here. The ids live inside the standard_accessories JSON
+-- setting, so binding existing rows means reading and stamping that blob —
+-- application work, not SQL. backfillAccessoryOptionIds() runs at startup and
+-- is idempotent.
+ALTER TABLE "Request" ADD COLUMN "accessoryOptionId" TEXT;

@@ -61,14 +61,27 @@ const stopWheelPropagation = (event: WheelEvent) => event.stopPropagation()
 //  WHAT IT LOOKED LIKE. Put a combobox inside a scrollable dialog body and the
 //  scroll box becomes the boundary. Scroll the input near the bottom of it and
 //  `--available-height` — which ComboboxList's max-height is derived from —
-//  collapses to a few dozen pixels. The list gets a sliver, and since
-//  `collisionAvoidance.side` is `"none"` it cannot flip above the input to
-//  escape either. The options are there and the wheel does nothing, because
-//  there is no room to scroll rather than no permission to.
+//  collapses to a few dozen pixels. The list gets a sliver: the options are
+//  there and the wheel does nothing, because there is no room to scroll rather
+//  than no permission to. (Flipping above the input is the other half of the
+//  escape route — see the next block.)
 //
-//  Passing the document element as the boundary restores the sane thing:
-//  Floating UI always intersects the boundary with its root boundary, which is
-//  the viewport, so the popup gets the space actually on screen.
+//  What we want instead is "no boundary of your own, just the screen". Floating
+//  UI ALWAYS intersects `boundary` with its `rootBoundary`, and that defaults to
+//  the viewport — so handing it a rect big enough to never be the binding
+//  constraint leaves the viewport as the only limit. That is what UNBOUNDED is.
+//
+//  DO NOT PUT `document.documentElement` HERE. It reads like the same idea and
+//  it is not. Floating UI measures an element boundary as
+//  `getBoundingClientRect().top + clientTop`, height `clientHeight` — and for
+//  the document element that is `-scrollY` with the VIEWPORT's height. So the
+//  boundary slides up the page as you scroll: at scrollY 900 on a 700px window
+//  its bottom edge is 200px ABOVE the top of the screen. Everything then counts
+//  as overflowing, `--available-height` goes NEGATIVE, and every popup below the
+//  fold opens as a ~10px sliver. It measures correctly at scrollY 0 only, which
+//  is exactly why it looked right in dialogs — react-remove-scroll pins the page
+//  at 0 while one is open — and broke on the settings page, worse the further
+//  down you were.
 //
 //  A NO-OP WHERE NOTHING CLIPS. On the request forms the anchor has no clipping
 //  ancestor, so clipping-ancestors already resolved to the viewport and the
@@ -76,11 +89,33 @@ const stopWheelPropagation = (event: WheelEvent) => event.stopPropagation()
 //
 //  Callers can still override it — the settings selectors deliberately confine
 //  some popups, and this is a default, not a rule.
+//
+//  THE BOUNDARY WAS ONLY HALF OF IT. Confining the popup to the screen fixes
+//  the case where a small scroll box was the boundary, but the screen itself
+//  runs out too: a field sitting 400px down a 500px-tall viewport has ~50px
+//  under it, and `--available-height` is that 50px no matter what the boundary
+//  is. With `side: "none"` the popup could not go anywhere else, so it opened
+//  as a ~22px sliver — one clipped row — while the space ABOVE the input sat
+//  unused. It reads as a broken menu rather than a cramped one, and it "fixes
+//  itself" when the window grows (or the page is zoomed out) because that is
+//  the only thing that ever gave it room. `side: "flip"` lets it open upward
+//  when below is the worse side, which is what every other menu here does.
+//
+//  `align` stays "shift" and `fallbackAxisSide` stays "none": the popup is
+//  anchor-width and belongs directly above or below its input, never beside it.
 ///  +-----------------------------------------------------------------+
 
-function viewportBoundary(): HTMLElement | undefined {
-  return typeof document === "undefined" ? undefined : document.documentElement
-}
+const COLLISION_AVOIDANCE = {
+  side: "flip",
+  align: "shift",
+  fallbackAxisSide: "none",
+} as const
+
+/** A rect large enough that it never binds, so Floating UI's own root boundary
+ *  — the viewport — is what actually confines the popup. Client coordinates, and
+ *  a constant: unlike an element it has nothing to re-measure, so it cannot go
+ *  stale on scroll or resize. */
+const UNBOUNDED = { x: -1e6, y: -1e6, width: 2e6, height: 2e6 } as const
 
 /** Ref callback for the popup element. The popup mounts only while the
  *  combobox is open, so this has to be a ref callback — an effect keyed on
@@ -189,10 +224,10 @@ function ComboboxContent({
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        // See viewportBoundary above — the default would confine the popup to
+        // See UNBOUNDED above — the default would confine the popup to
         // whatever scrollable box the input happens to sit in.
-        collisionBoundary={collisionBoundary ?? viewportBoundary()}
-        collisionAvoidance={{ side: "none", align: "shift", fallbackAxisSide: "none" }}
+        collisionBoundary={collisionBoundary ?? UNBOUNDED}
+        collisionAvoidance={COLLISION_AVOIDANCE}
         className="isolate z-50"
       >
         <ComboboxPrimitive.Popup

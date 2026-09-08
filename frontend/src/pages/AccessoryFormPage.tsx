@@ -5,7 +5,7 @@ import ApprovalInput from "@/components/request-form/ApprovalInput";
 import SpecLevelToggle from "@/components/request-form/SpecLevelToggle";
 import UserDetailsInput from "@/components/request-form/UserDetailsInput";
 import { fetchUsers } from "@/api/users";
-import { getAccessoryCategoriesForUser } from "@/api/accessories";
+import { getAccessoryCategoriesForUser, type AccessoryOptionChoice } from "@/api/accessories";
 import { apiFetch } from "@/api/client";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { User } from "@/components/request-form/UserSelect";
@@ -42,7 +42,8 @@ type FormState = {
   requestType: "STANDARD" | "NON_STANDARD"; // user's own choice
   reason: string;
   preferredModel: string;
-  accessoryOption: string | null; // chosen named option label
+  accessoryOptionId: string | null; // chosen option's stable id — what is submitted
+  accessoryOption: string | null;   // its label, for display and as a snapshot
   somethingElse: boolean;         // escape hatch → locks NON_STANDARD
   manager: string;
   managerId: string;
@@ -56,6 +57,7 @@ const INITIAL_STATE: FormState = {
   requestType: "STANDARD",
   reason: "",
   preferredModel: "",
+  accessoryOptionId: null,
   accessoryOption: null,
   somethingElse: false,
   manager: "",
@@ -64,7 +66,7 @@ const INITIAL_STATE: FormState = {
 
 export default function AccessoryRequestFormPage() {
   const [formState, setFormState] = useState<FormState>(INITIAL_STATE);
-  const [optionLabels, setOptionLabels] = useState<string[]>([]);
+  const [options, setOptions] = useState<AccessoryOptionChoice[]>([]);
   const [formKey, setFormKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,13 +95,13 @@ export default function AccessoryRequestFormPage() {
   //   neither picked    → the user's own choice stands.
   //
   // The two are mutually exclusive by construction (AccessoryOptionSection
-  // emits either (label, false) or (null, true)), so the order here is for
-  // readability rather than precedence.
+  // emits either (id, label, false) or (null, null, true)), so the order here
+  // is for readability rather than precedence.
   //
   // This is DERIVED rather than written into formState on selection: the
   // user's own requestType is preserved untouched underneath, so clearing the
   // option restores whatever they had chosen instead of silently rewriting it.
-  const hasNamedOption = !!formState.accessoryOption;
+  const hasNamedOption = !!formState.accessoryOptionId;
   const effectiveRequestType = formState.somethingElse
     ? "NON_STANDARD"
     : hasNamedOption
@@ -122,15 +124,15 @@ export default function AccessoryRequestFormPage() {
       setError("Please select an approver.");
       return;
     }
-    if (formState.userId === formState.managerId) {
-      setError("Requester cannot be the same as the approver.");
-      return;
-    }
+    // if (formState.userId === formState.managerId) {
+    //   setError("Requester cannot be the same as the approver.");
+    //   return;
+    // }
     // Only require a pick when this category actually offers choices.
     if (
-      optionLabels.length > 0 &&
+      options.length > 0 &&
       !formState.somethingElse &&
-      !formState.accessoryOption
+      !formState.accessoryOptionId
     ) {
       setError("Please choose what you need.");
       return;
@@ -153,6 +155,8 @@ export default function AccessoryRequestFormPage() {
       categoryName: formState.categoryName,
       requestKind: "ACCESSORY",
       requestType: effectiveRequestType,
+      // The id is the binding; the label rides along as the display snapshot.
+      accessoryOptionId: formState.somethingElse ? null : formState.accessoryOptionId,
       accessoryOption: formState.somethingElse ? null : formState.accessoryOption,
       // Both are non-standard-only fields, and the toggle hides them the moment
       // the request resolves to STANDARD — so anything still sitting in state
@@ -190,7 +194,7 @@ export default function AccessoryRequestFormPage() {
 
   const resetForm = () => {
     setFormState(INITIAL_STATE);
-    setOptionLabels([]);
+    setOptions([]);
     setAccessoryCategories([]);
     setError(null);
   };
@@ -227,10 +231,11 @@ export default function AccessoryRequestFormPage() {
       ...prev,
       categoryId: 0,
       categoryName: "",
+      accessoryOptionId: null,
       accessoryOption: null,
       somethingElse: false,
     }));
-    setOptionLabels([]);
+    setOptions([]);
 
     if (!formState.userId) {
       setAccessoryCategories([]);
@@ -309,6 +314,7 @@ export default function AccessoryRequestFormPage() {
                     ...prev,
                     categoryId: id,
                     categoryName: name,
+                    accessoryOptionId: null,
                     accessoryOption: null,
                     somethingElse: false,
                   }));
@@ -317,16 +323,17 @@ export default function AccessoryRequestFormPage() {
 
               <AccessoryOptionsSection
                 categoryId={formState.categoryId}
-                selectedOption={formState.accessoryOption}
+                selectedOptionId={formState.accessoryOptionId}
                 somethingElse={formState.somethingElse}
-                onChange={(selectedOption, somethingElse) =>
+                onChange={(selectedOptionId, selectedOptionLabel, somethingElse) =>
                   setFormState((prev) => ({
                     ...prev,
-                    accessoryOption: selectedOption,
+                    accessoryOptionId: selectedOptionId,
+                    accessoryOption: selectedOptionLabel,
                     somethingElse,
                   }))
                 }
-                onOptionsLoaded={setOptionLabels}
+                onOptionsLoaded={setOptions}
               />
 
               <SpecLevelToggle

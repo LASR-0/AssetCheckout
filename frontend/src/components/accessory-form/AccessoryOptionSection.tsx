@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { getAccessoryOptionLabels } from "@/api/accessories";
+import { getAccessoryOptions, type AccessoryOptionChoice } from "@/api/accessories";
 
 ///  +-----------------------------------------------------------------+
 ///  |                 ACCESSORY SPECIFIC OPTIONS                      |
@@ -12,7 +12,11 @@ import { getAccessoryOptionLabels } from "@/api/accessories";
 //  (fetched per category), plus an always-present "Something else"
 //  escape hatch.
 //
-//    selectedOption — the chosen NAMED option label, or null.
+//    selectedOptionId — the chosen option's STABLE ID, or null. The id, not
+//                       the label: the label is what an admin renames, and a
+//                       request bound to a name came unbound the moment one
+//                       did. onChange reports the label too, purely so the
+//                       request can record what the requester actually read.
 //    somethingElse  — the escape hatch. One-way implication, mirroring
 //                     the callText→data mechanic on the asset form:
 //                     while ticked, the spec level is locked to
@@ -35,11 +39,15 @@ const SOMETHING_ELSE = "__something_else__";
 
 type Props = {
   categoryId: number;
-  selectedOption: string | null;
+  selectedOptionId: string | null;
   somethingElse: boolean;
-  onChange: (selectedOption: string | null, somethingElse: boolean) => void;
-  /** Reports the loaded labels so the parent can validate proportionally. */
-  onOptionsLoaded: (labels: string[]) => void;
+  onChange: (
+    selectedOptionId: string | null,
+    selectedOptionLabel: string | null,
+    somethingElse: boolean
+  ) => void;
+  /** Reports the loaded options so the parent can validate proportionally. */
+  onOptionsLoaded: (options: AccessoryOptionChoice[]) => void;
   /** Section heading. Defaults to the accessory form's numbered one; the edit
    *  dialog has no numbered sequence to fit into. */
   label?: string;
@@ -47,19 +55,19 @@ type Props = {
 
 export default function AccessoryOptionsSection({
   categoryId,
-  selectedOption,
+  selectedOptionId,
   somethingElse,
   onChange,
   onOptionsLoaded,
   label = "3. What Do You Need?",
 }: Props) {
-  const [labels, setLabels] = useState<string[]>([]);
+  const [options, setOptions] = useState<AccessoryOptionChoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!categoryId) {
-      setLabels([]);
+      setOptions([]);
       onOptionsLoaded([]);
       return;
     }
@@ -69,15 +77,15 @@ export default function AccessoryOptionsSection({
       try {
         setLoading(true);
         setError(null);
-        const data = await getAccessoryOptionLabels(categoryId);
+        const data = await getAccessoryOptions(categoryId);
         if (!cancelled) {
-          setLabels(data);
+          setOptions(data);
           onOptionsLoaded(data);
         }
       } catch (err) {
         if (!cancelled) {
           setError("Couldn't load the options for this accessory type.");
-          setLabels([]);
+          setOptions([]);
           onOptionsLoaded([]);
           console.error("Failed to load accessory options", err);
         }
@@ -95,21 +103,24 @@ export default function AccessoryOptionsSection({
   // Single configured option → auto-select it. There's nothing to decide,
   // and requiring a click on the only choice is just friction.
   useEffect(() => {
-    if (labels.length === 1 && !selectedOption && !somethingElse) {
-      onChange(labels[0], false);
+    if (options.length === 1 && !selectedOptionId && !somethingElse) {
+      onChange(options[0].id, options[0].label, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labels]);
+  }, [options]);
 
   function handlePick(value: string) {
     if (value === SOMETHING_ELSE) {
-      onChange(null, true);
-    } else {
-      onChange(value, false);
+      onChange(null, null, true);
+      return;
     }
+    // The radio's value is the option id, so the label is looked up rather
+    // than carried by the control — the id is the thing being chosen.
+    const picked = options.find((o) => o.id === value);
+    onChange(picked?.id ?? null, picked?.label ?? null, false);
   }
 
-  const radioValue = somethingElse ? SOMETHING_ELSE : selectedOption ?? "";
+  const radioValue = somethingElse ? SOMETHING_ELSE : selectedOptionId ?? "";
 
   return (
     <div>
@@ -141,31 +152,31 @@ export default function AccessoryOptionsSection({
           </div>
         )}
 
-        {categoryId > 0 && !loading && !error && labels.length === 0 && (
+        {categoryId > 0 && !loading && !error && options.length === 0 && (
           <p className="text-sm text-on-surface-variant opacity-60 italic">
             No specific options for this accessory type — the standard item will
             be supplied.
           </p>
         )}
 
-        {categoryId > 0 && !loading && !error && labels.length > 0 && (
+        {categoryId > 0 && !loading && !error && options.length > 0 && (
           <RadioGroup
             value={radioValue}
             onValueChange={handlePick}
             className="space-y-3"
           >
-            {labels.map((label) => {
-              const selected = radioValue === label;
+            {options.map((option) => {
+              const selected = radioValue === option.id;
               return (
-                <div key={label} className="flex items-center gap-3">
-                  <RadioGroupItem value={label} id={`opt-${label}`} />
+                <div key={option.id} className="flex items-center gap-3">
+                  <RadioGroupItem value={option.id} id={`opt-${option.id}`} />
                   <label
-                    htmlFor={`opt-${label}`}
+                    htmlFor={`opt-${option.id}`}
                     className={`text-sm font-medium text-info-light hover:cursor-pointer transition-opacity ${
                       selected ? "opacity-100" : "opacity-40"
                     }`}
                   >
-                    {label}
+                    {option.label}
                   </label>
                 </div>
               );

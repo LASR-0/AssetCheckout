@@ -28,6 +28,7 @@ import {
   isCategoryRequestable,
   isAccessoryCategoryRequestable,
   getAccessoryOptionLabels,
+  getStandardAccessoriesForCategory,
   getStandardModelsForCategory,
   getSkeletonStatusId,
   getSetting
@@ -447,21 +448,37 @@ async function createAccessoryRequest(
     );
   }
 
-  const labels = await getAccessoryOptionLabels(input.categoryId);
+  const configured = await getStandardAccessoriesForCategory(input.categoryId);
 
+  // THE CHOICE IS RESOLVED TO A LIVE OPTION HERE, AND ITS ID IS WHAT IS STORED.
+  // The label is written alongside it as a display snapshot only. The form
+  // sends both, and an older client that sends only a label still works — the
+  // label is matched once, here, and the id it lands on is what the request
+  // carries from then on.
+  const rawOptionId =
+    typeof input.accessoryOptionId === "string" ? input.accessoryOptionId.trim() : "";
   const rawOption =
     typeof input.accessoryOption === "string" ? input.accessoryOption.trim() : "";
-  let accessoryOption: string | null = rawOption.length > 0 ? rawOption : null;
 
-  if (labels.length === 0) {
-    accessoryOption = null;
-  } else if (accessoryOption !== null) {
-    if (!labels.includes(accessoryOption)) {
+  let accessoryOptionId: string | null = null;
+  let accessoryOption: string | null = null;
+
+  if (configured.options.length === 0) {
+    // Nothing configured — the form shows no choice, so any supplied option is
+    // ignored rather than persisted against a category that has none.
+  } else if (rawOptionId || rawOption) {
+    const option = rawOptionId
+      ? configured.options.find((o) => o.id === rawOptionId)
+      : configured.options.find((o) => o.label === rawOption);
+
+    if (!option) {
       throw new AppError(
         "The chosen option is no longer available for this category. Please refresh and pick again.",
         400
       );
     }
+    accessoryOptionId = option.id ?? null;
+    accessoryOption = option.label;
   } else if (input.requestType === "STANDARD") {
     throw new AppError(
       "An option must be selected for a standard request in this category.",
@@ -479,6 +496,7 @@ async function createAccessoryRequest(
       categoryName: input.categoryName,
       requestKind: "ACCESSORY",
       requestType: input.requestType,
+      accessoryOptionId,
       accessoryOption,
       reason: input.reason,
       preferredModel: normalisePreferredModel(input.preferredModel),
@@ -588,6 +606,9 @@ export type EditRequestInput = {
   categoryName?: string;
   requestType?: "STANDARD" | "NON_STANDARD";
   accessoryOption?: string | null;
+  /** The chosen option's stable id. Preferred over the label; see
+   *  findAccessoryOption for why the label is a legacy fallback only. */
+  accessoryOptionId?: string | null;
   reason?: string | null;
   preferredModel?: string | null;
   manager?: string | null;
@@ -720,10 +741,33 @@ function describeRequestChanges(
  * is empty at that point, so its mere presence proves nothing. What proves it
  * is a Snipe id on it — a model, a skeleton asset or a linked accessory — or a
  * quote, which is a supplier's price for one specific item.
+ *
+ * IT ALSO PROVES IT ONCE IT HAS BEEN ADMIN-APPROVED. A Snipe id is the LAST
+ * thing the non-standard workflow produces, not the first, so testing only for
+ * one declared the shape uncommitted for the entire stretch where IT is
+ * actively working the request — the create-model and select-accessory stages
+ * both sit there. Flipping such a request to STANDARD was allowed, and left a
+ * standard request carrying an APPROVED ModelRequest: the row then matched the
+ * non-standard selection branch in the requests table and offered "Select
+ * accessory" on a request that has a standard option, whose search then filters
+ * on a category the admin never chose and returns nothing.
+ *
+ * A SKIPPED QUOTE COUNTS AS A QUOTE. quoteSkippedAt is IT recording a decision
+ * about THIS item's cost — the same judgement a quote records, minus the
+ * supplier. Reading only quoteDetail meant the skip-quote path (which is now
+ * the normal path for cheap accessories) left both signals absent right at the
+ * selection stage, which is what opened this up in practice.
+ *
+ * Still deliberately NOT committed: a ModelRequest sitting at PENDING. That is
+ * the empty buffer row created on the manager's approval, before IT has looked
+ * at it, and an admin correcting a miscategorised request at that point is
+ * exactly what editing is for. editRequest deletes that row when the request
+ * lands on STANDARD — see the delete beside the update.
  */
 function isShapeCommitted(request: {
   modelRequest: ModelRequest | null;
   quoteDetail: { id: number } | null;
+  quoteSkippedAt: Date | null;
 }): boolean {
   const mr = request.modelRequest;
   const linked =
@@ -731,7 +775,13 @@ function isShapeCommitted(request: {
     (mr.snipeModelId !== null ||
       mr.linkedAssetId !== null ||
       mr.snipeAccessoryId !== null);
-  return linked || request.quoteDetail !== null;
+  const workflowStarted = !!mr && mr.status !== "PENDING";
+  return (
+    linked ||
+    workflowStarted ||
+    request.quoteDetail !== null ||
+    request.quoteSkippedAt !== null
+  );
 }
 
 /**
@@ -882,6 +932,7 @@ export async function editRequest(
   // ---- Per-kind normalisation, mirroring the create paths ----
 
   let accessoryOption: string | null = null;
+  let accessoryOptionId: string | null = null;
   let callText = false;
   let needsData = false;
   let numberOption: "NEW" | "REUSE" | "NONE" | null = null;
@@ -896,29 +947,54 @@ export async function editRequest(
       );
     }
 
-    const raw =
-      input.accessoryOption === undefined
-        ? request.requestKind === "ACCESSORY"
-          ? request.accessoryOption
-          : null
-        : input.accessoryOption;
-    accessoryOption =
-      typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+    // An absent key means "leave the choice alone", which now means carrying
+    // the ID across, not the name — re-matching the stored name against the
+    // config on every unrelated edit is the fragility this whole change
+    // removes. The label rides along as the display snapshot.
+    const keptId =
+      request.requestKind === "ACCESSORY" ? request.accessoryOptionId : null;
+    const keptLabel =
+      request.requestKind === "ACCESSORY" ? request.accessoryOption : null;
 
-    // Only re-checked when the pair actually moves — an option configured away
-    // since the request was filed must not block an unrelated edit.
+    const rawId =
+      input.accessoryOptionId === undefined ? keptId : input.accessoryOptionId;
+    const rawLabel =
+      input.accessoryOption === undefined ? keptLabel : input.accessoryOption;
+
+    accessoryOptionId =
+      typeof rawId === "string" && rawId.trim().length > 0 ? rawId.trim() : null;
+    accessoryOption =
+      typeof rawLabel === "string" && rawLabel.trim().length > 0
+        ? rawLabel.trim()
+        : null;
+
+    // Only re-checked when the choice actually moves — an option configured
+    // away since the request was filed must not block an unrelated edit.
     const optionMoved =
-      categoryMoved || accessoryOption !== request.accessoryOption;
+      categoryMoved ||
+      accessoryOptionId !== keptId ||
+      accessoryOption !== keptLabel;
+
     if (optionMoved) {
-      const labels = await getAccessoryOptionLabels(categoryId);
-      if (labels.length === 0) {
+      const configured = await getStandardAccessoriesForCategory(categoryId);
+      if (configured.options.length === 0) {
+        accessoryOptionId = null;
         accessoryOption = null;
-      } else if (accessoryOption !== null && !labels.includes(accessoryOption)) {
-        throw new AppError(
-          "That option is no longer available for this accessory type. Please reopen the request and pick again.",
-          400
-        );
-      } else if (accessoryOption === null && requestType === "STANDARD") {
+      } else if (accessoryOptionId !== null || accessoryOption !== null) {
+        const option = accessoryOptionId
+          ? configured.options.find((o) => o.id === accessoryOptionId)
+          : configured.options.find((o) => o.label === accessoryOption);
+        if (!option) {
+          throw new AppError(
+            "That option is no longer available for this accessory type. Please reopen the request and pick again.",
+            400
+          );
+        }
+        // Re-snapshot both: an edit that moves the category has to land on that
+        // category's own option, and the label follows whatever it is called now.
+        accessoryOptionId = option.id ?? null;
+        accessoryOption = option.label;
+      } else if (requestType === "STANDARD") {
         // "Something else" is by definition not in the catalogue, so it cannot
         // be a standard request — the same contradiction the accessory form
         // refuses to let a requester submit.
@@ -983,6 +1059,7 @@ export async function editRequest(
     requestKind !== request.requestKind ||
     requestType !== request.requestType ||
     categoryId !== request.categoryId ||
+    accessoryOptionId !== request.accessoryOptionId ||
     accessoryOption !== request.accessoryOption;
 
   if (shapeMoved && isShapeCommitted(request)) {
@@ -1012,6 +1089,25 @@ export async function editRequest(
   const changes = describeRequestChanges(request, next);
 
   if (changes.length === 0) {
+    // NOTHING A HUMAN WOULD SEE MOVED — but the option's id still might have,
+    // on a legacy row being bound for the first time (its label resolved to a
+    // live option, and nothing else about the request changed). Write that
+    // quietly: no edit-log row and no email, because the requester's request
+    // did not change. What changed is only WHAT WE MATCH IT BY, from a name
+    // that can be renamed out from under it to an id that cannot.
+    if (accessoryOptionId !== request.accessoryOptionId) {
+      const bound = await prisma.request.update({
+        where: { id: requestId },
+        data: { accessoryOptionId },
+      });
+      return {
+        success: true,
+        request: bound,
+        changes,
+        message: "Nothing was changed.",
+      };
+    }
+
     return {
       success: true,
       request,
@@ -1021,6 +1117,24 @@ export async function editRequest(
   }
 
   const managerChanged = managerId !== request.managerId;
+
+  // A STANDARD request has no non-standard workflow, so it must not keep the
+  // row that represents one. The ModelRequest is created on the manager's
+  // approval of a NON_STANDARD request and is the only thing the requests
+  // table reads to decide which stage a request is at — leaving one behind on
+  // a request that just became STANDARD is what produced "Select accessory" on
+  // a standard accessory request, and "IT approve" before that.
+  //
+  // Only ever an empty PENDING buffer by this point: isShapeCommitted refuses
+  // the STANDARD flip outright once the row has been admin-approved or carries
+  // a Snipe id, so there is nothing here to lose. Deleting rather than
+  // detaching because requestId is @unique — a stale row would block the
+  // request being made non-standard again later.
+  //
+  // This is not the banner's "workflow columns" rule bending. That rule is
+  // about not re-running a decision somebody already made; this is removing a
+  // record of a workflow the request is no longer in.
+  const dropsModelRequest = requestType === "STANDARD" && request.modelRequest !== null;
 
   // The row and its edit-log entry land together or not at all: an edit that
   // committed without its log line would be a silent rewrite of somebody
@@ -1033,6 +1147,7 @@ export async function editRequest(
         requestType,
         categoryId,
         categoryName,
+        accessoryOptionId,
         accessoryOption,
         reason,
         preferredModel,
@@ -1056,6 +1171,11 @@ export async function editRequest(
         changes: JSON.stringify(changes),
       },
     }),
+    // Appended, never prepended — `updated` and `edit` are read positionally
+    // off this array.
+    ...(dropsModelRequest
+      ? [prisma.modelRequest.delete({ where: { requestId } })]
+      : []),
   ]);
 
   // The requester is told what was done to their request, always.
@@ -1382,6 +1502,7 @@ async function handleAdminAccessoryStandardApproval(
 
   const resolution = await resolveAccessoryForRequest(
     request.categoryId,
+    request.accessoryOptionId,
     request.accessoryOption,
     request.userId
   );

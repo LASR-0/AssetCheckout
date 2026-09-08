@@ -317,6 +317,96 @@ describe("editRequest — what it refuses", () => {
     expect(result.changes.map((c) => c.field)).toEqual(["managerId"]);
   });
 
+  ///  ---- The hybrid-state hole ----
+  //
+  //  A non-standard request that reaches IT's own stages keeps NOTHING that
+  //  looks committed until the very end: the Snipe id is the last thing the
+  //  workflow writes. So "has a Snipe id or a quote" declared the shape free to
+  //  change for the whole stretch where IT is actually working the request, and
+  //  flipping one to STANDARD there left a standard request owning a
+  //  non-standard workflow row. The requests table reads that row to decide
+  //  which stage a request is at, so it went on offering the non-standard
+  //  actions — "Select accessory" on a request that has a standard option.
+
+  it("refuses the STANDARD flip once IT has taken the request on", async () => {
+    const request = await seedRequest({
+      requestKind: "ACCESSORY",
+      requestType: "NON_STANDARD",
+      categoryId: 15,
+      categoryName: "Monitor",
+      status: "APPROVED",
+      callText: false,
+      needsData: false,
+      numberOption: null,
+      newNumber: false,
+    });
+    // The selection stage exactly: admin-approved, nothing linked yet.
+    await prisma.modelRequest.create({
+      data: { requestId: request.id, status: "APPROVED" },
+    });
+
+    await expect(
+      editRequest(request.id, ACTOR, { requestType: "STANDARD" })
+    ).rejects.toBeInstanceOf(AppError);
+
+    const after = await prisma.request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(after.requestType).toBe("NON_STANDARD");
+  });
+
+  it("counts a skipped quote as a quote", async () => {
+    // Skipping is IT deciding this item is too cheap to be worth a supplier
+    // quote — a judgement about THIS item, recorded on the request rather than
+    // as a quoteDetail row. Reading only quoteDetail left both commitment
+    // signals absent on the path that is now normal for cheap accessories.
+    const request = await seedRequest({
+      requestKind: "ACCESSORY",
+      requestType: "NON_STANDARD",
+      status: "APPROVED",
+      quoteSkippedAt: new Date(),
+      quoteSkippedBy: "Jordan Ellis",
+      callText: false,
+      needsData: false,
+      numberOption: null,
+      newNumber: false,
+    });
+
+    await expect(
+      editRequest(request.id, ACTOR, { requestType: "STANDARD" })
+    ).rejects.toBeInstanceOf(AppError);
+  });
+
+  it("drops the orphan ModelRequest when an untouched request becomes STANDARD", async () => {
+    // PENDING is the empty buffer row created on the manager's approval, before
+    // IT has looked at it. Correcting a miscategorised request there is exactly
+    // what editing is for — but the row has to go with it, or the table reads a
+    // non-standard stage off a standard request.
+    const request = await seedRequest({
+      requestKind: "ACCESSORY",
+      requestType: "NON_STANDARD",
+      categoryId: 15,
+      categoryName: "Monitor",
+      status: "APPROVED",
+      callText: false,
+      needsData: false,
+      numberOption: null,
+      newNumber: false,
+    });
+    await prisma.modelRequest.create({
+      data: { requestId: request.id, status: "PENDING" },
+    });
+
+    await editRequest(request.id, ACTOR, {
+      requestType: "STANDARD",
+      accessoryOption: null,
+    });
+
+    const after = await prisma.request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(after.requestType).toBe("STANDARD");
+    expect(
+      await prisma.modelRequest.findUnique({ where: { requestId: request.id } })
+    ).toBeNull();
+  });
+
   it("refuses to make the requester their own approver", async () => {
     const request = await seedRequest();
 

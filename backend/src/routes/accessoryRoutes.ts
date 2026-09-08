@@ -10,7 +10,7 @@ import {
   setRequestableAccessoryCategoryIds,
   getStandardAccessories,
   setStandardAccessoriesForCategory,
-  getAccessoryOptionLabels,
+  getAccessoryOptions,
   getRequestableAccessoryCategoryIdsForAssetCategories,
   type AccessoryOptionConfig,
 } from "../services/settings.js";
@@ -104,7 +104,9 @@ router.get("/options/:categoryId", async (req, res, next) => {
       });
     }
 
-    const options = await getAccessoryOptionLabels(categoryId);
+    // { id, label } pairs. The id is what a submitted request stores, so a
+    // later rename of the label leaves the request bound to the same option.
+    const options = await getAccessoryOptions(categoryId);
     res.json({ success: true, options });
   } catch (err) {
     next(err);
@@ -280,6 +282,7 @@ router.put("/settings/standard-accessories/:categoryId", async (req, res, next) 
       o !== null &&
       typeof (o as any).label === "string" &&
       (o as any).label.trim().length > 0 &&
+      validText((o as any).id) &&
       validSlot((o as any).primary) &&
       validSlot((o as any).backup) &&
       validText((o as any).displayLabel) &&
@@ -293,7 +296,13 @@ router.put("/settings/standard-accessories/:categoryId", async (req, res, next) 
       });
     }
 
+    // `id` is carried straight through from what the client was served. An
+    // option that arrives without one is new and gets minted an id in
+    // setStandardAccessoriesForCategory; one that arrives WITH an id keeps it,
+    // which is what lets an admin rename an option without unbinding the
+    // requests filed under it.
     const cleaned: AccessoryOptionConfig[] = options.map((o: any) => ({
+      ...(typeof o.id === "string" && o.id.trim() ? { id: o.id.trim() } : {}),
       label: o.label,
       displayLabel: o.displayLabel ?? null,
       accessoryLabel: o.accessoryLabel ?? null,

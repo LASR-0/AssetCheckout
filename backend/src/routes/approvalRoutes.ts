@@ -333,13 +333,40 @@ router.get("/:requestId/search-accessories", async (req, res, next) => {
 
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { categoryId: true },
+      select: { categoryId: true, requestKind: true, requestType: true },
     });
 
     if (!request) {
       return res.status(404).json({
         success: false,
         message: "Request not found",
+      });
+    }
+
+    // THE KIND GUARD THIS ROUTE WAS MISSING. The banner above says the guard
+    // lives in the service loaders — true of every other endpoint here, and not
+    // of this one: it calls searchAccessories directly, which takes a bare
+    // categoryId and asks no questions about where it came from.
+    //
+    // The failure is silent, which is what made it expensive. An asset
+    // request's categoryId is an ASSET category id and can never equal an
+    // accessory's, so the filter matched nothing and the endpoint answered
+    // {"success":true,"matches":[]} — indistinguishable from "we searched and
+    // there is nothing", for every term the admin could type. A standard
+    // accessory request is the same story via a different route: its category
+    // is real, but selection is not a stage it has.
+    if (request.requestKind !== "ACCESSORY") {
+      return res.status(400).json({
+        success: false,
+        message: "This request isn't an accessory request, so there is nothing to select.",
+      });
+    }
+
+    if (request.requestType !== "NON_STANDARD") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This is a standard accessory request — it is fulfilled from its configured option, not by searching.",
       });
     }
 

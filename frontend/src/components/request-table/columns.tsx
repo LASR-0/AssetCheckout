@@ -289,8 +289,16 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
       : null;
 
   const isPending = requestStatus === "PENDING";
+  // Also a NON-STANDARD-only stage: the ModelRequest that carries it is created
+  // on the manager's approval of a non-standard request and a standard one has
+  // no business owning one. Stated positively for the same reason as
+  // isAccessoryAwaitingSelection below — a standard request that kept an orphan
+  // PENDING ModelRequest through an edit used to land here and offer IT sign-off
+  // down the non-standard path.
   const isApprovedAwaitingAdmin =
-    requestStatus === "APPROVED" && modelRequestStatus === "PENDING";
+    request.requestType === "NON_STANDARD" &&
+    requestStatus === "APPROVED" &&
+    modelRequestStatus === "PENDING";
 
   // Non-standard SELECTION stage (ModelRequest APPROVED, nothing linked yet).
   // For assets that's "no linked asset → Create model"; for accessories it's
@@ -355,24 +363,39 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
   const isAwaitingQuote = isAtQuoteStage && !quote && !quoteSkipped;
   const isAwaitingQuoteResponse = isAtQuoteStage && quote?.status === "SENT";
 
-  // Selection now waits on an accepted (or skipped) quote. The backend
+  // Selection is a NON-STANDARD stage and nothing else. Stated positively on
+  // purpose: this used to read `requestType !== "NON_STANDARD" || quote
+  // accepted || quote skipped`, meaning "if it's non-standard, make it wait for
+  // a quote" — which is the right rule, but as written a STANDARD request
+  // satisfied the clause outright. The only thing keeping standards out was
+  // then `modelRequestStatus === "APPROVED"`, on the assumption that a standard
+  // request never has a ModelRequest. Edit a non-standard request to STANDARD
+  // mid-workflow and it kept one, so a standard accessory request offered
+  // "Select accessory" — and the search behind it filters on the request's
+  // category, so it returned nothing for every term. editRequest now refuses
+  // that flip and drops the orphan row, and this says what it means.
+  //
+  // Selection also waits on an accepted (or skipped) quote. The backend
   // enforces this too (loadAccessoryRequestAtSelection) — hiding the action
   // is the courtesy, the guard is what makes it true. Also hidden once the
   // request has been handed off for self-procurement instead — that's an
   // alternative to selection, not a step before it.
   const isAccessoryAwaitingSelection =
     isAccessory &&
+    request.requestType === "NON_STANDARD" &&
     requestStatus === "APPROVED" &&
     modelRequestStatus === "APPROVED" &&
     snipeAccessoryId === null &&
     !request.selfProcured &&
-    (request.requestType !== "NON_STANDARD" || quote?.status === "ACCEPTED" || quoteSkipped);
+    (quote?.status === "ACCEPTED" || quoteSkipped);
 
   // The self-procurement hand-off — offered alongside Select accessory, for
   // non-standard accessories only. A standard accessory is IT-stocked, so
   // there's nothing to hand off.
-  const isAwaitingUserProcuredOffer =
-    isAccessoryAwaitingSelection && request.requestType === "NON_STANDARD";
+  // isAccessoryAwaitingSelection is now non-standard by construction, so this
+  // is exactly it — kept as its own name because the two answer different
+  // questions and only one of them is about self-procurement.
+  const isAwaitingUserProcuredOffer = isAccessoryAwaitingSelection;
 
   const selfProcured = request.selfProcured ?? null;
   const isAwaitingSelfProcuredDetails = selfProcured?.status === "AWAITING_DETAILS";

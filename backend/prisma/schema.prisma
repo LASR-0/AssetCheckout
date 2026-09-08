@@ -34,6 +34,22 @@ model Request {
   newNumber      Boolean @default(false) //this will be replaced after we clean out where the value is used on the frontend
   needsData            Boolean       @default(false)
   numberOption         NumberOption?
+
+  /// WHICH standard option this request was filed under — the option's stable
+  /// id, not its name. Renaming an option in settings used to orphan every
+  /// in-flight request that referenced it: fulfilment matched the stored NAME
+  /// against the configured ones, found nothing, and reported "no accessory
+  /// stock available" for a standard that was sitting there in stock.
+  ///
+  /// Null on non-standard requests, on asset requests, and on rows filed
+  /// before this column existed that could not be bound to a live option.
+  accessoryOptionId    String?
+
+  /// What that option was CALLED when the request was filed. A display
+  /// snapshot, deliberately kept alongside the id rather than replaced by it:
+  /// it is what the requester chose and what the emails already quoted, and it
+  /// is the only remaining record once an option is deleted from settings.
+  /// Fulfilment reads it only as a fallback for rows with no id.
   accessoryOption      String?
   reuseNumberFromEmail String?
   reuseNumberPhone     String?

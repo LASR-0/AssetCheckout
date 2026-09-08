@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from "./routes/index.js";
 import { prisma } from "./db/prisma.js";
-import { ensureDefaults } from "./services/settings.js";
+import { ensureDefaults, backfillAccessoryOptionIds } from "./services/settings.js";
 import { startJobs } from './jobs/index.js';
 import { assertAppLinksConfig } from './jobs/handlers/appLinks.js';
 import { assertQuoteStorage } from './services/quoteStorage.js';
@@ -166,6 +166,18 @@ async function start() {
   await configureDatabase();
   await ensureDefaults();
   console.log("Settings defaults ensured");
+
+  // Standard accessory options are bound to requests by a stable id rather
+  // than by their display name — renaming one used to orphan every in-flight
+  // request that referenced it, and report the result as "no stock available".
+  // This stamps ids onto any option that predates them and binds the requests
+  // that were filed under a name. Idempotent; a no-op once it has run.
+  const bound = await backfillAccessoryOptionIds();
+  if (bound.optionsStamped > 0 || bound.requestsBound > 0) {
+    console.log(
+      `Accessory options: stamped ${bound.optionsStamped} id(s), bound ${bound.requestsBound} request(s)`
+    );
+  }
 
   // The troubleshooting library, from the authored modules, on a fresh
   // database only. `prisma migrate deploy` carries schema and never data, so

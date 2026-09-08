@@ -357,7 +357,9 @@ router.get("/", async (req, res, next) => {
     const needsStock = accessoryRows.some(
       (r) => r.modelRequest?.snipeAccessoryId != null
     );
-    const needsLabels = accessoryRows.some((r) => r.accessoryOption != null);
+    const needsLabels = accessoryRows.some(
+      (r) => r.accessoryOptionId != null || r.accessoryOption != null
+    );
 
     let catalogById:
       | Map<number, { remaining: number; locationName: string | null; name: string }>
@@ -426,12 +428,15 @@ router.get("/", async (req, res, next) => {
       // catalog name.
       let accessoryOptionDisplay: string | null = r.accessoryOption ?? null;
       let accessoryLinkedLabel: string | null = null;
-      if (standardAccessories && r.accessoryOption) {
-        const opt = (standardAccessories[String(r.categoryId)]?.options ?? []).find(
-          (o) => o.label === r.accessoryOption
-        );
+      if (standardAccessories && (r.accessoryOptionId || r.accessoryOption)) {
+        // By id where the request has one, so a renamed option still shows its
+        // current display label rather than falling back to the stale snapshot.
+        const inCategory = standardAccessories[String(r.categoryId)]?.options ?? [];
+        const opt = r.accessoryOptionId
+          ? inCategory.find((o) => o.id === r.accessoryOptionId)
+          : inCategory.find((o) => o.label === r.accessoryOption);
         if (opt) {
-          accessoryOptionDisplay = opt.displayLabel ?? r.accessoryOption;
+          accessoryOptionDisplay = opt.displayLabel ?? opt.label;
           accessoryLinkedLabel =
             opt.accessoryLabel ??
             (opt.primary != null && catalogById

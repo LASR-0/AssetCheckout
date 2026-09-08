@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../db/prisma.js";
 
 ///  +-----------------------------------------------------------------+
@@ -17,6 +18,16 @@ export type StandardModelsConfig = Record<string, CategoryStandardModels>;
 // by product identity at approval time). Categories with one option render
 // no choice on the form; the option labels are what requesters see.
 export type AccessoryOptionConfig = {
+  /**
+   * Stable identity, minted once and never rewritten — not derived from the
+   * label, so renaming an option keeps every request filed under it bound.
+   *
+   * Optional in the TYPE because two callers legitimately have no id yet: a
+   * brand-new row from the admin UI, and a config written before this existed.
+   * Both get one on the next write. Everything that READS the config after
+   * backfillAccessoryOptionIds() has run can rely on it being present.
+   */
+  id?: string;
   label: string;
   displayLabel?: string | null;
   accessoryLabel?: string | null;
@@ -134,14 +145,25 @@ function normalizeStandardModelsEnv(raw: string): string | null {
  * malformed entries, trims labels, discards empty labels, and dedupes
  * labels case-insensitively (first occurrence wins). Returns null when
  * the value isn't shaped { options: [...] } at all.
+ *
+ * IDS ARE PRESERVED, NEVER REGENERATED HERE. This runs on every READ of the
+ * config, so minting inside it would hand out a different id each time it was
+ * called and bind nothing to anything. Only `mintIds` — passed by the write
+ * path and the backfill — creates them, and only for options that arrive
+ * without one. An existing id is carried through untouched no matter what
+ * happens to the label beside it; that is the entire point.
  */
-function cleanAccessoryOptions(value: unknown): CategoryAccessoryOptions | null {
+function cleanAccessoryOptions(
+  value: unknown,
+  { mintIds = false }: { mintIds?: boolean } = {}
+): CategoryAccessoryOptions | null {
   if (typeof value !== "object" || value === null) return null;
   const rawOptions = (value as Record<string, unknown>).options;
   if (!Array.isArray(rawOptions)) return null;
 
   const options: AccessoryOptionConfig[] = [];
   const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const entry of rawOptions) {
     if (typeof entry !== "object" || entry === null) continue;
@@ -154,7 +176,15 @@ function cleanAccessoryOptions(value: unknown): CategoryAccessoryOptions | null 
     if (seen.has(key)) continue;
     seen.add(key);
 
+    // A duplicate id would make two options indistinguishable to fulfilment,
+    // so a repeat is treated as absent and re-minted rather than trusted.
+    const rawId = typeof e.id === "string" ? e.id.trim() : "";
+    let id = rawId && !seenIds.has(rawId) ? rawId : undefined;
+    if (!id && mintIds) id = randomUUID();
+    if (id) seenIds.add(id);
+
     options.push({
+      ...(id ? { id } : {}),
       label,
       displayLabel:
         typeof e.displayLabel === "string" && e.displayLabel.trim()
@@ -791,19 +821,132 @@ export async function setStandardAccessoriesForCategory(
   actorEmail: string
 ): Promise<void> {
   const config = await getStandardAccessories();
-  config[String(categoryId)] = cleanAccessoryOptions({ options }) ?? { options: [] };
+  // mintIds: this is a write, so anything arriving without an identity gets one
+  // now. The admin UI round-trips the ids it was given, so only genuinely new
+  // rows mint — a rename carries its id through and stays bound to its
+  // in-flight requests.
+  config[String(categoryId)] =
+    cleanAccessoryOptions({ options }, { mintIds: true }) ?? { options: [] };
   await setSetting(STANDARD_ACCESSORIES_KEY, JSON.stringify(config), actorEmail);
 }
 
 /**
- * Requester-facing option labels for a category — labels ONLY, never the
- * accessory IDs they resolve to, so which product is the configured
- * standard stays unrevealed (consistent with the asset flow never showing
- * standard models to requesters). Backs GET /api/accessories/options/:id.
+ * Requester-facing options for a category: stable id + the label to show. The
+ * accessory IDs behind them are never exposed, so which product is the
+ * configured standard stays unrevealed (consistent with the asset flow never
+ * showing standard models to requesters). Backs GET /api/accessories/options/:id.
+ *
+ * The id is what the submitted request stores. The label travels with it only
+ * so the request can record what the requester actually read on the form.
+ */
+export async function getAccessoryOptions(
+  categoryId: number
+): Promise<{ id: string; label: string }[]> {
+  const entry = await getStandardAccessoriesForCategory(categoryId);
+  return entry.options
+    .filter((o): o is AccessoryOptionConfig & { id: string } => !!o.id)
+    .map((o) => ({ id: o.id, label: o.label }));
+}
+
+/**
+ * Labels alone, for the places that only need to render or validate names.
  */
 export async function getAccessoryOptionLabels(categoryId: number): Promise<string[]> {
   const entry = await getStandardAccessoriesForCategory(categoryId);
   return entry.options.map((o) => o.label);
+}
+
+/**
+ * The configured option a request is filed under.
+ *
+ * BY ID FIRST, ALWAYS. That is the binding that survives a rename, which is
+ * the whole reason the id exists.
+ *
+ * The label is a FALLBACK FOR LEGACY ROWS ONLY — requests filed before the id
+ * column existed, and any the backfill could not bind because their option had
+ * already been renamed out from under them. Matching on a name is exactly the
+ * fragility being removed here, so it is never consulted for a row that has an
+ * id: a request whose option was deleted must resolve to nothing rather than
+ * silently landing on a different option that happens to share a name.
+ */
+export async function findAccessoryOption(
+  categoryId: number,
+  optionId: string | null,
+  legacyLabel: string | null
+): Promise<AccessoryOptionConfig | null> {
+  const entry = await getStandardAccessoriesForCategory(categoryId);
+
+  if (optionId) {
+    return entry.options.find((o) => o.id === optionId) ?? null;
+  }
+  if (legacyLabel) {
+    return entry.options.find((o) => o.label === legacyLabel) ?? null;
+  }
+  return null;
+}
+
+/**
+ * Give every configured option an id, and bind every standard accessory
+ * request that does not have one yet.
+ *
+ * Runs at startup, after ensureDefaults. Idempotent and cheap: it writes the
+ * setting only when an option actually gained an id, and touches only requests
+ * whose accessoryOptionId is null.
+ *
+ * BINDING IS BY LABEL, once, here — the one place where that is the right
+ * thing to do, because a request filed before the id existed has nothing else
+ * to go on. A row whose label no longer matches any configured option is left
+ * unbound rather than guessed at; fulfilment still falls back to the label for
+ * it, so it behaves exactly as it did before, and it binds itself on the next
+ * successful match if an admin restores the name.
+ */
+export async function backfillAccessoryOptionIds(): Promise<{
+  optionsStamped: number;
+  requestsBound: number;
+}> {
+  const raw = await getSetting(STANDARD_ACCESSORIES_KEY);
+  const before = raw ?? "";
+
+  const config = await getStandardAccessories();
+  const stamped: StandardAccessoriesConfig = {};
+  let optionsStamped = 0;
+
+  for (const [categoryKey, entry] of Object.entries(config)) {
+    optionsStamped += entry.options.filter((o) => !o.id).length;
+    stamped[categoryKey] = cleanAccessoryOptions(entry, { mintIds: true }) ?? {
+      options: [],
+    };
+  }
+
+  const next = JSON.stringify(stamped);
+  if (next !== before) {
+    await setSetting(STANDARD_ACCESSORIES_KEY, next, "system:backfill");
+  }
+
+  // Only STANDARD accessory requests carry an option at all.
+  const unbound = await prisma.request.findMany({
+    where: {
+      requestKind: "ACCESSORY",
+      accessoryOptionId: null,
+      accessoryOption: { not: null },
+    },
+    select: { id: true, categoryId: true, accessoryOption: true },
+  });
+
+  let requestsBound = 0;
+  for (const row of unbound) {
+    const option = stamped[String(row.categoryId)]?.options.find(
+      (o) => o.label === row.accessoryOption
+    );
+    if (!option?.id) continue;
+    await prisma.request.update({
+      where: { id: row.id },
+      data: { accessoryOptionId: option.id },
+    });
+    requestsBound++;
+  }
+
+  return { optionsStamped, requestsBound };
 }
 
 /**

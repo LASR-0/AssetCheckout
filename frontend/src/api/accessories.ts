@@ -27,9 +27,16 @@ type CategoriesResponse = {
   categories: AccessoryCategory[];
 };
 
-type OptionLabelsResponse = {
+export type AccessoryOptionChoice = {
+  /** What a submitted request is stored against. */
+  id: string;
+  /** What the requester reads on the form. */
+  label: string;
+};
+
+type OptionChoicesResponse = {
   success: boolean;
-  options: string[];
+  options: AccessoryOptionChoice[];
 };
 
 type SettingsResponse = {
@@ -65,13 +72,17 @@ export async function getAllAccessoryCategories(): Promise<AccessoryCategory[]> 
 
 /**
  * The named options configured for a category ("USB-C to Lightning",
- * "Case", ...). Labels only — the standards they resolve to are never
+ * "Case", ...) as { id, label }. The standards they resolve to are never
  * exposed to requesters. Empty array = no options configured yet.
+ *
+ * The ID is the part that matters on submit: a request stores it, so renaming
+ * the option in settings later leaves the request bound to the same option
+ * rather than orphaning it.
  */
-export async function getAccessoryOptionLabels(
+export async function getAccessoryOptions(
   categoryId: number
-): Promise<string[]> {
-  const data = await apiFetch<OptionLabelsResponse>(
+): Promise<AccessoryOptionChoice[]> {
+  const data = await apiFetch<OptionChoicesResponse>(
     `/api/accessories/options/${categoryId}`
   );
   return data.options ?? [];

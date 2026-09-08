@@ -13,7 +13,7 @@ import ApprovalInput from "@/components/request-form/ApprovalInput";
 import type { User } from "@/components/request-form/UserSelect";
 import { editRequest, type EditRequestPayload } from "@/api/requests";
 import { getAssetCategories } from "@/api/categories";
-import { getAccessoryCategoriesForUser } from "@/api/accessories";
+import { getAccessoryCategoriesForUser, type AccessoryOptionChoice } from "@/api/accessories";
 import { fetchUsers } from "@/api/users";
 import { canEditRequestShape } from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
@@ -68,7 +68,9 @@ type EditState = {
   numberOption: "NEW" | "REUSE" | "NONE" | null;
   reuseUser: User | null;
 
-  // Accessory options.
+  // Accessory options. The id is the binding; the label is the display
+  // snapshot that travels with it.
+  accessoryOptionId: string | null;
   accessoryOption: string | null;
   somethingElse: boolean;
 
@@ -188,7 +190,7 @@ export default function EditRequestDialog({
   const [accessoryCategories, setAccessoryCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
-  const [optionLabels, setOptionLabels] = useState<string[]>([]);
+  const [options, setOptions] = useState<AccessoryOptionChoice[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,16 +233,18 @@ export default function EditRequestDialog({
       // Filled in once the directory loads — the row stores the email, and the
       // picker is driven by the whole User.
       reuseUser: null,
+      accessoryOptionId:
+        kind === "ACCESSORY" ? request.accessoryOptionId ?? null : null,
       accessoryOption: kind === "ACCESSORY" ? request.accessoryOption ?? null : null,
       // "Something else" is the null option on an accessory request, but null
       // ALSO means "this category offers no options at all". The two are only
-      // distinguishable once the option labels arrive, so this is settled in
+      // distinguishable once the options arrive, so this is settled in
       // onOptionsLoaded below rather than guessed here.
       somethingElse: false,
       manager: request.manager ?? "",
       managerId: String(request.managerId),
     });
-    setOptionLabels([]);
+    setOptions([]);
     setResult(null);
     setError(null);
     savedRef.current = false;
@@ -333,7 +337,7 @@ export default function EditRequestDialog({
   // accessory form does: "Something else" is non-standard by definition, a
   // catalogued option is standard by definition, and with neither picked the
   // admin's own choice stands. Assets always take the admin's own choice.
-  const hasNamedOption = !!state?.accessoryOption;
+  const hasNamedOption = !!state?.accessoryOptionId;
   const effectiveRequestType: "STANDARD" | "NON_STANDARD" = !state
     ? "STANDARD"
     : state.requestKind === "ACCESSORY"
@@ -372,11 +376,12 @@ export default function EditRequestDialog({
         needsData: false,
         numberOption: null,
         reuseUser: null,
+        accessoryOptionId: null,
         accessoryOption: null,
         somethingElse: false,
       };
     });
-    setOptionLabels([]);
+    setOptions([]);
   }
 
   function validate(s: EditState): string | null {
@@ -391,9 +396,9 @@ export default function EditRequestDialog({
     }
     if (
       s.requestKind === "ACCESSORY" &&
-      optionLabels.length > 0 &&
+      options.length > 0 &&
       !s.somethingElse &&
-      !s.accessoryOption
+      !s.accessoryOptionId
     ) {
       return "Pick which option this request is for.";
     }
@@ -437,6 +442,7 @@ export default function EditRequestDialog({
         effectiveRequestType === "NON_STANDARD" ? state.preferredModel : "",
       ...(state.requestKind === "ACCESSORY"
         ? {
+            accessoryOptionId: state.somethingElse ? null : state.accessoryOptionId,
             accessoryOption: state.somethingElse ? null : state.accessoryOption,
           }
         : {
@@ -634,6 +640,7 @@ export default function EditRequestDialog({
                               categoryName: name,
                               // A new category always resets its own options —
                               // the same rule both create forms apply.
+                              accessoryOptionId: null,
                               accessoryOption: null,
                               somethingElse: false,
                             }
@@ -654,26 +661,33 @@ export default function EditRequestDialog({
               <AccessoryOptionsSection
                 label="What do they need?"
                 categoryId={state.categoryId}
-                selectedOption={state.accessoryOption}
+                selectedOptionId={state.accessoryOptionId}
                 somethingElse={state.somethingElse}
-                onChange={(selectedOption, somethingElse) =>
+                onChange={(selectedOptionId, selectedOptionLabel, somethingElse) =>
                   setState((prev) =>
-                    prev ? { ...prev, accessoryOption: selectedOption, somethingElse } : prev
+                    prev
+                      ? {
+                          ...prev,
+                          accessoryOptionId: selectedOptionId,
+                          accessoryOption: selectedOptionLabel,
+                          somethingElse,
+                        }
+                      : prev
                   )
                 }
-                onOptionsLoaded={(labels) => {
-                  setOptionLabels(labels);
+                onOptionsLoaded={(loaded) => {
+                  setOptions(loaded);
                   // Settle the ambiguity the seed couldn't: a null option on a
                   // category that DOES offer options means the requester chose
                   // "Something else". On a category with none, null just means
                   // there was nothing to choose. Only ever applied to the row's
                   // own untouched option, so it can't overwrite an admin's pick.
                   setState((prev) => {
-                    if (!prev || prev.somethingElse || prev.accessoryOption) return prev;
-                    if (labels.length === 0) return prev;
+                    if (!prev || prev.somethingElse || prev.accessoryOptionId) return prev;
+                    if (loaded.length === 0) return prev;
                     if (prev.categoryId !== request.categoryId) return prev;
                     if (request.requestKind !== "ACCESSORY") return prev;
-                    if (request.accessoryOption) return prev;
+                    if (request.accessoryOptionId || request.accessoryOption) return prev;
                     return { ...prev, somethingElse: true };
                   });
                 }}

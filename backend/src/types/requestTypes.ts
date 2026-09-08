@@ -56,10 +56,20 @@ export type CreateRequestInput = {
   requestKind?: "ASSET" | "ACCESSORY";
   requestType: "STANDARD" | "NON_STANDARD";
   /**
-   * Accessory requests only: the chosen option label ("USB-C to Lightning",
-   * "Case", ...). Null when the requester picked "Something else" (the reason
-   * carries the detail) or when the category has no configured options.
+   * Accessory requests only: the chosen option's STABLE ID. This is what the
+   * request is stored against, so renaming the option in settings leaves the
+   * request bound to it. Null when the requester picked "Something else" (the
+   * reason carries the detail) or when the category has no configured options.
    * Ignored (forced null) on asset requests.
+   */
+  accessoryOptionId?: string | null;
+  /**
+   * The chosen option's label ("USB-C to Lightning", "Case", ...), as the
+   * requester read it on the form. Stored as a display snapshot beside the id.
+   *
+   * Still accepted ON ITS OWN from an older client: it is matched against the
+   * configured options once, at submit, and the request carries the id it
+   * lands on from then on.
    */
   accessoryOption?: string | null;
   reason?: string;
