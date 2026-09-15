@@ -39,7 +39,8 @@ const MANUALLY_TRIGGERABLE: Set<JobType> = new Set([
   "REFRESH_PRICES_CACHE",
   "PURGE_OLD_JOB_HISTORY",
   "CLEANUP_STALE_REQUESTS",
-  "CLEANUP_ORPHAN_SNIPE_MODELS"
+  "CLEANUP_ORPHAN_SNIPE_MODELS",
+  "BACKFILL_REQUEST_LOCATIONS"
 ]);
 
 ///  +-----------------------------------------------------------------+

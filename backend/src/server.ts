@@ -3,7 +3,11 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import routes from "./routes/index.js";
 import { prisma } from "./db/prisma.js";
-import { ensureDefaults, backfillAccessoryOptionIds } from "./services/settings.js";
+import {
+  ensureDefaults,
+  backfillAccessoryOptionIds,
+  ensureStockKeeperFlowCutover,
+} from "./services/settings.js";
 import { startJobs } from './jobs/index.js';
 import { assertAppLinksConfig } from './jobs/handlers/appLinks.js';
 import { assertQuoteStorage } from './services/quoteStorage.js';
@@ -178,6 +182,14 @@ async function start() {
       `Accessory options: stamped ${bound.optionsStamped} id(s), bound ${bound.requestsBound} request(s)`
     );
   }
+
+  // Fixes the line between requests that keep the old ending (requester
+  // confirms receipt directly) and those that now route through a stock
+  // keeper. Written once, on the first boot after this version lands, and
+  // never moved afterwards — a restart that re-stamped it would
+  // re-grandfather shipments that have already changed hands.
+  const cutover = await ensureStockKeeperFlowCutover();
+  console.log(`Stock keeper flow in effect from ${cutover.toISOString()}`);
 
   // The troubleshooting library, from the authored modules, on a fresh
   // database only. `prisma migrate deploy` carries schema and never data, so

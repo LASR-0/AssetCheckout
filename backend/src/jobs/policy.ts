@@ -21,6 +21,9 @@ export const ONE_SHOT_JOBS: Set<JobType> = new Set([
   "CLEANUP_ORPHAN_SNIPE_MODELS",
   "PURGE_OLD_JOB_HISTORY",
   "REMIND_SHIPPED_REQUESTS",
+  // Idempotent and re-runnable by hand; an auto-retry inside one run would
+  // just re-hammer Snipe with the lookups that already failed.
+  "BACKFILL_REQUEST_LOCATIONS",
 ]);
 
 export const DRY_RUN_JOBS: Partial<Record<JobType, string>> = {

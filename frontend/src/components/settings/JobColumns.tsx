@@ -36,6 +36,7 @@ export const JOB_TYPE_LABELS: Record<JobType, string> = {
   PURGE_OLD_JOB_HISTORY: "Purge History",
   REMIND_SHIPPED_REQUESTS: "Shipping Reminder",
   LOG_CAPEX_PURCHASE: "CAPEX Purchase Log",
+  BACKFILL_REQUEST_LOCATIONS: "Backfill Request Locations",
 };
 
 function jobTypeLabel(type: string): string {

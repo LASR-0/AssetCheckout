@@ -31,9 +31,31 @@ type Props = {
    *  and reversible; without it a single-row table looks like a broken filter. */
   pinnedId?: number | null;
   onClearPin?: () => void;
+  /**
+   * Location narrowing — "ALL", or a Snipe location id as a string.
+   *
+   * Derived from the rows on screen rather than fetched from Snipe: every row
+   * already carries the requester's location, so the list of sites worth
+   * offering is exactly the set present in what the actor can see. A stock
+   * keeper covering two sites gets both; a requester who only ever sees their
+   * own rows gets one, and the control hides itself (see below).
+   */
+  location?: string;
+  setLocation?: (value: string) => void;
+  locationOptions?: { id: number; name: string }[];
 };
 
-export default function RequestsToolbar({ search, setSearch, status, setStatus, pageSize, setPageSize, setPage, pinnedId, onClearPin }: Props) {
+export default function RequestsToolbar({ search, setSearch, status, setStatus, pageSize, setPageSize, setPage, pinnedId, onClearPin, location = "ALL", setLocation, locationOptions = [] }: Props) {
+  const [openLocation, setOpenLocation] = useState(false);
+
+  // Nothing to choose between with one site, and a filter whose only options
+  // are "All" and the single value already on screen is pure noise for the
+  // requesters who make up most of this page's traffic.
+  const showLocationFilter = !!setLocation && locationOptions.length > 1;
+  const selectedLocationName =
+    location === "ALL"
+      ? null
+      : locationOptions.find((l) => String(l.id) === location)?.name ?? null;
 
   const [openRequest, setOpenRequest] = useState(false);
   const [openPage, setOpenPage] = useState(false);
@@ -169,6 +191,54 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
                       </PopoverContent>
                   </Popover>
 
+
+                  {showLocationFilter && (
+                    <Popover open={openLocation} onOpenChange={setOpenLocation}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <PopoverTrigger asChild>
+                            <button className="flex-1 shadow-sm !text-info-light sm:flex-none inline-flex items-center justify-center px-4 py-2 bg-filter/30 text-on-surface text-sm font-medium rounded-md hover:brightness-70 hover:cursor-pointer transition-colors">
+                              <span className="material-symbols-outlined !text-info-light mr-2 !text-sm">
+                                warehouse
+                              </span>
+                              {selectedLocationName ?? "Location"}
+                            </button>
+                          </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          Filter by location
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <PopoverContent className="w-56 max-h-80 overflow-y-auto bg-surface p-1">
+                        <button
+                          onClick={() => {
+                            setLocation?.("ALL");
+                            setOpenLocation(false);
+                          }}
+                          className="w-full flex items-center gap-2 text-left bg-surface text-info-light px-3 py-2 text-sm rounded-md hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined !text-base">list</span>
+                          All locations
+                        </button>
+                        {locationOptions.map((l) => (
+                          <button
+                            key={l.id}
+                            onClick={() => {
+                              setLocation?.(String(l.id));
+                              setOpenLocation(false);
+                            }}
+                            className="w-full flex items-center gap-2 text-left bg-surface text-info-light px-3 py-2 text-sm rounded-md hover:brightness-95 dark:hover:brightness-150 hover:cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined !text-base">
+                              warehouse
+                            </span>
+                            {l.name}
+                          </button>
+                        ))}
+                      </PopoverContent>
+                    </Popover>
+                  )}
 
                   <Popover open={openRequest} onOpenChange={setOpenRequest}>
                     <Tooltip>

@@ -1,7 +1,11 @@
 import { prisma } from "../../db/prisma.js";
 import { resolveUserEmail } from "../../services/snipeitassets.js";
 import { sendEmail, type EmailAttachment } from "../../services/email.js";
-import { getSetting } from "../../services/settings.js";
+import {
+  getSetting,
+  getStockKeepersForLocation,
+  type StockKeeperEntry,
+} from "../../services/settings.js";
 import { readQuoteDocument } from "../../services/quoteStorage.js";
 import { appLink } from "./appLinks.js";
 import {
@@ -24,6 +28,11 @@ const KINDS = [
   "REQUEST_REJECTED",
   "SHIPMENT_REMINDER",
   "SHIPMENT_OVERDUE",
+  /// Something is on its way to a site, addressed to the keepers there rather
+  /// than to the person who asked for it. They are the ones who will take
+  /// delivery of it, and they cannot hand over a parcel they were never told
+  /// to expect.
+  "SHIPMENT_INBOUND",
   "QUOTE_APPROVAL_NEEDED",
   "REQUEST_EDITED",
   "SELF_PROCUREMENT_NEEDED",
@@ -33,6 +42,55 @@ type NotificationKind = (typeof KINDS)[number];
 
 function isKind(v: unknown): v is NotificationKind {
   return typeof v === "string" && (KINDS as readonly string[]).includes(v);
+}
+
+///  +-----------------------------------------------------------------+
+///  |            WHO IS ON THE HOOK FOR A DEVICE RIGHT NOW            |
+///  +-----------------------------------------------------------------+
+//
+//  Between dispatch and handover it is the destination site's stock keeper.
+//  After handover it is the requester. Chasing the wrong one of those is not
+//  a cosmetic problem: it asks somebody to confirm they have a device nobody
+//  has given them, and it lets the person actually holding it up hear
+//  nothing.
+//
+//  FALLS BACK TO ADMINS, never to nobody. A site with no assigned keeper, a
+//  request with no recorded location, keepers assigned without an email on
+//  record — each of those would otherwise silently drop the reminder, and a
+//  reminder nobody receives is indistinguishable from one that was never due.
+//  Admins can act as keeper anywhere, so they are the correct fallback as
+//  well as the safe one.
+///  +-----------------------------------------------------------------+
+
+async function resolveStockKeeperEmails(
+  locationId: number | null
+): Promise<{ emails: string[]; keepers: StockKeeperEntry[]; viaAdmins: boolean }> {
+  if (locationId === null) {
+    return { emails: ADMIN_EMAILS, keepers: [], viaAdmins: true };
+  }
+
+  let keepers: StockKeeperEntry[] = [];
+  try {
+    keepers = await getStockKeepersForLocation(locationId);
+  } catch (err) {
+    console.error("[notification] could not read stock keepers:", err);
+  }
+
+  const emails = keepers
+    .map((k) => k.email)
+    .filter((e): e is string => !!e);
+
+  return emails.length > 0
+    ? { emails, keepers, viaAdmins: false }
+    : { emails: ADMIN_EMAILS, keepers, viaAdmins: true };
+}
+
+/** "Ali Rahman or Sam Taylor" — who to go and see. */
+function keeperNames(keepers: StockKeeperEntry[]): string | null {
+  const names = keepers.map((k) => k.name).filter(Boolean);
+  if (names.length === 0) return null;
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
 }
 
 /** Pull just the rejection reason out of the "REJECTED: x\n REQUEST: y" format. */
@@ -275,17 +333,59 @@ export async function sendRequestNotificationHandler(
 
     case "DEVICE_READY_FOR_COLLECTION": {
       to = await resolveUserEmail(request.userId);
+
+      // NAME THE PERSON, not the department. "Collect it from IT" is useless
+      // at a site where IT is in another state — which is the situation this
+      // whole role exists for. Falls back to the old wording when the site has
+      // no named keeper (an admin stood in), because "collect it from
+      // somebody" is worse than a vague but honest instruction.
+      const { keepers } = await resolveStockKeeperEmails(request.userLocationId);
+      const from = keeperNames(keepers);
+      const whereFrom = from ? `from ${from}` : "from IT";
+
       subject = `Your ${request.categoryName} is ready for collection`;
       text =
-        `Your ${request.categoryName} has been prepared and is ready to collect.\n\n` +
-        `Please collect it from IT, then mark it as collected in AssetCheckout.`;
+        `Your ${request.categoryName} is ready to collect.\n\n` +
+        `Please collect it ${whereFrom}, then mark it as collected in AssetCheckout.`;
       content = {
         eyebrow: "Ready to collect",
         title: "Your device is ready for collection",
         paragraphs: [
           greeting(userFirst),
-          `Your ${category} has been prepared and is ready to collect.`,
-          `Please collect it from IT, then mark it as collected in KSB Checkout.`,
+          `Your ${category} is ready to collect.`,
+          from
+            ? `Please collect it from <strong style="color:#27242e; font-weight:600;">${esc(from)}</strong>, then mark it as collected in KSB Checkout.`
+            : `Please collect it from IT, then mark it as collected in KSB Checkout.`,
+        ],
+        cta: { label: "Open KSB Checkout", url: reviewLink },
+      };
+      break;
+    }
+
+    case "SHIPMENT_INBOUND": {
+      const { emails, viaAdmins } = await resolveStockKeeperEmails(
+        request.userLocationId
+      );
+      to = emails;
+
+      const site = request.userLocationName ?? "your location";
+      subject = `Inbound: ${request.categoryName} for ${request.userName}`;
+      text =
+        `A ${request.categoryName} for ${request.userName} has been shipped to ${site}.\n\n` +
+        `When it arrives, mark it as ready to collect in AssetCheckout — that tells ` +
+        `${request.userName} to come and get it, and stops the reminders coming to you.`;
+      content = {
+        eyebrow: "On its way to you",
+        title: "A device is being shipped to your location",
+        paragraphs: [
+          greeting(null),
+          `A ${category} for <strong style="color:#27242e; font-weight:600;">${userName}</strong> has been shipped to <strong style="color:#27242e; font-weight:600;">${esc(site)}</strong>.`,
+          `When it arrives, mark it as ready to collect — that tells ${userName} to come and get it, and stops the reminders coming to you.`,
+          ...(viaAdmins
+            ? [
+                `This went to IT because ${esc(site)} has no stock keeper assigned.`,
+              ]
+            : []),
         ],
         cta: { label: "Open KSB Checkout", url: reviewLink },
       };
@@ -314,47 +414,132 @@ export async function sendRequestNotificationHandler(
     }
 
     case "SHIPMENT_REMINDER": {
+      // WHOEVER IS ACTUALLY HOLDING IT UP. Before the handover the device is
+      // the destination site's problem and the requester can do nothing about
+      // it; after the handover it is sitting waiting for them. Sending the
+      // "have you received it?" copy to a requester who has not been given
+      // anything is how people learn to ignore these.
+      if (request.collectionReadyAt === null) {
+        const { emails } = await resolveStockKeeperEmails(request.userLocationId);
+        to = emails;
+
+        const site = request.userLocationName ?? "your location";
+
+        // A shipped device may genuinely not have turned up yet, so that copy
+        // offers "no action needed" as a real answer. One already at the site
+        // has no such excuse — it is on a shelf waiting to be handed over, and
+        // telling its keeper they might have nothing to do would be wrong.
+        const wasShipped = request.needsShipping;
+
+        subject = wasShipped
+          ? `Has ${request.userName}'s ${request.categoryName} arrived?`
+          : `${request.userName}'s ${request.categoryName} is waiting to be handed over`;
+        text = wasShipped
+          ? `A ${request.categoryName} for ${request.userName} was shipped to ${site} and ` +
+            `hasn't been marked ready to collect yet.\n\n` +
+            `If it has arrived, mark it ready to collect in AssetCheckout so ${request.userName} ` +
+            `knows to come and get it. If it hasn't turned up, no action is needed.`
+          : `A ${request.categoryName} for ${request.userName} has been ready at ${site} for a ` +
+            `while and hasn't been marked ready to collect yet.\n\n` +
+            `Mark it ready to collect in AssetCheckout so ${request.userName} knows to come and get it.`;
+        content = {
+          eyebrow: "Checking in",
+          title: wasShipped
+            ? "Has this arrived at your location?"
+            : "This is waiting to be handed over",
+          paragraphs: [
+            greeting(null),
+            wasShipped
+              ? `A ${category} for <strong style="color:#27242e; font-weight:600;">${userName}</strong> was shipped to <strong style="color:#27242e; font-weight:600;">${esc(site)}</strong> and hasn't been marked ready to collect yet.`
+              : `A ${category} for <strong style="color:#27242e; font-weight:600;">${userName}</strong> has been ready at <strong style="color:#27242e; font-weight:600;">${esc(site)}</strong> for a while and hasn't been marked ready to collect yet.`,
+            wasShipped
+              ? `If it has arrived, mark it ready to collect so ${userName} knows to come and get it. If it hasn't turned up, no action is needed.`
+              : `Mark it ready to collect so ${userName} knows to come and get it.`,
+          ],
+          cta: { label: "Mark ready to collect", url: reviewLink },
+        };
+        break;
+      }
+
       to = await resolveUserEmail(request.userId);
-      subject = `Have you received your ${request.categoryName}?`;
+      subject = `Have you collected your ${request.categoryName}?`;
       text =
-        `We're checking in on your ${request.categoryName}, which was shipped to you recently.\n\n` +
-        `If it has arrived, please mark it as received in AssetCheckout. ` +
-        `If it hasn't arrived yet, no action is needed — we'll check in again soon.`;
+        `We're checking in on your ${request.categoryName}, which is waiting for you to collect.\n\n` +
+        `If you have it, please mark it as collected in AssetCheckout. ` +
+        `If you haven't picked it up yet, no action is needed — we'll check in again soon.`;
       content = {
         eyebrow: "Checking in",
-        title: `Have you received your ${request.categoryName}?`,
+        title: `Have you collected your ${request.categoryName}?`,
         paragraphs: [
           greeting(userFirst),
-          `We're checking in on your ${category}, which was shipped to you recently.`,
-          `If it has arrived, please mark it as received. If it hasn't arrived yet, no action is needed — we'll check in again soon.`,
+          `We're checking in on your ${category}, which is waiting for you to collect.`,
+          `If you have it, please mark it as collected. If you haven't picked it up yet, no action is needed — we'll check in again soon.`,
         ],
-        cta: { label: "Mark as received", url: reviewLink },
+        cta: { label: "Mark as collected", url: reviewLink },
       };
       break;
     }
 
     case "SHIPMENT_OVERDUE": {
-      // Fans out to the user AND all admins — so the body opens generically.
+      // Admins are always copied — that is what makes this an escalation
+      // rather than a fourth reminder. Who it is escalating ABOUT depends on
+      // where the device got stuck, same split as SHIPMENT_REMINDER above.
+      const awaitingHandover = request.collectionReadyAt === null;
+
+      if (awaitingHandover) {
+        const { emails } = await resolveStockKeeperEmails(request.userLocationId);
+        to = Array.from(new Set([...emails, ...ADMIN_EMAILS]));
+
+        const site = request.userLocationName ?? "an unrecorded location";
+        const wasShipped = request.needsShipping;
+
+        subject = `Overdue: ${request.categoryName} for ${request.userName} not marked ready`;
+        text = wasShipped
+          ? `A ${request.categoryName} for ${request.userName} was shipped to ${site} and still ` +
+            `hasn't been marked ready to collect.\n\n` +
+            `Either it never arrived — in which case this needs investigating as a possible postage ` +
+            `issue — or it is sitting there and ${request.userName} hasn't been told. IT has been notified.`
+          : `A ${request.categoryName} for ${request.userName} has been sitting at ${site} for over ` +
+            `a month and still hasn't been marked ready to collect.\n\n` +
+            `${request.userName} has not been told it is there. IT has been notified.`;
+        content = {
+          eyebrow: "Overdue",
+          title: wasShipped
+            ? "Shipment not yet marked ready to collect"
+            : "Device not yet handed over",
+          paragraphs: [
+            greeting(null),
+            wasShipped
+              ? `A ${category} for <strong style="color:#27242e; font-weight:600;">${userName}</strong> was shipped to <strong style="color:#27242e; font-weight:600;">${esc(site)}</strong> and still hasn't been marked ready to collect.`
+              : `A ${category} for <strong style="color:#27242e; font-weight:600;">${userName}</strong> has been sitting at <strong style="color:#27242e; font-weight:600;">${esc(site)}</strong> for over a month and still hasn't been marked ready to collect.`,
+            wasShipped
+              ? `Either it never arrived — in which case this needs investigating as a possible postage issue — or it is sitting there and ${userName} hasn't been told.`
+              : `<strong style="color:#27242e; font-weight:600;">${userName}</strong> has not been told it is there.`,
+            `IT has been notified.`,
+          ],
+          cta: { label: "Mark ready to collect", url: reviewLink },
+        };
+        break;
+      }
+
       const userEmail = await resolveUserEmail(request.userId);
       to = [userEmail, ...ADMIN_EMAILS].filter((e): e is string => !!e);
 
-      subject = `Overdue: ${request.categoryName} not yet marked received`;
+      subject = `Overdue: ${request.categoryName} not yet collected`;
       text =
-        `The ${request.categoryName} shipped to ${request.userName} has not been marked as received ` +
-        `after more than a month.\n\n` +
-        `If it doesn't arrive within another week, this will need to be investigated as a possible ` +
-        `postage issue. ${request.userName}: if you have received it, please mark it as received in ` +
-        `AssetCheckout. IT has been notified.`;
+        `The ${request.categoryName} for ${request.userName} has been ready to collect for ` +
+        `more than a month and still hasn't been picked up.\n\n` +
+        `${request.userName}: if you have it, please mark it as collected in AssetCheckout. ` +
+        `IT has been notified.`;
       content = {
         eyebrow: "Overdue",
-        title: "Shipment not yet marked received",
+        title: "Device not yet collected",
         paragraphs: [
           greeting(null),
-          `The ${category} shipped to <strong style="color:#27242e; font-weight:600;">${userName}</strong> has not been marked as received after more than a month.`,
-          `If it doesn't arrive within another week, this will need to be investigated as a possible postage issue.`,
-          `<strong style="color:#27242e; font-weight:600;">${userName}</strong>: if you have received it, please mark it as received. IT has been notified.`,
+          `The ${category} for <strong style="color:#27242e; font-weight:600;">${userName}</strong> has been ready to collect for more than a month and still hasn't been picked up.`,
+          `<strong style="color:#27242e; font-weight:600;">${userName}</strong>: if you have it, please mark it as collected. IT has been notified.`,
         ],
-        cta: { label: "Mark as received", url: reviewLink },
+        cta: { label: "Mark as collected", url: reviewLink },
       };
       break;
     }

@@ -40,7 +40,14 @@ export type FulfilmentStage = {
 
 // ── Post-fulfilment shipping/receipt derivation ──
 // Collect path: assigned (awaiting prep) → ready to collect → collected
-// Ship path:    assigned (awaiting dispatch) → shipped → received
+// Ship path:    assigned (awaiting dispatch) → shipped → ready to collect
+//                                                      → collected
+//
+// THE TWO PATHS NOW CONVERGE. needsShipping used to fork the whole tail into
+// two different endings; it only decides whether there is a courier leg in the
+// middle. Both end at a stock keeper marking the device ready, then the
+// requester collecting it — so isReadyToCollect is no longer collect-path-only,
+// and a shipped request stops reading as SHIPPED the moment it is handed over.
 export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
   const needsShipping = request.needsShipping ?? false;
   const shippedAt = request.shippedAt ?? null;
@@ -76,12 +83,14 @@ export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
   const isCollectAwaitingPrep =
     isCompleted && !needsShipping && !collectionReadyAt && !receivedAt;
   const isReadyToCollect =
-    isCompleted && !needsShipping && !!collectionReadyAt && !receivedAt;
+    isCompleted && !!collectionReadyAt && !receivedAt;
 
   const isShipAwaitingPrep =
     isCompleted && needsShipping && !shippedAt && !receivedAt;
+  // In transit, or delivered but not yet handed over. Ends at the stock
+  // keeper's mark, which is why collectionReadyAt closes it.
   const isShipped =
-    isCompleted && needsShipping && !!shippedAt && !receivedAt;
+    isCompleted && needsShipping && !!shippedAt && !collectionReadyAt && !receivedAt;
 
   const isReceivedOrCollected = isCompleted && !!receivedAt;
 
@@ -89,6 +98,8 @@ export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
     ? request.status
     : isReceivedOrCollected
     ? (needsShipping ? "RECEIVED" : "COLLECTED")
+    // Before isShipped, which a handed-over shipment no longer satisfies
+    // anyway — ordered this way so the two can't both be true by accident.
     : isReadyToCollect
     ? "READY_TO_COLLECT"
     : isShipped

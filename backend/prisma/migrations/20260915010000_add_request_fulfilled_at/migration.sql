@@ -1,0 +1,16 @@
+-- When a request's hardware was actually handed to the fulfilment chain.
+--
+-- A request on the COLLECT path has no clock. Its stock keeper needs chasing
+-- when something has been sitting at their site unclaimed, and there was
+-- nothing to measure that from: shippedAt is null by definition on that path,
+-- and updatedAt is bumped by setReminderStage itself, so a reminder ladder
+-- built on it would reset its own clock every time it fired and never reach
+-- the escalation.
+--
+-- NOT BACKFILLED, deliberately. Every existing COMPLETED request would
+-- otherwise acquire a clock that started months ago and immediately cross the
+-- 30-day threshold, so the first nightly run after deploying would escalate a
+-- backlog of long-settled requests to IT and to stock keepers who have never
+-- seen this system before. Null means "no collect-path reminder", which is
+-- exactly the right behaviour for rows that predate the feature.
+ALTER TABLE "Request" ADD COLUMN "fulfilledAt" DATETIME;

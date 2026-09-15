@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db/prisma.js";
+import { AppError } from "../utils/errors.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                            TYPES                                |
@@ -44,6 +45,53 @@ export type CategoryAccessoryOptions = {
 
 export type StandardAccessoriesConfig = Record<string, CategoryAccessoryOptions>;
 
+// Stock keepers: the people who physically hold and hand out hardware at a
+// site. Keyed by Snipe LOCATION id (numeric-string, same convention as the
+// category-keyed configs above), each carrying a small snapshot of the person
+// rather than a bare id — the settings UI, the notification recipients, and
+// the "collect from" line on a request all need a name and an email, and none
+// of them should have to reach Snipe to render one.
+//
+// The snapshot is deliberately NOT the source of truth for the person: userId
+// is. A renamed or re-emailed user is re-snapshotted on the next write, and
+// anything that must be current (notification delivery) resolves through Snipe
+// by id anyway.
+export type StockKeeperEntry = {
+  /** Snipe user id — the identity. Everything else here is a display snapshot. */
+  userId: number;
+  name: string;
+  email: string | null;
+};
+
+/**
+ * One location's assignment. The wrapper-object-around-a-list shape mirrors
+ * CategoryAccessoryOptions above rather than storing a bare array, because the
+ * location needs a display snapshot of its own.
+ *
+ * WHY THE NAME IS STORED: /api/auth/role reports which sites the signed-in
+ * user keeps, and it is called on every page load. getLocations() is an
+ * uncached Snipe request, so resolving names there would put a Snipe round
+ * trip on the hot path and make role resolution fail whenever Snipe blips.
+ * The name is captured when the assignment is made — where the admin UI
+ * already has it — and refreshed on every subsequent write.
+ */
+export type LocationStockKeepers = {
+  /** Snipe location name when the assignment was last written. */
+  locationName: string | null;
+  keepers: StockKeeperEntry[];
+};
+
+// locationId (numeric-string key) → the people keeping stock there.
+export type StockKeepersConfig = Record<string, LocationStockKeepers>;
+
+/**
+ * Cap per location. Three, so a site has cover when the usual keeper is away
+ * without the role quietly becoming "most of the office". Enforced in
+ * setStockKeepersForLocation rather than only in the UI, so it holds for the
+ * env-seeded config and any future caller too.
+ */
+export const MAX_STOCK_KEEPERS_PER_LOCATION = 3;
+
 // FIXED: mobile-filter config shape — mirrors MobileNumberConfig on the frontend
 export type MobileFilterConfig = {
   countryCode: string;        // digits only, e.g. "61"
@@ -66,6 +114,9 @@ const MOBILE_LEADING_DIGIT_KEY = "mobile_leading_digit";
 const REQUESTABLE_ACCESSORY_CATEGORIES_KEY = "requestable_accessory_categories";
 const STANDARD_ACCESSORIES_KEY = "standard_accessories";
 const ACCESSORY_ASSET_CATEGORY_MAP_KEY = "accessory_asset_category_map";
+// Stock keepers chapter
+const STOCK_KEEPERS_KEY = "stock_keepers";
+const STOCK_KEEPER_FLOW_CUTOVER_KEY = "stock_keeper_flow_enabled_at";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DEFAULTS REGISTRY + SEEDING                    |
@@ -495,6 +546,29 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     normalize: normalizeAssetAccessoryMapEnv,
     defaultValue: "",
     description: "JSON object mapping Snipe-IT ASSET category IDs → array of accessory category IDs that holders of that asset category may request (L3). Empty string means no asset-derived mapping is configured.",
+  },
+
+  {
+    key: "jobs.locationBackfillMaxRows",
+    defaultValue: "500",
+    description:
+      "Maximum requests BACKFILL_REQUEST_LOCATIONS will fill in one run, newest first. Caps how many Snipe user lookups a single run can make; run the job again to continue through a large backlog.",
+  },
+
+  // ---- Stock keepers ----
+  {
+    key: STOCK_KEEPER_FLOW_CUTOVER_KEY,
+    defaultValue: "",
+    description:
+      "ISO timestamp of the first boot after stock keepers shipped. Requests dispatched BEFORE this keep the old ending, where the requester confirms receipt directly; those dispatched after route through a stock keeper first. Stamped automatically at startup — do not set it by hand unless you are deliberately moving the cutover.",
+  },
+  {
+    key: STOCK_KEEPERS_KEY,
+    envVar: "STOCK_KEEPERS_JSON",
+    normalize: normalizeStockKeepersEnv,
+    defaultValue: "",
+    description:
+      "JSON object mapping Snipe-IT LOCATION IDs → up to 3 stock keepers, each { userId, name, email }. Stock keepers mark requests ready to collect at their site. Empty string means no site has an assigned keeper, which leaves admins covering every location.",
   },
 ];
 
@@ -1145,4 +1219,337 @@ export async function getRequestableAccessoryCategoryIdsForAssetCategories(
   if (l1 === null) return Array.from(union); // no whitelist → all allowed
   const allowed = new Set(l1);
   return Array.from(union).filter((id) => allowed.has(id));
+}
+///  +-----------------------------------------------------------------+
+///  |                        STOCK KEEPERS                            |
+///  +-----------------------------------------------------------------+
+//
+//  WHO HANDS OUT HARDWARE AT EACH SITE. Assigned here rather than inferred
+//  from a user's Snipe location, deliberately: this is authorisation data —
+//  it decides who may mark a request ready to collect — and a Snipe location
+//  is an ordinary profile field that drifts when someone moves desks. An
+//  explicit assignment also lets a site be covered by someone who is not
+//  themselves posted there.
+//
+//  SHAPED LIKE THE CATEGORY CONFIGS ABOVE (numeric-string keys, cleaned on
+//  read, replace-semantics per key on write) so there is one JSON-config
+//  idiom in this file rather than two.
+//
+//  ADMINS ARE NOT LISTED HERE. They can act as stock keeper anywhere, which
+//  is what stops a site with no assigned keeper from stranding its requests;
+//  that rule lives with the permission check, not with this data, so an
+//  empty config degrades to "IT does it" rather than to a deadlock.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Shape-check one location's keepers. Entries without a usable Snipe user id
+ * or a name are dropped rather than repaired: a keeper the app can neither
+ * identify nor display is not a keeper.
+ *
+ * Deduplicates by userId — the same person listed twice would otherwise eat
+ * two of the three slots and be emailed twice per reminder.
+ *
+ * Does NOT enforce the cap. Truncating on READ would silently disenfranchise
+ * whoever sorted last in a config that was over the limit, and the read path
+ * is not where an admin would find out. setStockKeepersForLocation rejects
+ * instead, so the error lands on the write that caused it.
+ */
+function cleanStockKeepers(value: unknown): StockKeeperEntry[] {
+  if (!Array.isArray(value)) return [];
+
+  const keepers: StockKeeperEntry[] = [];
+  const seen = new Set<number>();
+
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+
+    const userId = typeof e.userId === "number" ? e.userId : Number(e.userId);
+    if (!Number.isFinite(userId) || userId <= 0) continue;
+    if (seen.has(userId)) continue;
+
+    const name = typeof e.name === "string" ? e.name.trim() : "";
+    if (!name) continue;
+
+    seen.add(userId);
+    keepers.push({
+      userId,
+      name,
+      email:
+        typeof e.email === "string" && e.email.trim()
+          ? e.email.trim().toLowerCase()
+          : null,
+    });
+  }
+
+  return keepers;
+}
+
+/**
+ * Shape-check one location's whole entry. Returns null for a location with
+ * nothing usable left, which the callers drop — so a key in the config always
+ * means at least one real keeper.
+ *
+ * Accepts a BARE ARRAY as well as the wrapper object. Nothing has shipped in
+ * the older shape, but the config is env-seedable and hand-editable, and
+ * `[{...}]` is the obvious thing to write for "the keepers at this site";
+ * reading it as a nameless entry costs one line and beats discarding an
+ * admin's config silently.
+ */
+function cleanLocationStockKeepers(value: unknown): LocationStockKeepers | null {
+  const rawKeepers = Array.isArray(value)
+    ? value
+    : typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>).keepers
+    : null;
+
+  const keepers = cleanStockKeepers(rawKeepers);
+  if (keepers.length === 0) return null;
+
+  const rawName =
+    !Array.isArray(value) && typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>).locationName
+      : null;
+
+  return {
+    locationName:
+      typeof rawName === "string" && rawName.trim() ? rawName.trim() : null,
+    keepers,
+  };
+}
+
+/** Env normaliser: JSON object only, cleaned through the same rules as the getter. */
+function normalizeStockKeepersEnv(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const cleaned: StockKeepersConfig = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!/^\d+$/.test(key)) continue;
+      // Over-cap env values are rejected outright rather than trimmed — seeding
+      // a config the UI would then refuse to save back is worse than starting
+      // from the default and being told why.
+      const entry = cleanLocationStockKeepers(value);
+      if (entry === null) continue;
+      if (entry.keepers.length > MAX_STOCK_KEEPERS_PER_LOCATION) return null;
+      cleaned[key] = entry;
+    }
+    return JSON.stringify(cleaned);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The full assignment map: locationId → keepers. `{}` when unset, which means
+ * no location has a keeper and admins are covering everywhere.
+ *
+ * Locations with an empty list are dropped on the way out, so callers can read
+ * "has a key" as "has at least one keeper".
+ */
+export async function getStockKeepers(): Promise<StockKeepersConfig> {
+  const raw = await getSetting(STOCK_KEEPERS_KEY);
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return {};
+    }
+    const cleaned: StockKeepersConfig = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!/^\d+$/.test(key)) continue;
+      const entry = cleanLocationStockKeepers(value);
+      if (entry === null) continue;
+      cleaned[key] = entry;
+    }
+    return cleaned;
+  } catch {
+    return {};
+  }
+}
+
+/** The keepers at one location — `[]` when it has none. */
+export async function getStockKeepersForLocation(
+  locationId: number
+): Promise<StockKeeperEntry[]> {
+  const config = await getStockKeepers();
+  return config[String(locationId)]?.keepers ?? [];
+}
+
+/**
+ * Replace one location's keeper list (the admin UI edits a site as a unit).
+ * An empty list clears the site, which hands it back to admin cover.
+ *
+ * Throws 400 when the list exceeds the cap, counted AFTER deduplication so
+ * that submitting the same person twice is a no-op rather than an error the
+ * admin can't make sense of.
+ */
+export async function setStockKeepersForLocation(
+  locationId: number,
+  keepers: StockKeeperEntry[],
+  actorEmail: string,
+  locationName?: string | null
+): Promise<void> {
+  const cleaned = cleanStockKeepers(keepers);
+
+  if (cleaned.length > MAX_STOCK_KEEPERS_PER_LOCATION) {
+    throw new AppError(
+      `A location can have at most ${MAX_STOCK_KEEPERS_PER_LOCATION} stock keepers.`,
+      400
+    );
+  }
+
+  const config = await getStockKeepers();
+  const key = String(locationId);
+
+  if (cleaned.length === 0) {
+    delete config[key];
+  } else {
+    const name =
+      typeof locationName === "string" && locationName.trim()
+        ? locationName.trim()
+        : // Caller didn't supply one (or supplied a blank): keep whatever
+          // snapshot is already stored rather than blanking a good name.
+          config[key]?.locationName ?? null;
+    config[key] = { locationName: name, keepers: cleaned };
+  }
+
+  await setSetting(STOCK_KEEPERS_KEY, JSON.stringify(config), actorEmail);
+}
+
+/**
+ * Which locations this Snipe user keeps stock for. The answer for an ADMIN is
+ * still whatever they are explicitly assigned — their ability to act anywhere
+ * comes from their role, not from this list, so the two stay separable and an
+ * admin's own site still shows them as its named keeper.
+ *
+ * Returns location ids as numbers, ascending, so callers get a stable order.
+ */
+export async function getStockKeeperLocationIdsForUser(
+  userId: number
+): Promise<number[]> {
+  if (!Number.isFinite(userId)) return [];
+
+  const config = await getStockKeepers();
+  const ids: number[] = [];
+  for (const [locationId, entry] of Object.entries(config)) {
+    if (entry.keepers.some((k) => k.userId === userId)) ids.push(Number(locationId));
+  }
+  return ids.sort((a, b) => a - b);
+}
+
+/**
+ * The sites this user keeps stock for, with the names the assignments were
+ * written under. What /api/auth/role hands the client, so the UI can say which
+ * locations somebody covers without resolving anything against Snipe.
+ *
+ * A location whose snapshot predates the name being stored comes back with
+ * `name: null` rather than being dropped — the id is the part that carries
+ * authority, and a nameless entry still grants it.
+ */
+export async function getStockKeeperLocationsForUser(
+  userId: number
+): Promise<{ id: number; name: string | null }[]> {
+  if (!Number.isFinite(userId)) return [];
+
+  const config = await getStockKeepers();
+  const locations: { id: number; name: string | null }[] = [];
+  for (const [locationId, entry] of Object.entries(config)) {
+    if (entry.keepers.some((k) => k.userId === userId)) {
+      locations.push({ id: Number(locationId), name: entry.locationName });
+    }
+  }
+  return locations.sort((a, b) => a.id - b.id);
+}
+
+///  +-----------------------------------------------------------------+
+///  |              THE STOCK KEEPER FLOW CUTOVER                      |
+///  +-----------------------------------------------------------------+
+//
+//  Marking a request ready to collect became a stock keeper's step on EVERY
+//  path, shipping included. That inserts a new actor between "dispatched" and
+//  "the requester has it" — which is correct for everything filed from here
+//  on, and unfair to everything already in the air.
+//
+//  A request that was shipped last week has a requester who was told to
+//  confirm receipt themselves, and a site that may have no keeper assigned
+//  yet. Applying the new rule retroactively would take the button away from
+//  the one person who can see the parcel and hand the job to somebody who
+//  does not know they have it.
+//
+//  So the flow changes for shipments dispatched AFTER this instant, and not
+//  before. Recorded as a setting rather than a migration constant because it
+//  has to be the moment this version actually went live in a given
+//  environment — which differs between dev, staging and production, and is
+//  not knowable when the migration is written.
+///  +-----------------------------------------------------------------+
+
+/**
+ * When the stock keeper flow took effect here, or null if it has not been
+ * stamped yet.
+ *
+ * Null is read as "the new flow applies to everything" by the callers, not as
+ * "nothing has changed". A missing marker must not silently disable the
+ * feature, and it cannot strand anything: admins can act as stock keeper
+ * anywhere, so the worst case is that an in-flight shipment needs one click
+ * from IT rather than from its requester.
+ */
+export async function getStockKeeperFlowCutover(): Promise<Date | null> {
+  const raw = await getSetting(STOCK_KEEPER_FLOW_CUTOVER_KEY);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Stamp the cutover on first boot after this version lands. Idempotent: once
+ * set, the value is never rewritten, so a restart does not move the line and
+ * re-grandfather requests that have already changed hands.
+ *
+ * Returns the effective cutover, whether it was just written or already there.
+ */
+export async function ensureStockKeeperFlowCutover(): Promise<Date> {
+  const existing = await getStockKeeperFlowCutover();
+  if (existing !== null) return existing;
+
+  const now = new Date();
+  await setSetting(
+    STOCK_KEEPER_FLOW_CUTOVER_KEY,
+    now.toISOString(),
+    "system:startup"
+  );
+  return now;
+}
+
+/**
+ * Does this request keep the OLD ending — requester confirms receipt with no
+ * stock keeper in between?
+ *
+ * True only for a shipment already dispatched when the flow changed. Three
+ * things deliberately do NOT qualify:
+ *
+ *   - A collect-path request awaiting preparation. Its requester could never
+ *     act at that stage anyway, so routing it through a keeper takes nothing
+ *     away from anyone.
+ *   - A shipment dispatched after the cutover, however old the request is.
+ *     What matters is when it went in the van, not when it was asked for.
+ *   - Anything already marked ready or received. Those have passed the point
+ *     where the two flows differ.
+ */
+export function isLegacyShipment(
+  request: {
+    needsShipping: boolean;
+    shippedAt: Date | null;
+    collectionReadyAt: Date | null;
+  },
+  cutover: Date | null
+): boolean {
+  if (cutover === null) return false;
+  if (!request.needsShipping) return false;
+  if (request.shippedAt === null) return false;
+  if (request.collectionReadyAt !== null) return false;
+  return request.shippedAt < cutover;
 }

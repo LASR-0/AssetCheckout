@@ -10,6 +10,7 @@ import { remindShippedRequestsHandler } from "./handlers/remindShippedRequests.j
 import { syncRequestsToSharepointHandler } from "./handlers/syncRequestsToSharepoint.js";
 import { refreshAccessoriesCacheHandler } from "./handlers/refreshAccessoriesCachehandler.js";
 import { logCapexPurchaseHandler } from "./handlers/logCapexPurchase.js";
+import { backfillRequestLocationsHandler } from "./handlers/backfillRequestLocations.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    JOB SYSTEM ENTRY POINT                       |
@@ -37,6 +38,9 @@ export async function startJobs(): Promise<void> {
   registerHandler("REFRESH_ACCESSORIES_CACHE", refreshAccessoriesCacheHandler);
   // Event-driven — enqueued at quote acceptance, so it has no scheduler entry.
   registerHandler("LOG_CAPEX_PURCHASE", logCapexPurchaseHandler);
+  // Manual only — a one-off migration chore, run from Settings. No scheduler
+  // entry on purpose: see the handler's header.
+  registerHandler("BACKFILL_REQUEST_LOCATIONS", backfillRequestLocationsHandler);
 
   await startRunner();
   await startScheduler();

@@ -1,4 +1,4 @@
-import type { Role } from "@/types/authType";
+import type { Role, StockKeeperLocation } from "@/types/authType";
 import type { Request } from "@/types/requestType";
 
 /**
@@ -38,6 +38,51 @@ export function isApprover(
   return sameName(request.manager, userName);
 }
 
+
+///  +-----------------------------------------------------------------+
+///  |                   ACTING AS A STOCK KEEPER                      |
+///  +-----------------------------------------------------------------+
+//
+//  Mirrors canActAsStockKeeper in the backend's config/auth.ts, and is held
+//  to the same contract as isApprover above: the two must agree, or a row
+//  offers a button the API then refuses.
+//
+//  ADMINS EVERYWHERE. Not a shortcut — it is what stops a location with no
+//  assigned keeper from stranding its requests at "waiting to be made ready"
+//  with nobody able to advance them, and it covers head office, where the IT
+//  admin genuinely is the stock keeper.
+//
+//  A NULL LOCATION IS ADMIN-ONLY. A request with no location recorded (filed
+//  before locations were stamped, or a requester with no Snipe location) has
+//  no site for an assignment to match. Falling open there would hand every
+//  keeper every unplaceable request in the system.
+///  +-----------------------------------------------------------------+
+
+export function canActAsStockKeeper(
+  role: Role,
+  stockKeeperLocations: StockKeeperLocation[],
+  locationId: number | null
+): boolean {
+  if (role === "ADMIN") return true;
+  if (locationId === null) return false;
+  return stockKeeperLocations.some((l) => l.id === locationId);
+}
+
+/**
+ * Does this actor keep stock anywhere at all? Drives whether stock-keeper
+ * surfaces are offered in the first place — a location filter, a stock page —
+ * as distinct from whether they may act on one particular request.
+ *
+ * An admin with no assignment is NOT a stock keeper by this test, and that is
+ * intentional: they can act anywhere, but they have no home site, so a
+ * "requests at my location" view would have nothing to scope to. Their route
+ * into that work is the admin view, which already shows everything.
+ */
+export function isStockKeeper(
+  stockKeeperLocations: StockKeeperLocation[]
+): boolean {
+  return stockKeeperLocations.length > 0;
+}
 
 ///  +-----------------------------------------------------------------+
 ///  |                      WHO CAN EDIT A REQUEST                     |
@@ -128,12 +173,62 @@ const ROLE_COLUMNS: Record<NonNullable<Role>, ColumnId[]> = {
   REQUESTER: ["userName", "requestType", "reason", "manager", "createdAt", "actions"],
 };
 
+///  +-----------------------------------------------------------------+
+///  |        A STOCK KEEPER MAY HAVE NO ROLE AT ALL                   |
+///  +-----------------------------------------------------------------+
+//
+//  Role is derived, and all three values are earned by APPEARING ON A
+//  REQUEST: admin by email, manager by being somebody's nominated approver,
+//  requester by being the person a request is for. Somebody who has never
+//  asked for hardware and approves nobody is role null — and that is an
+//  entirely ordinary stock keeper. Storeroom staff at a depot may never file
+//  a request in their working life.
+//
+//  Null used to mean "hide every column", which is right for someone with no
+//  business here and catastrophic for someone with plenty: the backend
+//  correctly returned their site's 44 rows, the table correctly paginated
+//  them into 5 pages, and every one rendered as a blank line. Nothing errored.
+//  The page looked broken rather than empty, which is worse than either.
+//
+//  This is the same failure the requests list and the role endpoint were
+//  already fixed for once — see the ID-FIRST note in config/auth.ts, where a
+//  name mismatch stranded people at role null and their rows "were fetched,
+//  returned, and then rendered into nothing". Same symptom, different cause.
+//
+//  Keeping stock therefore GRANTS columns rather than being gated behind a
+//  role. The set matches REQUESTER's, so a keeper who is also a requester —
+//  the common case — sees exactly what they saw before and the two paths
+//  can't disagree about it.
+///  +-----------------------------------------------------------------+
 
-export function getColumnVisibility(role: Role): Record<string, boolean> {
-  if (role === null) {
-  
-    return Object.fromEntries(ALL_COLUMN_IDS.map((id) => [id, false]));
+const STOCK_KEEPER_COLUMNS: ColumnId[] = [
+  "userName",
+  "requestType",
+  "reason",
+  "manager",
+  "createdAt",
+  "actions",
+];
+
+/**
+ * Which columns this actor's table shows.
+ *
+ * `isStockKeeper` WIDENS, never narrows: the role's own columns are unioned
+ * with the keeper set, so passing it can only ever reveal columns. Omitting
+ * it reproduces the previous behaviour exactly.
+ */
+export function getColumnVisibility(
+  role: Role,
+  isStockKeeper = false
+): Record<string, boolean> {
+  const allowed = new Set<ColumnId>();
+
+  if (role !== null) {
+    for (const id of ROLE_COLUMNS[role]) allowed.add(id);
   }
-  const allowed = new Set(ROLE_COLUMNS[role]);
+  if (isStockKeeper) {
+    for (const id of STOCK_KEEPER_COLUMNS) allowed.add(id);
+  }
+
   return Object.fromEntries(ALL_COLUMN_IDS.map((id) => [id, allowed.has(id)]));
 }

@@ -305,3 +305,30 @@ export type AccessoryResolution = {
  * record and needs to see its location, so siblings are shown, not grouped.
  */
 export type AccessorySearchResult = AccessorySummary & { hasAvailable: boolean };
+///  +-----------------------------------------------------------------+
+///  |                     ASSETS AT A LOCATION                        |
+///  +-----------------------------------------------------------------+
+//
+//  What a stock keeper sees on their own page: the hardware Snipe says is at
+//  their site, whether or not any request in this app ever touched it.
+//
+//  CARRIES WHO HOLDS IT. The question a keeper is actually asked is "whose is
+//  that one?", so an asset checked out to somebody is shown with their name
+//  rather than filtered out — an inventory that only lists spares answers half
+//  the question.
+///  +-----------------------------------------------------------------+
+
+export type LocationAsset = {
+  id: number;
+  assetTag: string;
+  name: string | null;
+  serial: string | null;
+  model: string | null;
+  manufacturer: string | null;
+  categoryName: string | null;
+  statusLabel: string | null;
+  /** True when Snipe considers it available to issue. */
+  available: boolean;
+  /** Who currently holds it, when it is checked out to a person. */
+  assignedTo: string | null;
+};

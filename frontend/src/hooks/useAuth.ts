@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Role } from "@/types/authType";
+import type { Role, StockKeeperLocation } from "@/types/authType";
 
 export interface AuthState {
   name: string;
@@ -12,6 +12,13 @@ export interface AuthState {
    */
   userId: number | null;
   role: Role;
+  /**
+   * Snipe locations this actor is assigned to keep stock for. Empty for most
+   * people, and empty for an admin who has not been explicitly assigned —
+   * admins can act as stock keeper anywhere regardless, which is why the
+   * permission check takes `role` as well as this list.
+   */
+  stockKeeperLocations: StockKeeperLocation[];
   isLoading: boolean;
   refresh: () => void;
 }
@@ -67,6 +74,9 @@ export function useAuth(): AuthState {
   const [email, setEmail] = useState<string>("");
   const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<Role>(null);
+  const [stockKeeperLocations, setStockKeeperLocations] = useState<
+    StockKeeperLocation[]
+  >([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [tick, setTick] = useState(0);
 
@@ -95,6 +105,7 @@ export function useAuth(): AuthState {
             setEmail("");
             setUserId(null);
             setRole(null);
+            setStockKeeperLocations([]);
             setIsLoading(false);
           }
           return;
@@ -115,6 +126,18 @@ export function useAuth(): AuthState {
           setEmail(data.email ?? devEmail);
           setUserId(typeof data.userId === "number" ? data.userId : null);
           setRole(data.role);
+          // Shape-checked rather than trusted: an older backend returns no
+          // such field at all, and "not a stock keeper" is the safe reading.
+          setStockKeeperLocations(
+            Array.isArray(data.stockKeeperLocations)
+              ? data.stockKeeperLocations.filter(
+                  (l: unknown): l is StockKeeperLocation =>
+                    typeof l === "object" &&
+                    l !== null &&
+                    typeof (l as StockKeeperLocation).id === "number"
+                )
+              : []
+          );
           setIsLoading(false);
         }
       } catch (err) {
@@ -122,6 +145,7 @@ export function useAuth(): AuthState {
         if (!cancelled) {
           setUserId(null);
           setRole(null);
+          setStockKeeperLocations([]);
           setIsLoading(false);
         }
       }
@@ -133,5 +157,5 @@ export function useAuth(): AuthState {
     };
   }, [tick]);
 
-  return { name, email, userId, role, isLoading, refresh };
+  return { name, email, userId, role, stockKeeperLocations, isLoading, refresh };
 }

@@ -88,6 +88,100 @@ export function canSeeRequest(request: RequestIdentity, actor: Actor): boolean {
   return isRequestee(request, actor) || isApprover(request, actor);
 }
 
+///  +-----------------------------------------------------------------+
+///  |                   ACTING AS A STOCK KEEPER                      |
+///  +-----------------------------------------------------------------+
+//
+//  ADMINS CAN ACT ANYWHERE. That disjunct is not a convenience — it is what
+//  stops a location with no assigned keeper from stranding its requests at
+//  "fulfilled, waiting to be made ready" with nobody able to advance them.
+//  It also covers the ordinary case at head office, where the IT admin IS the
+//  stock keeper.
+//
+//  Kept pure, and kept here beside isRequestee/isApprover, for the reason
+//  this file already gives: the route that ENFORCES this and the client that
+//  decides whether to render the button must agree, or the UI offers an
+//  action the API then refuses. Both call this.
+//
+//  Resolving WHICH locations somebody keeps is a settings read, so callers do
+//  that themselves and pass the answer in. This function does not reach the
+//  database, which is what lets the frontend mirror it exactly.
+///  +-----------------------------------------------------------------+
+
+export type StockKeeperActor = {
+  /** Admin by email, per ADMIN_EMAILS. Grants every location at once. */
+  isAdmin: boolean;
+  /** Snipe location ids this actor is explicitly assigned to keep. */
+  stockKeeperLocationIds: number[];
+};
+
+/**
+ * May this actor perform stock-keeper actions for the given location?
+ *
+ * A null locationId means the request has no location recorded — rows filed
+ * before locations were stamped, or a requester with no Snipe location set.
+ * Only an admin can act on those: there is no site to match, so no assignment
+ * can grant it, and falling open would hand every keeper every unplaceable
+ * request in the system.
+ */
+export function canActAsStockKeeper(
+  actor: StockKeeperActor,
+  locationId: number | null
+): boolean {
+  if (actor.isAdmin) return true;
+  if (locationId === null) return false;
+  return actor.stockKeeperLocationIds.includes(locationId);
+}
+
+/** A request row, reduced to the four fields stock-keeper visibility reads. */
+export type KeeperVisibleRequest = {
+  userLocationId: number | null;
+  status: string;
+  requestKind: string;
+  /** The self-procurement detail row, when there is one. */
+  selfProcured: unknown | null;
+};
+
+/**
+ * Does this request belong to one of the sites the actor keeps stock for?
+ *
+ * THE ONLY RULE IN THE APP that shows somebody a request they neither raised
+ * nor approve, so it is deliberately narrow. It WIDENS what canSeeRequest
+ * already returns and never narrows it — a keeper's own requests and the ones
+ * they approve reach them through that predicate regardless of this one.
+ *
+ * FULFILMENT-STAGE ROWS ONLY. A keeper is not an approver and has no business
+ * reading why somebody asked for a laptop: `reason` is free text that carries
+ * things like a replacement tied to somebody being performance-managed.
+ * Requiring COMPLETED means there is something physical at their site, and
+ * everything earlier stays between the requester, their approver and IT.
+ *
+ * COLLECTED ROWS STAY VISIBLE. A keeper needs a record of what they handed
+ * out; hiding a row the moment it closes makes the one question they will
+ * actually be asked — "did I ever get that?" — unanswerable.
+ *
+ * EXCLUDED: corrections (nothing is ever collected for one, and a resolved
+ * correction is COMPLETED with no fulfilment stamps) and self-procured items
+ * (the requester bought it themselves; it never passes through a keeper's
+ * hands). A null location matches nothing, for the same reason it does in
+ * canActAsStockKeeper.
+ *
+ * Takes the keeper's sites as a set rather than resolving them, so it stays
+ * pure and one settings read covers a whole page of rows.
+ */
+export function stockKeeperCanSeeRequest(
+  request: KeeperVisibleRequest,
+  keeperSites: Set<number>
+): boolean {
+  if (keeperSites.size === 0) return false;
+  if (request.userLocationId === null) return false;
+  if (!keeperSites.has(request.userLocationId)) return false;
+  if (request.status !== "COMPLETED") return false;
+  if (request.requestKind === "CORRECTION") return false;
+  if (request.selfProcured !== null) return false;
+  return true;
+}
+
 /*
  * Returns an empty string when no email is available — callers that
  * require an email (e.g. for `updatedBy` in settings) should treat empty

@@ -1,4 +1,8 @@
-import { findShippedAwaitingReceipt, setReminderStage } from "../../services/request.js";
+import {
+  findShippedAwaitingReceipt,
+  setReminderStage,
+  reminderClockStart,
+} from "../../services/request.js";
 import { getSetting } from "../../services/settings.js";
 import { enqueue } from "../jobQueue.js";
 import { maxAttemptsFor } from "../policy.js";
@@ -19,10 +23,22 @@ function daysSince(from: Date): number {
 /**
  * REMIND_SHIPPED_REQUESTS handler.
  *
- * Scans shipped-but-unreceived requests and escalates received-reminders:
- *   stage 1 (>= reminder_days_1): nudge the user
- *   stage 2 (>= reminder_days_2): nudge the user again
- *   stage 3 (>= reminder_days_3): escalate to user AND admins (overdue)
+ * Scans shipped-but-unreceived requests and escalates reminders:
+ *   stage 1 (>= reminder_days_1): nudge
+ *   stage 2 (>= reminder_days_2): nudge again
+ *   stage 3 (>= reminder_days_3): escalate, copying in admins (overdue)
+ *
+ * WHO gets nudged is decided per-send in the notification handler, not here:
+ * before the stock keeper's handover the device is the destination site's
+ * problem, after it the requester's. This handler only decides WHETHER a
+ * nudge is due.
+ *
+ * WHICH CLOCK IT MEASURES follows the same split. Dispatch starts the
+ * keeper's ladder; the handover restarts it for the requester (see
+ * reminderClockStart, and the reminderStage reset in markReadyForCollection).
+ * Measuring from dispatch throughout would hand the requester a device
+ * already weeks into an escalation caused by somebody else's delay, and their
+ * first email about it would be the overdue notice that copies in IT.
  *
  * Each request carries reminderStage (0..3). A reminder fires only when the
  * DUE stage (highest threshold the elapsed time has crossed) exceeds the
@@ -52,9 +68,10 @@ export async function remindShippedRequestsHandler(): Promise<Record<string, unk
   const failures: string[] = [];
 
   for (const request of candidates) {
-    if (!request.shippedAt) continue; // type-guard; scan already filters
+    const clockStart = reminderClockStart(request);
+    if (!clockStart) continue; // type-guard; scan already filters
 
-    const days = daysSince(request.shippedAt);
+    const days = daysSince(clockStart);
 
     // Highest threshold crossed → due stage.
     let dueStage = 0;

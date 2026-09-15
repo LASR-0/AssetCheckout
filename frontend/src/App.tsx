@@ -4,6 +4,7 @@ import RequestFormPage from "@/pages/RequestFormPage";
 import AccessoryRequestFormPage from "@/pages/AccessoryFormPage";
 import SuccessRedirect from "@/pages/SuccessRedirect";
 import RequestTablePage from "@/pages/RequestsTablePage"
+import StockPage from "@/pages/StockPage";
 import Navbar from "./components/nav/Navbar";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import NoAccessPage from "./pages/NoAccessPage";
@@ -46,6 +47,18 @@ function App() {
             element={
               <ProtectedRoute requireRole={false}>
                 <RequestTablePage />
+              </ProtectedRoute>
+            }
+          />
+          {/* The stock keeper's own page. requireRole={false} matches the
+              requests route: a keeper is usually a REQUESTER, and the page
+              gates itself on the assignment rather than on the role — see the
+              empty state, which explains what to do instead. */}
+          <Route
+            path="/stock"
+            element={
+              <ProtectedRoute requireRole={false}>
+                <StockPage />
               </ProtectedRoute>
             }
           />

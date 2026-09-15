@@ -16,6 +16,7 @@ import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
 import MobileFilterCard from "@/components/settings/MobileFilterCard";
 import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
 import AccessoryAssetMap from "@/components/settings/AccessoryAssetMap";
+import StockKeepersSelector from "@/components/settings/StockKeepersSelector";
 
 export default function SettingsPage() {
   const { role } = useAuth();
@@ -117,6 +118,25 @@ export default function SettingsPage() {
         </SettingsSection>
       )}
 
+      {/* Stock Keepers -- admin-only */}
+      {isAdmin && (
+        <SettingsSection icon="warehouse" title="Stock Keepers">
+          <p className="text-sm text-info-light mb-4">
+            Who hands out hardware at each site. A stock keeper marks a request
+            ready to collect once the device is physically with them — whether
+            it was already at their location or has just been shipped in — and
+            the requester then confirms they've collected it.
+          </p>
+          <p className="text-sm text-info-light mb-4">
+            Assigned here rather than read from a person's Snipe-IT location,
+            so moving desks doesn't quietly change who can act on a request.
+            Admins can always stand in as stock keeper at any location, so a
+            site left empty falls to IT rather than stalling.
+          </p>
+          <StockKeepersSelector />
+        </SettingsSection>
+      )}
+
       {/* Snipe-IT Configuration -- admin-only */}
       {isAdmin && (
         <SettingsSection icon="settings_applications" title="Snipe-IT Configuration">
@@ -167,7 +187,9 @@ export default function SettingsPage() {
           <div>
             <h3 className="font-semibold text-on-background mb-1">Scheduled Jobs</h3>
             <p className="text-sm text-info-light mb-4">
-              Maintenance jobs that run on a schedule. Trigger any of them manually with "Run now".
+              Maintenance jobs, most of them on a schedule. Trigger any of them
+              manually with "Run now"; the ones with no schedule shown are
+              run by hand only.
             </p>
             <ScheduledJobsCard onQueued={() => setJobsRefreshKey((k) => k + 1)} />
           </div>

@@ -13,6 +13,7 @@ import integrationsRoutes from "./integrationRoutes.js";
 import feedbackRoutes from "./feedbackRoutes.js"
 import sharepointRoutes from "./sharepointRoutes.js";
 import holdingsRoutes from "./holdingsRoutes.js";
+import stockRoutes from "./stockRoutes.js";
 import troubleshootingRoutes from "./troubleshootingRoutes.js";
 import tourRoutes from "./tourRoutes.js";
 import troubleshootingAdminRoutes from "./troubleshootingAdminRoutes.js";
@@ -36,6 +37,7 @@ router.use("/integrations", integrationsRoutes);
 router.use("/feedback", feedbackRoutes);
 router.use("/sharepoint", sharepointRoutes);
 router.use("/holdings", holdingsRoutes);
+router.use("/stock", stockRoutes);
 router.use("/troubleshooting/admin", troubleshootingAdminRoutes);
 router.use("/troubleshooting", troubleshootingRoutes);
 

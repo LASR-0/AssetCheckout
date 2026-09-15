@@ -1,5 +1,10 @@
 import { apiFetch } from "./client";
-import type { StandardModelsConfig } from "@/types/settingsType";
+import type {
+  StandardModelsConfig,
+  StockKeeperEntry,
+  StockKeepersConfig,
+} from "@/types/settingsType";
+import { DEFAULT_MAX_STOCK_KEEPERS } from "@/types/settingsType";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     STANDARD MODELS                             |
@@ -101,4 +106,50 @@ export async function setAccessoryCategoriesForAssetCategory(
     { method: "PUT", body: { assetCategoryId, accessoryCategoryIds } }
   );
   return data.map ?? {};
+}
+
+///  +-----------------------------------------------------------------+
+///  |                        STOCK KEEPERS                            |
+///  +-----------------------------------------------------------------+
+
+/**
+ * Full assignment map: locationId → keepers, plus the server's cap so the UI
+ * never hardcodes a limit the backend could disagree with. Admin-only on the
+ * server; the settings card that calls it only renders for admins.
+ */
+export async function getStockKeepers(): Promise<{
+  config: StockKeepersConfig;
+  maxPerLocation: number;
+}> {
+  const data = await apiFetch<{
+    config: StockKeepersConfig;
+    maxPerLocation: number;
+  }>("/api/settings/stock-keepers");
+  return {
+    config: data.config ?? {},
+    maxPerLocation: data.maxPerLocation ?? DEFAULT_MAX_STOCK_KEEPERS,
+  };
+}
+
+/**
+ * Replace one location's keeper list (per-row contract, same as the L3 map
+ * above). An empty array clears the location, handing it back to admin cover.
+ * Returns the full updated map to adopt.
+ */
+export async function setStockKeepersForLocation(
+  locationId: number,
+  keepers: StockKeeperEntry[],
+  locationName?: string | null
+): Promise<{ config: StockKeepersConfig; maxPerLocation: number }> {
+  const data = await apiFetch<{
+    config: StockKeepersConfig;
+    maxPerLocation: number;
+  }>("/api/settings/stock-keepers", {
+    method: "PUT",
+    body: { locationId, keepers, locationName: locationName ?? null },
+  });
+  return {
+    config: data.config ?? {},
+    maxPerLocation: data.maxPerLocation ?? DEFAULT_MAX_STOCK_KEEPERS,
+  };
 }

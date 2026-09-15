@@ -11,7 +11,11 @@ import {
   getMobileFilterConfig,
   setMobileFilterConfig,
   getAssetAccessoryCategoryMap,
-  setAccessoryCategoriesForAssetCategory
+  setAccessoryCategoriesForAssetCategory,
+  getStockKeepers,
+  setStockKeepersForLocation,
+  MAX_STOCK_KEEPERS_PER_LOCATION,
+  type StockKeeperEntry
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 
@@ -264,6 +268,91 @@ router.put("/accessory-asset-map", async (req: Request, res: Response, next: Nex
     );
     const map = await getAssetAccessoryCategoryMap();
     res.json({ map });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                        STOCK KEEPERS                            |
+///  +-----------------------------------------------------------------+
+//
+//  ADMIN-ONLY ON BOTH VERBS, unlike the category configs above. This is not
+//  catalogue configuration, it is who may act on someone else's request —
+//  and the full map says which sites are uncovered, which is not something
+//  every signed-in user needs to be handed. Anything user-facing that has to
+//  name a keeper (the "collect from" line, reminder recipients) resolves the
+//  one keeper it needs server-side rather than shipping the whole map.
+///  +-----------------------------------------------------------------+
+
+router.get("/stock-keepers", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const config = await getStockKeepers();
+    res.json({ config, maxPerLocation: MAX_STOCK_KEEPERS_PER_LOCATION });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { locationId, keepers, locationName } = req.body ?? {};
+
+    if (typeof locationId !== "number" || !Number.isFinite(locationId) || locationId <= 0) {
+      return res.status(400).json({ error: "locationId must be a positive number" });
+    }
+    if (!Array.isArray(keepers)) {
+      return res.status(400).json({ error: "keepers must be an array" });
+    }
+    // Optional: the display snapshot the auth endpoint reports back. Absent or
+    // blank keeps whatever name is already stored rather than clearing it.
+    if (
+      locationName !== null &&
+      locationName !== undefined &&
+      typeof locationName !== "string"
+    ) {
+      return res.status(400).json({ error: "locationName must be a string or null" });
+    }
+
+    // Shape-checked here as well as in the service: the service drops entries
+    // it can't use, which would turn a malformed payload into a silent
+    // partial save. An admin removing the wrong person should hear about it.
+    const parsed: StockKeeperEntry[] = [];
+    for (const entry of keepers) {
+      if (typeof entry !== "object" || entry === null) {
+        return res.status(400).json({ error: "each keeper must be an object" });
+      }
+      const { userId, name, email } = entry as Record<string, unknown>;
+      if (typeof userId !== "number" || !Number.isFinite(userId) || userId <= 0) {
+        return res.status(400).json({ error: "each keeper needs a positive numeric userId" });
+      }
+      if (typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "each keeper needs a name" });
+      }
+      if (email !== null && email !== undefined && typeof email !== "string") {
+        return res.status(400).json({ error: "keeper email must be a string or null" });
+      }
+      parsed.push({
+        userId,
+        name: name.trim(),
+        email: typeof email === "string" && email.trim() ? email.trim() : null,
+      });
+    }
+
+    // Throws 400 past the cap — surfaced by the error middleware.
+    await setStockKeepersForLocation(
+      locationId,
+      parsed,
+      getActorEmail(req),
+      typeof locationName === "string" ? locationName : null
+    );
+
+    const config = await getStockKeepers();
+    res.json({ config, maxPerLocation: MAX_STOCK_KEEPERS_PER_LOCATION });
   } catch (err) {
     next(err);
   }

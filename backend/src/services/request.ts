@@ -31,7 +31,9 @@ import {
   getStandardAccessoriesForCategory,
   getStandardModelsForCategory,
   getSkeletonStatusId,
-  getSetting
+  getSetting,
+  getStockKeeperFlowCutover,
+  isLegacyShipment
 } from "../services/settings.js";
 import {
   resolveAccessoryForRequest,
@@ -82,6 +84,7 @@ type NotificationKind =
   | "DEVICE_ASSIGNED"
   | "DEVICE_READY_FOR_COLLECTION"
   | "DEVICE_SHIPPED"
+  | "SHIPMENT_INBOUND"
   | "REQUEST_REJECTED"
   | "REQUEST_EDITED";
 
@@ -241,10 +244,21 @@ export async function createCorrectionRequest(
     }
   }
 
+  // A correction never moves hardware, so no stock keeper will ever act on
+  // one. Stamped anyway: a column that is populated for two request kinds and
+  // silently null for the third is a trap for anyone who later queries it
+  // without knowing that, and the lookup is best-effort either way.
+  const { userLocationId, userLocationName } = await resolveRequesteeFacts(
+    input.userId,
+    null
+  );
+
   const request = await prisma.request.create({
     data: {
       userId: input.userId,
       userName: input.userName,
+      userLocationId,
+      userLocationName,
       categoryId: input.categoryId,
       categoryName: input.categoryName,
       requestKind: "CORRECTION",
@@ -299,27 +313,66 @@ function normalisePreferredModel(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/**
- * True when the person submitting the request is the requestee's immediate
- * manager, as Snipe-IT records it — the signal a manager filing a request for
- * one of their own reports doesn't need to be asked to approve it a second
- * time. `submitterId` is resolved server-side from the signed-in actor (see
- * the POST / route), never taken from the form body, since the approver field
- * on the form is free text and proves nothing on its own.
- */
-async function isAutoApproveEligible(
+///  +-----------------------------------------------------------------+
+///  |              ONE USER LOOKUP, TWO THINGS DECIDED                |
+///  +-----------------------------------------------------------------+
+//
+//  Creating a request needs the requestee's Snipe record twice over: their
+//  manager, to decide whether the approval stage is skipped, and their
+//  location, to stamp the row so stock keepers can find it. Fetched once here
+//  and read for both, rather than each caller reaching for it separately.
+//
+//  BEST-EFFORT, DELIBERATELY. A Snipe outage during submission now files the
+//  request without a location and without auto-approval, instead of failing
+//  the submission outright as it did when the auto-approve check owned this
+//  fetch. Both degradations are recoverable and neither loses anything the
+//  user typed: a missing location leaves the row admin-actionable (which is
+//  what a null location means everywhere else), and a missed auto-approval
+//  just means the submitting manager clicks Approve on a request they would
+//  otherwise have skipped past. Losing the whole form to a 500 is worse than
+//  either.
+///  +-----------------------------------------------------------------+
+
+type RequesteeFacts = {
+  /**
+   * True when the person submitting the request is the requestee's immediate
+   * manager, as Snipe-IT records it — the signal a manager filing a request
+   * for one of their own reports doesn't need to be asked to approve it a
+   * second time. `submitterId` is resolved server-side from the signed-in
+   * actor (see the POST / route), never taken from the form body, since the
+   * approver field on the form is free text and proves nothing on its own.
+   */
+  autoApproved: boolean;
+  /** The requestee's Snipe location, snapshotted onto the row. */
+  userLocationId: number | null;
+  userLocationName: string | null;
+};
+
+async function resolveRequesteeFacts(
   requesteeUserId: number,
   submitterId: number | null | undefined
-): Promise<boolean> {
-  if (submitterId == null) return false;
-  const requestee = await getSnipeUser(requesteeUserId);
-  return requestee?.manager?.id === submitterId;
+): Promise<RequesteeFacts> {
+  let requestee = null;
+  try {
+    requestee = await getSnipeUser(requesteeUserId);
+  } catch (err) {
+    console.error(
+      "[request] could not resolve requestee in Snipe; filing without location or auto-approval:",
+      err
+    );
+  }
+
+  return {
+    autoApproved: submitterId != null && requestee?.manager?.id === submitterId,
+    userLocationId: requestee?.location?.id ?? null,
+    userLocationName: requestee?.location?.name ?? null,
+  };
 }
 
 /**
  * Dispatches a freshly created PENDING request to either the manager's inbox
  * (the normal path) or straight through the manager stage (when
- * isAutoApproveEligible matched at creation time and `autoApproved` is
+ * resolveRequesteeFacts matched at creation time and `autoApproved` is
  * already stamped on the row). Reuses handleStandardApproval /
  * handleNonStandardApproval verbatim — an auto-approval takes exactly the
  * same code path a manual one does, only the trigger differs, so
@@ -374,12 +427,15 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   }
 
   const needsData = input.callText ? true : (input.needsData ?? false);
-  const autoApproved = await isAutoApproveEligible(input.userId, input.submittedById);
+  const { autoApproved, userLocationId, userLocationName } =
+    await resolveRequesteeFacts(input.userId, input.submittedById);
 
   let request = await prisma.request.create({
     data: {
       userId: input.userId,
       userName: input.userName,
+      userLocationId,
+      userLocationName,
       categoryId: input.categoryId,
       categoryName: input.categoryName,
       requestKind: "ASSET",
@@ -486,12 +542,15 @@ async function createAccessoryRequest(
     );
   }
 
-  const autoApproved = await isAutoApproveEligible(input.userId, input.submittedById);
+  const { autoApproved, userLocationId, userLocationName } =
+    await resolveRequesteeFacts(input.userId, input.submittedById);
 
   let request = await prisma.request.create({
     data: {
       userId: input.userId,
       userName: input.userName,
+      userLocationId,
+      userLocationName,
       categoryId: input.categoryId,
       categoryName: input.categoryName,
       requestKind: "ACCESSORY",
@@ -1464,6 +1523,7 @@ async function handleAdminStandardApproval(
         adminApprovedAt: new Date(),
         needsShipping,
         locationMissing,
+        fulfilledAt: new Date(),
       },
     });
 
@@ -1530,6 +1590,7 @@ async function handleAdminAccessoryStandardApproval(
       adminApprovedAt: new Date(),
       needsShipping,
       locationMissing,
+      fulfilledAt: new Date(),
     },
   });
 
@@ -1669,7 +1730,12 @@ async function fulfilReadyAsset(
 
   await prisma.request.update({
     where: { id: request.id },
-    data: { status: "COMPLETED", needsShipping, locationMissing },
+    data: {
+      status: "COMPLETED",
+      needsShipping,
+      locationMissing,
+      fulfilledAt: new Date(),
+    },
   });
 
   notify(request.id, "DEVICE_ASSIGNED");
@@ -2136,7 +2202,12 @@ async function fulfilReadyAccessory(
 
   const updated = await prisma.request.update({
     where: { id: request.id },
-    data: { status: "COMPLETED", needsShipping, locationMissing },
+    data: {
+      status: "COMPLETED",
+      needsShipping,
+      locationMissing,
+      fulfilledAt: new Date(),
+    },
   });
 
   notify(request.id, "DEVICE_ASSIGNED");
@@ -2389,6 +2460,11 @@ export async function markRequestShipped(
   });
 
   notify(updated.id, "DEVICE_SHIPPED");
+  // And the people who will actually take delivery of it. They cannot hand
+  // over a parcel they were never told to expect, and they are who the
+  // reminders will chase until they mark it ready — being chased about
+  // something nobody mentioned is how a new role starts badly.
+  notify(updated.id, "SHIPMENT_INBOUND");
 
   return {
     success: true,
@@ -2397,14 +2473,32 @@ export async function markRequestShipped(
   };
 }
 
-/**
- * Admin marks a collect-path request as ready for pickup. The collect-path
- * twin of markRequestShipped. Valid only on a COMPLETED request that does NOT
- * need shipping and hasn't already been marked ready. Stamps collectionReadyAt
- * and notifies the requester their device is ready to collect.
- *
- * Admin-only — enforced by the route.
- */
+///  +-----------------------------------------------------------------+
+///  |          ONE HANDOVER STEP, ON BOTH PATHS                       |
+///  +-----------------------------------------------------------------+
+//
+//  This used to be the collect path's twin of markRequestShipped, and refused
+//  outright on anything marked for shipping — "This request is for shipping,
+//  not collection". That guard is gone, and its removal is the whole point of
+//  the change: a device that has been shipped to a site still has to be
+//  handed to the person who asked for it, and the stock keeper who takes
+//  delivery of it is who knows it arrived.
+//
+//  So collectionReadyAt now means one thing on both paths: the device is
+//  physically with the stock keeper and the requester can come and get it. On
+//  the collect path that is the moment it comes off the shelf; on the ship
+//  path it is the moment the parcel is opened. needsShipping no longer
+//  decides how a request ENDS — only whether there was a courier in the
+//  middle.
+//
+//  shippedAt IS NOT REQUIRED FIRST, deliberately. A device cannot physically
+//  arrive before it was sent, but "marked shipped" is an admin remembering to
+//  click a button, and blocking the person holding the parcel on that is
+//  backwards. The keeper's mark is the authoritative "it is here".
+//
+//  Stock keeper or admin — enforced by the route.
+///  +-----------------------------------------------------------------+
+
 export async function markReadyForCollection(
   requestId: number
 ): Promise<MarkReadyResponse> {
@@ -2415,16 +2509,30 @@ export async function markReadyForCollection(
   if (request.status !== "COMPLETED") {
     throw new AppError("Only a completed request can be marked ready for collection", 400);
   }
-  if (request.needsShipping) {
-    throw new AppError("This request is for shipping, not collection", 400);
-  }
   if (request.collectionReadyAt !== null) {
     throw new AppError("Request is already marked ready for collection", 400);
+  }
+  if (request.receivedAt !== null) {
+    throw new AppError("Request has already been received", 400);
   }
 
   const updated = await prisma.request.update({
     where: { id: requestId },
-    data: { collectionReadyAt: new Date() },
+    data: {
+      collectionReadyAt: new Date(),
+      // THE ESCALATION LADDER STARTS AGAIN, FOR THE OTHER PARTY. One clock
+      // and one counter now serve two people in sequence: the stock keeper
+      // between dispatch and handover, the requester after it. Carrying the
+      // keeper's progress across meant the requester's early nudges were
+      // swallowed by a stage somebody else had already advanced, and their
+      // first contact about the device was the day-30 escalation that copies
+      // in IT — about a delay that was not theirs.
+      //
+      // Paired with the reminder scan measuring from collectionReadyAt once
+      // it is set: reset without that would re-fire every stage the elapsed
+      // shipping time had already crossed, immediately.
+      reminderStage: 0,
+    },
   });
 
   notify(updated.id, "DEVICE_READY_FOR_COLLECTION");
@@ -2460,8 +2568,21 @@ export async function markRequestReceived(
   if (request.receivedAt !== null) {
     throw new AppError("Request is already marked received", 400);
   }
-  if (request.needsShipping && request.shippedAt === null) {
-    throw new AppError("Device must be marked shipped before it can be received", 400);
+
+  // A shipment already in the air when the flow changed keeps the old rule:
+  // its requester was told to confirm receipt themselves, and no stock keeper
+  // was ever going to mark it ready. Everything else has to pass through the
+  // handover first — that stamp is what says the device is physically with
+  // somebody the requester can collect it from.
+  if (isLegacyShipment(request, await getStockKeeperFlowCutover())) {
+    if (request.shippedAt === null) {
+      throw new AppError("Device must be marked shipped before it can be received", 400);
+    }
+  } else if (request.collectionReadyAt === null) {
+    throw new AppError(
+      "The stock keeper hasn't marked this ready to collect yet",
+      400
+    );
   }
 
   const updated = await prisma.request.update({
@@ -2476,7 +2597,10 @@ export async function markRequestReceived(
     success: true,
     request: updated,
     promptFeedback,
-    message: request.needsShipping
+    // Both paths end at a collection now — the shipped ones just had a
+    // courier leg first. The old "received" wording is kept for a legacy
+    // shipment, which genuinely did arrive at the requester's own desk.
+    message: isLegacyShipment(request, await getStockKeeperFlowCutover())
       ? "Device marked as received"
       : "Device marked as collected",
   };
@@ -2612,14 +2736,80 @@ export async function findModelRequestsAwaitingCompletion(): Promise<
  * Returns COMPLETED requests that have been shipped but not yet marked
  * received — the candidates the shipped-reminder job escalates over time.
  */
+///  +-----------------------------------------------------------------+
+///  |        EVERY REQUEST WITH SOMEBODY ON THE HOOK FOR IT           |
+///  +-----------------------------------------------------------------+
+//
+//  This used to return shipped rows only, which left the collect path with no
+//  reminders at all. That was survivable while IT was the one preparing those
+//  — they were looking at the queue anyway. It stopped being survivable when
+//  the handover became a stock keeper's mandatory step on BOTH paths: a
+//  collect-path request whose keeper never acts now stalls forever, and
+//  nobody hears anything.
+//
+//  Three groups, matching the three clocks in reminderClockStart:
+//
+//    1. Handed over, not yet collected  → the requester's to chase.
+//    2. Shipped, not yet handed over    → the destination keeper's.
+//    3. Collect path, fulfilled, not yet handed over → the local keeper's.
+//
+//  DELIBERATELY NOT INCLUDED: a ship-path request that IT has not dispatched
+//  yet. The action there belongs to IT, not to the destination site, and
+//  chasing a keeper about a device nobody has sent is exactly the misrouting
+//  this whole pass exists to remove. It sits in the admin queue, which IT
+//  already reads.
+//
+//  Corrections are excluded outright — nothing is ever collected for one, and
+//  a resolved correction is COMPLETED with no fulfilment stamps, which is
+//  byte-for-byte what group 3 looks like.
+//
+//  Unfiltered by elapsed time; the handler decides what is due.
+///  +-----------------------------------------------------------------+
+
 export async function findShippedAwaitingReceipt(): Promise<Request[]> {
   return prisma.request.findMany({
     where: {
       status: "COMPLETED",
-      shippedAt: { not: null },
       receivedAt: null,
+      requestKind: { not: "CORRECTION" },
+      OR: [
+        { collectionReadyAt: { not: null } },
+        { needsShipping: true, shippedAt: { not: null } },
+        { needsShipping: false, fulfilledAt: { not: null } },
+      ],
     },
   });
+}
+
+/**
+ * When the clock for THIS request's reminders started.
+ *
+ * The handover resets the ladder, so after it the elapsed time that matters is
+ * how long the requester has left the device sitting there — not how long the
+ * whole journey has taken. Measuring from dispatch throughout would hand a
+ * requester a device that was already three weeks into an escalation somebody
+ * else caused.
+ *
+ * Null only for a row with neither stamp, which the scan does not return.
+ */
+export function reminderClockStart(request: {
+  shippedAt: Date | null;
+  collectionReadyAt: Date | null;
+  fulfilledAt: Date | null;
+}): Date | null {
+  // Ordered by who is on the hook, latest handover first:
+  //   collectionReadyAt — the requester's, since it was handed to them
+  //   shippedAt         — the destination keeper's, since it was dispatched
+  //   fulfilledAt       — the local keeper's, since it came off the shelf
+  //
+  // fulfilledAt is LAST rather than first even though it is the earliest of
+  // the three: a shipped request has both, and measuring it from fulfilment
+  // would charge the destination keeper for the days it spent in a van.
+  // Trailing `?? null` is not decoration: `a ?? b ?? c` yields UNDEFINED when
+  // every operand is absent, and the callers test the result for null.
+  return (
+    request.collectionReadyAt ?? request.shippedAt ?? request.fulfilledAt ?? null
+  );
 }
 
 /** Records that a reminder stage has been sent for a shipped request. */

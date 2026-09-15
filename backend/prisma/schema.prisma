@@ -54,6 +54,23 @@ model Request {
   reuseNumberFromEmail String?
   reuseNumberPhone     String?
 
+  /// When IT actually handed the thing over to the fulfilment chain — the
+  /// asset checked out in Snipe, the accessory assigned. Stamped at the four
+  /// places that send DEVICE_ASSIGNED, and nowhere else: a correction and a
+  /// self-procured item both reach COMPLETED without anything needing to be
+  /// collected from anyone.
+  ///
+  /// EXISTS BECAUSE A COLLECT-PATH REQUEST HAS NO OTHER CLOCK. Its stock
+  /// keeper has to be reminded that something is sitting there waiting to be
+  /// handed out, and until this column there was nothing to measure that
+  /// from: shippedAt is null by definition on that path, and updatedAt is
+  /// bumped by setReminderStage itself, so a ladder built on it would reset
+  /// its own clock every time it fired and never escalate.
+  ///
+  /// Null on everything that predates the column. Deliberately left that way
+  /// rather than backfilled — see the migration.
+  fulfilledAt        DateTime?
+
   collectionReadyAt  DateTime?
   shippedAt          DateTime?
   receivedAt         DateTime?
@@ -61,6 +78,26 @@ model Request {
   locationMissing    Boolean   @default(false)
   trackingCode       String?
   trackingUrl        String?
+
+  /// WHERE THE REQUESTER WAS when this request was filed — their Snipe
+  /// location, snapshotted rather than looked up.
+  ///
+  /// Stock keepers see the requests for their own site, and the requests list
+  /// is not paginated: resolving this live would mean one Snipe user lookup
+  /// per row on every load of the page. Stamped at creation instead, and
+  /// indexed, so "requests at my location" is a query.
+  ///
+  /// NULL is a real state, not just a pre-migration one: a requester with no
+  /// Snipe location set, or a creation that happened while Snipe was
+  /// unreachable, both land here. A null-location request is actionable by
+  /// admins only — there is no site for a keeper's assignment to match, and
+  /// falling open would hand every keeper every unplaceable request.
+  userLocationId       Int?
+
+  /// The location's name at filing time. A display snapshot on the same terms
+  /// as accessoryOption above: it saves every reader a Snipe round trip, and
+  /// it is what remains once a location is renamed or deleted.
+  userLocationName     String?
 
   syncedToSharepointAt DateTime?
 
@@ -102,6 +139,11 @@ model Request {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  /// Drives the stock keeper's "requests at my location" view. Paired with
+  /// status because that view is always scoped to fulfilment-stage rows —
+  /// a keeper has no business with a request still awaiting approval.
+  @@index([userLocationId, status])
 }
 
 /* ===================== MODEL REQUESTS ===================== */
@@ -399,6 +441,13 @@ enum JobType {
   /// no cron expression and cannot go the way of a schedule that was never
   /// registered.
   LOG_CAPEX_PURCHASE
+  /// Stamp userLocationId/userLocationName onto requests filed before those
+  /// columns existed. Manual, not scheduled: it is a one-off migration chore
+  /// that reaches Snipe once per distinct requester, and putting it on a cron
+  /// would have it re-scan the rows it can never fill — the ones whose
+  /// requester genuinely has no Snipe location — on every tick, forever.
+  /// Idempotent, so running it twice is harmless.
+  BACKFILL_REQUEST_LOCATIONS
 }
 
 enum JobStatus {

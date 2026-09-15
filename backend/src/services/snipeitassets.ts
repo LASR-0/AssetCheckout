@@ -27,7 +27,8 @@ import type {
   CheckinFailure,
   OffboardResult,
   CorrectionModelMatch,
-  CorrectionAssetMatch
+  CorrectionAssetMatch,
+  LocationAsset
 } from '../types/snipeTypes.js';
 
 const BASE_URL = process.env.SNIPEIT_API_URL;
@@ -1649,6 +1650,74 @@ export async function getUserAssets(userId: number): Promise<SnipeUserAsset[]> {
  * Check a single asset back in. The note lands in Snipe's asset history so
  * offboarding checkins are attributable to the HRT integration.
  */
+///  +-----------------------------------------------------------------+
+///  |                  THE STOCK KEEPER'S INVENTORY                   |
+///  +-----------------------------------------------------------------+
+//
+//  Every asset Snipe places at one site. Backs the stock keeper's own page,
+//  which answers the two questions this app could not answer before: what is
+//  actually here, and whose is it.
+//
+//  FILTERED BY SNIPE, NOT BY US. ?location_id= is a server-side filter, so a
+//  site with forty assets costs one small response rather than the whole
+//  hardware table pulled down and discarded. The 500 cap matches the other
+//  list reads in this file.
+//
+//  rtd_location IS THE SITE, location IS WHERE IT IS RIGHT NOW. Snipe
+//  overwrites `location` with the holder's location on checkout, so filtering
+//  on it alone would drop every issued device the moment it was handed over —
+//  which is exactly the hardware a keeper is asked about. Snipe's filter
+//  covers both, and the rows are returned as it sends them.
+///  +-----------------------------------------------------------------+
+
+export async function getAssetsByLocation(locationId: number): Promise<LocationAsset[]> {
+  const url =
+    `${baseUrl.replace(/\/$/, "")}/api/v1/hardware` +
+    `?location_id=${encodeURIComponent(locationId)}&limit=500`;
+
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new AppError(
+      `Failed to fetch assets for location ${locationId}: status ${res.status}`,
+      500
+    );
+  }
+
+  const data = await res.json().catch(() => null);
+  const rows: any[] = data?.rows ?? [];
+
+  return rows.map((asset) => {
+    // assigned_to is a user object when issued to a person, but Snipe also
+    // allows checkout to another asset or to a location — those have no
+    // `name` worth showing a keeper, so anything unexpected reads as null
+    // rather than "[object Object]".
+    const assigned = asset.assigned_to;
+    const assignedTo =
+      assigned && typeof assigned === "object" && typeof assigned.name === "string"
+        ? assigned.name
+        : null;
+
+    return {
+      id: Number(asset.id),
+      assetTag: asset.asset_tag ?? "",
+      name: asset.name?.trim() || null,
+      serial: asset.serial?.trim() || null,
+      model: asset.model?.name ?? null,
+      manufacturer: asset.manufacturer?.name ?? null,
+      categoryName: asset.category?.name ?? null,
+      statusLabel: asset.status_label?.name ?? null,
+      // Snipe's own judgement, not ours — status labels are configurable per
+      // instance, so reading the meta flag beats matching on label names.
+      available: asset.status_label?.status_meta === "deployable",
+      assignedTo,
+    };
+  });
+}
+
 export async function checkinAsset(assetId: number, note?: string): Promise<unknown> {
   const url = `${baseUrl.replace(/\/$/, "")}/api/v1/hardware/${assetId}/checkin`;
 

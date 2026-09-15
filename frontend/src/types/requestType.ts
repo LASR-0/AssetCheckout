@@ -203,6 +203,30 @@ export interface Request {
   needsShipping?: boolean;
   locationMissing?: boolean;
 
+  /**
+   * Where the requester was when this was filed — their Snipe location,
+   * snapshotted onto the row rather than resolved live. Decides which stock
+   * keeper is responsible for it.
+   *
+   * Null is a real state, not only a legacy one: a requester with no Snipe
+   * location, or a submission made while Snipe was unreachable, both land
+   * here. A null-location request is actionable by admins only — there is no
+   * site for a keeper's assignment to match. See canActAsStockKeeper.
+   */
+  userLocationId?: number | null;
+  userLocationName?: string | null;
+
+  /**
+   * This shipment was already in the air when stock keepers shipped, so it
+   * keeps the OLD ending: the requester confirms receipt themselves, with no
+   * handover step, exactly as they were told to when it was dispatched.
+   *
+   * Computed by the backend from the cutover setting. Deliberately not a
+   * timestamp the client compares itself — the rule lives in one place, and
+   * the client is told the answer.
+   */
+  legacyShipment?: boolean;
+
   createdAt: string;
 
   adminApprovedBy?: string | null;

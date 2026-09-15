@@ -32,6 +32,7 @@ export type JobType =
   | "CLEANUP_ORPHAN_SNIPE_MODELS"
   | "PURGE_OLD_JOB_HISTORY"
   | "REMIND_SHIPPED_REQUESTS"
+  | "BACKFILL_REQUEST_LOCATIONS"
   | "LOG_CAPEX_PURCHASE";
 
 export type BackgroundJob = {

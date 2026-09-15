@@ -70,6 +70,15 @@ const SCHEDULED_JOBS: ScheduledJob[] = [
     label: "SharePoint Request Sync",
     description: "Sends new requests to the SharePoint ordering ledger nightly via Power Automate.",
   },
+  // No schedule, deliberately — a one-off chore run by hand after deploying
+  // stock keepers. ScheduledJobRow renders a row with no settingKey as
+  // "Run now" and nothing else, which is exactly right for it.
+  {
+    type: "BACKFILL_REQUEST_LOCATIONS",
+    label: "Backfill Request Locations",
+    description:
+      "Fills in the requester's location on requests filed before stock keepers existed, so keepers can see their site's in-flight work. Run once after deploying; safe to run again.",
+  },
 ];
 
 type Feedback = { text: string; ok: boolean };

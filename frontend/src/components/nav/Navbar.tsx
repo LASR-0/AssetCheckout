@@ -4,10 +4,18 @@ import { useTheme } from "next-themes";
 import TourButton from "@/components/tour/TourButton";
 import { ICON_BUTTON } from "./iconButton";
 import { withThemeReveal } from "@/lib/theme-transition";
+import { useAuth } from "@/hooks/useAuth";
+import { isStockKeeper } from "@/lib/permissions";
 
 export default function Navbar() {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Shown only to people who actually keep stock somewhere. An admin with no
+  // assignment can act as a keeper anywhere but has no home site for the page
+  // to open on, so the tab would lead them to an empty state — see StockPage.
+  const { stockKeeperLocations } = useAuth();
+  const showStock = isStockKeeper(stockKeeperLocations);
 
   const isActive = (path: string) =>
     location.pathname === path;
@@ -119,6 +127,25 @@ export default function Navbar() {
               </span>
               Requests
             </Link>
+
+            {showStock && (
+              <Link
+                to="/stock"
+                className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
+                  isActive("/stock")
+                    ? "text-nav-tab-selected after:bg-underline"
+                    : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined !text-xl"
+                  style={{ fontVariationSettings: `'FILL' 1` }}
+                >
+                  warehouse
+                </span>
+                Stock
+              </Link>
+            )}
 
             <Link
               to="/troubleshooting"
@@ -290,6 +317,26 @@ export default function Navbar() {
             </span>
             Requests
           </Link>
+
+          {showStock && (
+            <Link
+              to="/stock"
+              onClick={() => setMobileNavOpen(false)}
+              className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+                isActive("/stock")
+                  ? "text-nav-tab-selected"
+                  : "text-nav-tab hover:text-nav-tab-selected"
+              }`}
+            >
+              <span
+                className="material-symbols-outlined !text-xl"
+                style={{ fontVariationSettings: `'FILL' 1` }}
+              >
+                warehouse
+              </span>
+              Stock
+            </Link>
+          )}
 
           <Link
             to="/troubleshooting"

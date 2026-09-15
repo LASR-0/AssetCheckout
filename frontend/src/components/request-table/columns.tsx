@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { getInitials } from "@/lib/utils";
-import { canEditRequest, isApprover, isRequestee } from "@/lib/permissions";
+import {
+  canActAsStockKeeper,
+  canEditRequest,
+  isApprover,
+  isRequestee,
+} from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
 import { StatusBadge, deriveFulfilment, deriveStage } from "@/components/ui/statusbadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { Role } from "@/types/authType";
+import type { Role, StockKeeperLocation } from "@/types/authType";
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -22,6 +27,12 @@ export type RequestsTableMeta = {
   currentUserName: string;
   /** Snipe user id of the signed-in actor; null if it could not be resolved. */
   currentUserId: number | null;
+  /**
+   * Locations the actor keeps stock for. Composes with `role` rather than
+   * replacing it — see canActAsStockKeeper, which admins pass for every
+   * location regardless of what is in here.
+   */
+  stockKeeperLocations: StockKeeperLocation[];
   onApprove: (request: Request) => void;
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
@@ -452,20 +463,41 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
   const needsShipping = request.needsShipping ?? false;
   const isOwner = isRequestee(request, meta.currentUserId, meta.currentUserName);
 
+  // Already in the air when the handover step landed, so it keeps the ending
+  // its requester was told to expect. Decided by the backend — see the field.
+  const legacyShipment = request.legacyShipment ?? false;
+
+  // Scoped to THIS request's site: keeping stock at Brisbane grants nothing
+  // over a device sitting in Bundamba. Admins pass everywhere, which is what
+  // stops a site with no assigned keeper from stranding its requests.
+  const canKeepStock = canActAsStockKeeper(
+    role,
+    meta.stockKeeperLocations,
+    request.userLocationId ?? null
+  );
+
   // Stage-specific tooltip for the COMPLETED fulfilment badge, derived from
   // the same booleans that drive the badge itself.
+  //
+  // A shipped request that has NOT been handed over is now waiting on the
+  // destination site's stock keeper, not on the requester — saying otherwise
+  // sent people looking for a parcel nobody had given them yet. The legacy
+  // wording is kept for shipments that predate the handover step, because for
+  // those it is still true.
   const completedTip = isReceivedOrCollected
     ? needsShipping
       ? "Device received by the requester"
       : "Device collected by the requester"
     : isShipped
-    ? "Shipped — waiting for the requester to confirm receipt"
+    ? legacyShipment
+      ? "Shipped — waiting for the requester to confirm receipt"
+      : "Shipped — waiting for the stock keeper to receive it"
     : isReadyToCollect
-    ? "Ready — waiting for the requester to collect"
+    ? "Ready — waiting for the requester to collect it from the stock keeper"
     : isShipAwaitingPrep
     ? "Fulfilled — waiting for IT to ship the device"
     : isCollectAwaitingPrep
-    ? "Fulfilled — waiting for IT to prepare it for collection"
+    ? "Fulfilled — waiting for the stock keeper to make it ready"
     : undefined;
 
   // CORRECTIONS never offer a provisioning action. Without this branch a
@@ -532,8 +564,19 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
 
     // Owner receipt action takes precedence over role — an admin who is also
     // the requester can still mark their own device collected/received.
-    if (isOwner && (isReadyToCollect || isShipped)) {
-      const collecting = !needsShipping;
+    //
+    // AT THE SHIPPED STAGE THIS IS NOW ONLY FOR LEGACY SHIPMENTS. A shipment
+    // dispatched after the handover step landed is waiting on the destination
+    // site's stock keeper; offering its requester a "Mark received" button
+    // there would have them confirm a device nobody had handed them, skipping
+    // the step and leaving the keeper's queue holding a row that was already
+    // closed. Anything shipped before the cutover keeps the button, because
+    // that is the ending its requester was told to expect.
+    if (isOwner && (isReadyToCollect || (isShipped && legacyShipment))) {
+      // At ready-to-collect it is always a collection now, on both paths —
+      // the shipped ones just had a courier leg first, and the requester is
+      // picking it up from their stock keeper either way.
+      const collecting = isReadyToCollect;
       return (
         <ActionRow>
           <ActionButton
@@ -542,46 +585,61 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
             color="text-intent-done"
             hoverBg="hover:bg-intent-done/10"
             border="border-intent-done/40"
-            title={collecting ? "Confirm you've collected this device" : "Confirm you've received this device"}
+            title={
+              collecting
+                ? "Confirm you've collected this device from your stock keeper"
+                : "Confirm you've received this device"
+            }
             onClick={() => meta.onMarkReceived(request)}
           />
         </ActionRow>
       );
     }
 
-    // Admin prep actions: ship-path → Mark shipped; collect-path → Mark ready.
-    if (role === "ADMIN") {
-      if (isShipAwaitingPrep) {
-        return (
-          <ActionRow>
-            <ActionButton
-              icon="local_shipping"
-              label="Mark shipped"
-              color="text-intent-done"
-              hoverBg="hover:bg-intent-done/10"
-              border="border-intent-done/40"
-              title="Mark this device as shipped to the requester"
-              onClick={() => meta.onMarkShipped(request)}
-            />
-          </ActionRow>
-        );
-      }
-      if (isCollectAwaitingPrep) {
-        return (
-          <ActionRow>
-            <ActionButton
-              icon="package_2"
-              label="Mark ready"
-              color="text-intent-done"
-              hoverBg="hover:bg-intent-done/10"
-              border="border-intent-done/40"
-              title="Mark this device as ready for collection"
-              onClick={() => meta.onMarkReadyForCollection(request)}
-            />
-          </ActionRow>
-        );
-      }
-      return <BadgeWithTooltip status={completedBadgeKey} tip={completedTip} />;
+    // Dispatch stays with IT — shipping is a logistics action, and nothing
+    // about it belongs to the destination site.
+    if (role === "ADMIN" && isShipAwaitingPrep) {
+      return (
+        <ActionRow>
+          <ActionButton
+            icon="local_shipping"
+            label="Mark shipped"
+            color="text-intent-done"
+            hoverBg="hover:bg-intent-done/10"
+            border="border-intent-done/40"
+            title="Mark this device as shipped to the requester"
+            onClick={() => meta.onMarkShipped(request)}
+          />
+        </ActionRow>
+      );
+    }
+
+    // THE HANDOVER, on both paths. Off the shelf at the requester's own site,
+    // or out of the parcel that just arrived there — one action either way,
+    // because from the requester's side the two are the same thing: the
+    // device is with somebody they can collect it from.
+    //
+    // Excluded for a legacy shipment, whose requester can still close it
+    // themselves; adding a second way to finish those would just mean two
+    // people racing for the same row.
+    if (canKeepStock && (isCollectAwaitingPrep || (isShipped && !legacyShipment))) {
+      return (
+        <ActionRow>
+          <ActionButton
+            icon="package_2"
+            label="Mark ready to collect"
+            color="text-intent-done"
+            hoverBg="hover:bg-intent-done/10"
+            border="border-intent-done/40"
+            title={
+              isShipped
+                ? "Confirm this arrived at your location and is ready for the requester"
+                : "Mark this device as ready for the requester to collect"
+            }
+            onClick={() => meta.onMarkReadyForCollection(request)}
+          />
+        </ActionRow>
+      );
     }
 
     // Everyone else (manager, non-owner requester, owner at non-actionable

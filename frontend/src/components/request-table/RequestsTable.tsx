@@ -11,13 +11,15 @@ import {
 } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import { columns, type RequestsTableMeta } from "./columns";
-import type { Role } from "@/types/authType";
+import type { Role, StockKeeperLocation } from "@/types/authType";
 
 type Props = {
   requests: Request[];
   role: Role;
   currentUserName: string;
   currentUserId: number | null;
+  /** Locations the actor keeps stock for — gates the handover action. */
+  stockKeeperLocations: StockKeeperLocation[];
   onApprove: (request: Request) => void;
   onReject: (request: Request) => void;
   onCreateModel: (request: Request) => void;
@@ -123,6 +125,7 @@ export default function RequestsTable({
   role,
   currentUserName,
   currentUserId,
+  stockKeeperLocations,
   onApprove,
   onReject,
   onCreateModel,
@@ -164,10 +167,16 @@ export default function RequestsTable({
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    // NOTE: TanStack types `meta` as an open interface, so a field the cell
+    // reads but nobody passes is NOT a type error here — it arrives as
+    // undefined and fails inside the cell. Anything added to
+    // RequestsTableMeta has to be threaded through Props and set here by
+    // hand; the compiler will not remind you.
     meta: {
       role,
       currentUserName,
       currentUserId,
+      stockKeeperLocations,
       onApprove,
       onReject,
       onCreateModel,

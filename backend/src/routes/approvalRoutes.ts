@@ -40,7 +40,9 @@ import {
   isAdminEmail,
   isApprover,
   isRequestee,
+  canActAsStockKeeper,
 } from "../config/auth.js";
+import { resolveStockKeeperActor } from "../services/stockKeeper.js";
 
 const router = express.Router();
 
@@ -673,7 +675,15 @@ router.post("/:requestId/ship", async (req, res, next) => {
 });
 
 /**
- * Admin marks a collect-path request as ready for pickup. Admin-only.
+ * The stock keeper hands the device over: it is physically with them and the
+ * requester can come and get it. Now the step on BOTH paths — a shipped
+ * device is received at its destination site before anyone collects it — so
+ * this is no longer admin-only, and no longer collect-path-only.
+ *
+ * Gated on the request's OWN location, not on the actor having some
+ * assignment somewhere: a keeper at Brisbane must not be able to hand over a
+ * device sitting in Bundamba. Admins pass for every location, which is what
+ * keeps a site with no assigned keeper from stranding its requests.
  */
 router.post("/:requestId/ready-for-collection", async (req, res, next) => {
   try {
@@ -686,8 +696,27 @@ router.post("/:requestId/ready-for-collection", async (req, res, next) => {
     if (Number.isNaN(requestId)) {
       return res.status(400).json({ success: false, message: "Invalid requestId" });
     }
-    if (!isAdminEmail(getActorEmail(req))) {
-      return res.status(403).json({ success: false, message: "Admin access required" });
+
+    // Loaded for its location before the permission check, since the check is
+    // about WHERE the device is. A missing request is a 404 either way, and
+    // saying so before the 403 leaks nothing an actor couldn't already infer.
+    const target = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { userLocationId: true },
+    });
+    if (!target) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    const actor = await resolveStockKeeperActor(req);
+    if (!canActAsStockKeeper(actor, target.userLocationId)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          target.userLocationId === null
+            ? "This request has no recorded location, so only an admin can mark it ready"
+            : "You aren't a stock keeper for this location",
+      });
     }
 
     const result = await markReadyForCollection(requestId);

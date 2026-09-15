@@ -10,7 +10,7 @@ import { getRequests } from "@/api/requests";
 import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
 import { deriveStage, isDoneStage } from "@/components/ui/statusbadge";
-import { getColumnVisibility, isApprover } from "@/lib/permissions";
+import { getColumnVisibility, isApprover, isStockKeeper } from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
@@ -86,6 +86,12 @@ export default function RequestTablePage() {
   });
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
 
+  // "ALL", or a Snipe location id as a string. Seeded from the URL on the same
+  // terms as the stage filter, so a stock keeper can bookmark their own site.
+  const [location, setLocation] = useState(
+    () => searchParams.get("location") ?? "ALL"
+  );
+
   // ?requestId=<n> pins the table to one row — what the home page's recent
   // requests list links to. Kept separate from `search` because the free-text
   // filter deliberately ignores `id` and every `*Id` key (isNoiseKey in
@@ -111,9 +117,20 @@ export default function RequestTablePage() {
 
   const [selectedTier, setSelectedTier] = useState<string>("STANDARD");
 
-  const { role, name: currentUserName, userId: currentUserId } = useAuth();
+  const {
+    role,
+    name: currentUserName,
+    userId: currentUserId,
+    stockKeeperLocations,
+  } = useAuth();
   useTourReady(loaded);
-  const columnVisibility = getColumnVisibility(role);
+  // Keeping stock grants columns on its own: a keeper who has never filed a
+  // request is role null, and without this their site's rows render as blank
+  // lines. See getColumnVisibility.
+  const columnVisibility = getColumnVisibility(
+    role,
+    isStockKeeper(stockKeeperLocations)
+  );
   const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
   const [createAccessoryDialogOpen, setCreateAccessoryDialogOpen] = useState(false);
@@ -229,9 +246,41 @@ export default function RequestTablePage() {
    * and "rows showing the Shipped badge" cannot disagree — which is the whole
    * reason the stage is derived in one place rather than stored per row.
    */
+  /**
+   * The sites present in what this actor can see, for the location filter.
+   *
+   * Derived from the rows rather than fetched: every request already carries
+   * the requester's location, and the only sites worth offering are the ones
+   * actually on screen. That also means the control is empty for someone with
+   * nothing to filter, which is what hides it.
+   *
+   * Rows with no recorded location are left out — "unrecorded" is not a site
+   * somebody can be a keeper of, and offering it as a filter would suggest it
+   * is.
+   */
+  const locationOptions = useMemo(() => {
+    const byId = new Map<number, string>();
+    for (const r of requests) {
+      const id = r.userLocationId ?? null;
+      if (id === null) continue;
+      if (!byId.has(id)) byId.set(id, r.userLocationName ?? `Location #${id}`);
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  }, [requests]);
+
   const visibleRequests = useMemo(() => {
-    const scoped =
+    const pinScoped =
       pinnedId === null ? requests : requests.filter((r) => r.id === pinnedId);
+
+    // Applied before the stage filter, and on the same terms as the pin: the
+    // two compose, so narrowing to a site and then to a stage does what it
+    // looks like it does.
+    const scoped =
+      location === "ALL"
+        ? pinScoped
+        : pinScoped.filter((r) => String(r.userLocationId ?? "") === location);
 
     if (status === "ALL") return scoped;
 
@@ -243,7 +292,7 @@ export default function RequestTablePage() {
         return !isDoneStage(stage) && stage !== "REJECTED";
       return stage === status;
     });
-  }, [requests, status, pinnedId]);
+  }, [requests, status, pinnedId, location]);
 
   /** Drop the pin and strip it from the URL, so a refresh doesn't reinstate a
    *  filter the user just dismissed. Other params (status, q) are preserved. */
@@ -615,6 +664,9 @@ export default function RequestTablePage() {
             role={role}
             pinnedId={pinnedId}
             onClearPin={clearPin}
+            location={location}
+            setLocation={setLocation}
+            locationOptions={locationOptions}
           />
 
           {/* TABLE */}
@@ -623,6 +675,7 @@ export default function RequestTablePage() {
             role={role}
             currentUserName={currentUserName}
             currentUserId={currentUserId}
+            stockKeeperLocations={stockKeeperLocations}
             onApprove={handleApprove}
             onReject={handleRejectClick}
             onCreateModel={handleCreateModel}

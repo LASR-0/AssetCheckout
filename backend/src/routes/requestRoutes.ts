@@ -7,7 +7,12 @@ import {
 } from "../services/snipeitassets.js";
 import { getAllAccessories } from "../services/snipeitaccessories.js";
 import { findSnipeUserByEmail, resolveActorUserId } from "../services/snipeitassets.js";
-import { getStandardAccessories } from "../services/settings.js";
+import {
+  getStandardAccessories,
+  getStockKeeperFlowCutover,
+  getStockKeeperLocationIdsForUser,
+  isLegacyShipment,
+} from "../services/settings.js";
 import { isValidRequestStatus, isValidRequestType } from "../utils/validation.js";
 import { prisma } from "../db/prisma.js";
 import {
@@ -20,6 +25,7 @@ import {
   getActorEmail,
   isAdminEmail,
   canSeeRequest,
+  stockKeeperCanSeeRequest,
 } from "../config/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
 
@@ -270,6 +276,12 @@ router.get("/averages", async (req, res, next) => {
  *     admin's accessoryLabel, else the option primary's catalog name).
  *   - All four are null for non-accessory rows; accessoryRemaining/Location
  *     are also null for accessory rows without a selection.
+ *
+ * Also stamped on every row (not accessory-specific):
+ *   - legacyShipment: this was already in the air when stock keepers shipped,
+ *     so it keeps the old ending — the requester confirms receipt themselves
+ *     with no handover step. Computed server-side from the cutover setting so
+ *     the client never re-implements the comparison.
  */
 router.get("/", async (req, res, next) => {
   try {
@@ -347,7 +359,46 @@ router.get("/", async (req, res, next) => {
       }
 
       const actor = { id: actorId, name: actorName };
-      visible = requests.filter((r) => canSeeRequest(r, actor));
+
+      ///  +-----------------------------------------------------------------+
+      ///  |        A STOCK KEEPER SEES THEIR SITE'S PHYSICAL WORK           |
+      ///  +-----------------------------------------------------------------+
+      //
+      //  WIDENS, NEVER NARROWS. Their own requests and the ones they approve
+      //  come through canSeeRequest exactly as before; this adds the rows they
+      //  are responsible for as a keeper, and nothing is taken away.
+      //
+      //  FULFILMENT-STAGE ROWS ONLY. A keeper is not an approver and has no
+      //  business reading why somebody asked for a laptop — the `reason` field
+      //  carries things like a replacement tied to a performance issue, and it
+      //  is visible to the requester, their approver and IT for good reason.
+      //  Restricting to COMPLETED means there is something physical at their
+      //  site; anything earlier is somebody else's decision to make.
+      //
+      //  Collected rows stay visible, deliberately: a keeper needs a record of
+      //  what they handed out, and hiding a row the moment it is closed makes
+      //  the one question they will actually be asked — "did I ever get that?"
+      //  — unanswerable.
+      //
+      //  SELF-PROCURED IS EXCLUDED. The requester bought it themselves; it
+      //  never passes through a stock keeper's hands, so it is not theirs to
+      //  see. Corrections are excluded for the same reason — nothing is ever
+      //  collected for one.
+      ///  +-----------------------------------------------------------------+
+      let keeperLocationIds: number[] = [];
+      if (actorId !== null) {
+        try {
+          keeperLocationIds = await getStockKeeperLocationIdsForUser(actorId);
+        } catch (err) {
+          // Degrades to "keeps nothing" — they still see their own rows.
+          console.error("[requests] could not resolve stock keeper locations:", err);
+        }
+      }
+      const keeperSites = new Set(keeperLocationIds);
+
+      visible = requests.filter(
+        (r) => canSeeRequest(r, actor) || stockKeeperCanSeeRequest(r, keeperSites)
+      );
     }
 
     // Enrich accessory rows: live stock (drives "Add stock") plus the two
@@ -360,6 +411,13 @@ router.get("/", async (req, res, next) => {
     const needsLabels = accessoryRows.some(
       (r) => r.accessoryOptionId != null || r.accessoryOption != null
     );
+
+    // One read for the whole page. Whether a row keeps the OLD ending is a
+    // comparison against this, and it is computed HERE rather than shipped to
+    // the client as a timestamp: the rule is "was this dispatched before the
+    // flow changed", and re-implementing that in the browser is how the two
+    // ends drift. The client gets the answer, not the inputs.
+    const stockKeeperCutover = await getStockKeeperFlowCutover();
 
     let catalogById:
       | Map<number, { remaining: number; locationName: string | null; name: string }>
@@ -405,10 +463,13 @@ router.get("/", async (req, res, next) => {
           }
         : null;
 
+      const legacyShipment = isLegacyShipment(r, stockKeeperCutover);
+
       if (r.requestKind !== "ACCESSORY") {
         return {
           ...r,
           lastEdit,
+          legacyShipment,
           accessoryRemaining: null,
           accessoryLocationName: null,
           accessoryOptionDisplay: null,
@@ -448,6 +509,7 @@ router.get("/", async (req, res, next) => {
       return {
         ...r,
         lastEdit,
+        legacyShipment,
         accessoryRemaining: stock ? stock.remaining : null,
         accessoryLocationName: stock ? stock.locationName : null,
         accessoryOptionDisplay,
