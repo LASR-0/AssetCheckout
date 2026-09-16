@@ -19,4 +19,26 @@ export type LocationAsset = {
   available: boolean;
   /** Who currently holds it, when it is checked out to a person. */
   assignedTo: string | null;
+  /** When it was last checked out, or null if it never has been. */
+  lastCheckout: string | null;
+};
+
+/**
+ * An accessory line at a site — the accessory half of the stock ledger.
+ *
+ * NOT shaped like LocationAsset, deliberately. Accessories are stock with a
+ * quantity rather than serialised units, so there is no tag, no serial and no
+ * single holder; `qty` and `remaining` are the whole story.
+ */
+export type LocationAccessory = {
+  id: number;
+  name: string;
+  modelNumber: string | null;
+  manufacturer: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  qty: number;
+  remaining: number;
+  locationId: number | null;
+  locationName: string | null;
 };

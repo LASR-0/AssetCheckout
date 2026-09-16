@@ -29,6 +29,22 @@ export async function getRequests(params?: GetRequestsParams): Promise<GetReques
 }
 
 /**
+ * Clear the "new" marker on one request, for the signed-in viewer only.
+ *
+ * Fire-and-forget by design: it is called from a hover, it changes nothing
+ * the reader can see beyond a dot the UI has already removed optimistically,
+ * and a failed call simply means the marker returns on the next load. Raising
+ * an error for that would be noise about nothing.
+ */
+export async function markRequestSeen(requestId: number): Promise<void> {
+  try {
+    await apiFetch<void>(`/api/requests/${requestId}/seen`, { method: "POST" });
+  } catch {
+    // Intentionally silent — see above.
+  }
+}
+
+/**
  * A sparse set of corrections to an existing request. An omitted key means
  * "leave it alone"; `null` is a real value and clears the column.
  *

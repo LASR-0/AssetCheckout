@@ -296,6 +296,18 @@ router.get("/", async (req, res, next) => {
 
     const isAdmin = isAdminEmail(getActorEmail(req));
 
+    // Resolved for everybody now, not just non-admins: the row's read state is
+    // per person, and an admin has one too.
+    let viewerId: number | null = null;
+    const viewerEmail = getActorEmail(req);
+    if (viewerEmail) {
+      try {
+        viewerId = await resolveActorUserId(viewerEmail);
+      } catch (err) {
+        console.error("[requests] could not resolve viewer:", err);
+      }
+    }
+
     const { status, requestType } = req.query;
 
     const where = {
@@ -335,6 +347,12 @@ router.get("/", async (req, res, next) => {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        // Every seen row for the page, filtered to the actor below. Fetching
+        // the lot and narrowing in JS rather than a per-actor `where` keeps
+        // this one query: the actor's id is resolved further down, after the
+        // admin short-circuit, and the set is small — one row per person who
+        // has looked at a request, not per person who could.
+        seenBy: { select: { userId: true } },
       },
     });
 
@@ -345,18 +363,8 @@ router.get("/", async (req, res, next) => {
 
       // Null covers both "no Snipe account" and "Snipe did not answer". The
       // id clause simply drops out in either case, which is why the name
-      // clause below is still here.
-      let actorId: number | null = null;
-      if (actorEmail) {
-        try {
-          actorId = await resolveActorUserId(actorEmail);
-        } catch (err) {
-          console.error(
-            "[requests] could not resolve actor to a Snipe user, falling back to name matching:",
-            err
-          );
-        }
-      }
+      // clause below is still here. Resolved once, above, for every viewer.
+      const actorId = viewerId;
 
       const actor = { id: actorId, name: actorName };
 
@@ -448,7 +456,13 @@ router.get("/", async (req, res, next) => {
       }
     }
 
-    const enriched = visible.map(({ edits, ...r }) => {
+    const enriched = visible.map(({ edits, seenBy, ...r }) => {
+      // One boolean instead of the join rows: the client only ever asks "have
+      // I seen this", and shipping other people's read state would be both
+      // useless and a quiet disclosure of who has been looking at what.
+      const seenByMe =
+        viewerId !== null && seenBy.some((v) => v.userId === viewerId);
+
       // The `edits` relation collapses to a single decoded `lastEdit`, so the
       // client never has to know that `changes` is a JSON string on disk. Null
       // for the overwhelming majority of rows, which have never been edited.
@@ -470,6 +484,7 @@ router.get("/", async (req, res, next) => {
           ...r,
           lastEdit,
           legacyShipment,
+          seenByMe,
           accessoryRemaining: null,
           accessoryLocationName: null,
           accessoryOptionDisplay: null,
@@ -510,6 +525,7 @@ router.get("/", async (req, res, next) => {
         ...r,
         lastEdit,
         legacyShipment,
+        seenByMe,
         accessoryRemaining: stock ? stock.remaining : null,
         accessoryLocationName: stock ? stock.locationName : null,
         accessoryOptionDisplay,
@@ -522,6 +538,176 @@ router.get("/", async (req, res, next) => {
       count: enriched.length,
       requests: enriched,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                      MARK A REQUEST SEEN                        |
+///  +-----------------------------------------------------------------+
+//
+//  Clears the "new and yours" marker for the calling actor only. It records
+//  ATTENTION, not agreement and not action: the request's own state is
+//  untouched, so a dismissed approval is still pending and still turns up
+//  under the "Needs you" filter.
+//
+//  NOT PERMISSION-GATED BEYOND IDENTITY. The worst a caller can do is mark
+//  their OWN view of a request as read — there is nothing here to escalate
+//  to, and no other person's state is reachable. Guarding it on visibility
+//  would mean loading and re-deriving the whole visibility rule to write a
+//  row that says "this person stopped being nudged".
+//
+//  IDEMPOTENT. The hover that triggers it fires whenever a pointer rests on a
+//  row, so the same request is marked seen many times over a session; the
+//  unique constraint absorbs the repeats and the first seenAt is kept.
+///  +-----------------------------------------------------------------+
+
+router.post("/:requestId/seen", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (!Number.isInteger(requestId) || requestId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    const actorEmail = getActorEmail(req);
+    if (!actorEmail) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+
+    let actorId: number | null = null;
+    try {
+      actorId = await resolveActorUserId(actorEmail);
+    } catch (err) {
+      console.error("[seen] could not resolve actor:", err);
+    }
+    if (actorId === null) {
+      // Nothing to key the row on. Not an error the UI should surface — the
+      // marker simply stays until the id resolves on a later visit.
+      return res.json({ success: true, recorded: false });
+    }
+
+    await prisma.requestSeen.upsert({
+      where: { requestId_userId: { requestId, userId: actorId } },
+      create: { requestId, userId: actorId },
+      update: {},
+    });
+
+    res.json({ success: true, recorded: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                 WHAT IS WAITING ON THIS PERSON                  |
+///  +-----------------------------------------------------------------+
+//
+//  Two numbers for the two nav badges. A badge is a claim that the reader has
+//  something to DO, so this counts only work that is genuinely theirs and
+//  genuinely blocked on them — not "requests you can see", which for an admin
+//  is the whole table and would make the badge permanent furniture.
+//
+//  DELIBERATELY NOT the full action matrix from columns.tsx. Reimplementing
+//  every branch of that server-side would give two copies of a large rule to
+//  keep in step, for a number. These are the three states where somebody is
+//  actually waiting on a reply, plus the keeper's handover queue:
+//
+//    approver  — a request naming you, still PENDING
+//    requester — your own device, marked ready, not yet confirmed collected
+//    admin     — approved by the manager, not yet signed off by IT
+//    keeper    — at your site, fulfilled, not yet handed over
+//
+//  A badge that overcounts gets ignored within a week, so where the rule is
+//  uncertain it undercounts on purpose.
+///  +-----------------------------------------------------------------+
+
+router.get("/action-counts", async (req, res, next) => {
+  try {
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+
+    const actorEmail = getActorEmail(req);
+    const isAdmin = isAdminEmail(actorEmail);
+
+    let actorId: number | null = null;
+    if (actorEmail) {
+      try {
+        actorId = await resolveActorUserId(actorEmail);
+      } catch (err) {
+        // Degrades to zero rather than failing the navbar on every page load.
+        console.error("[action-counts] could not resolve actor:", err);
+      }
+    }
+
+    let requests = 0;
+    let stock = 0;
+
+    if (actorId !== null) {
+      // `seenBy: none` is what makes this a NOTIFICATION rather than a
+      // workload. The same rows stay reachable through the "Needs you"
+      // filter, which is state-based and does not clear — dismissing the
+      // nudge never hides the work.
+      const unseen = { seenBy: { none: { userId: actorId } } };
+
+      const [approvals, toCollect] = await Promise.all([
+        prisma.request.count({
+          where: { managerId: actorId, status: "PENDING", ...unseen },
+        }),
+        prisma.request.count({
+          where: {
+            userId: actorId,
+            status: "COMPLETED",
+            collectionReadyAt: { not: null },
+            receivedAt: null,
+            ...unseen,
+          },
+        }),
+      ]);
+      requests = approvals + toCollect;
+
+      // The keeper's handover queue, mirroring StockPage. Legacy shipments are
+      // excluded: their requester closes them directly, so they are not work
+      // waiting on a keeper.
+      const cutover = await getStockKeeperFlowCutover();
+      const sites = await getStockKeeperLocationIdsForUser(actorId);
+      if (sites.length > 0) {
+        const candidates = await prisma.request.findMany({
+          where: {
+            userLocationId: { in: sites },
+            status: "COMPLETED",
+            collectionReadyAt: null,
+            receivedAt: null,
+            requestKind: { not: "CORRECTION" },
+            selfProcured: null,
+            OR: [
+              { needsShipping: true, shippedAt: { not: null } },
+              { needsShipping: false, fulfilledAt: { not: null } },
+            ],
+          },
+          select: {
+            needsShipping: true,
+            shippedAt: true,
+            collectionReadyAt: true,
+          },
+        });
+        stock = candidates.filter((r) => !isLegacyShipment(r, cutover)).length;
+      }
+    }
+
+    if (isAdmin && actorId !== null) {
+      requests += await prisma.request.count({
+        where: {
+          status: "APPROVED",
+          adminApprovedAt: null,
+          seenBy: { none: { userId: actorId } },
+        },
+      });
+    }
+
+    res.json({ success: true, requests, stock });
   } catch (err) {
     next(err);
   }

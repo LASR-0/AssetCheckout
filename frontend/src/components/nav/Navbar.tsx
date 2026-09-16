@@ -6,6 +6,8 @@ import { ICON_BUTTON } from "./iconButton";
 import { withThemeReveal } from "@/lib/theme-transition";
 import { useAuth } from "@/hooks/useAuth";
 import { isStockKeeper } from "@/lib/permissions";
+import CountBadge from "@/components/ui/countbadge";
+import { useActionCounts } from "@/hooks/useActionCounts";
 
 export default function Navbar() {
   const location = useLocation();
@@ -16,6 +18,9 @@ export default function Navbar() {
   // to open on, so the tab would lead them to an empty state — see StockPage.
   const { stockKeeperLocations } = useAuth();
   const showStock = isStockKeeper(stockKeeperLocations);
+
+  // What is actually blocked on this person, for the nav badges.
+  const counts = useActionCounts();
 
   const isActive = (path: string) =>
     location.pathname === path;
@@ -126,6 +131,7 @@ export default function Navbar() {
                 pending_actions
               </span>
               Requests
+              <CountBadge count={counts.requests} label="requests need you" />
             </Link>
 
             {showStock && (
@@ -141,9 +147,10 @@ export default function Navbar() {
                   className="material-symbols-outlined !text-xl"
                   style={{ fontVariationSettings: `'FILL' 1` }}
                 >
-                  warehouse
+                  inventory_2
                 </span>
                 Stock
+                <CountBadge count={counts.stock} label="waiting to hand over" />
               </Link>
             )}
 
@@ -316,6 +323,7 @@ export default function Navbar() {
               pending_actions
             </span>
             Requests
+            <CountBadge count={counts.requests} label="requests need you" />
           </Link>
 
           {showStock && (
@@ -332,9 +340,10 @@ export default function Navbar() {
                 className="material-symbols-outlined !text-xl"
                 style={{ fontVariationSettings: `'FILL' 1` }}
               >
-                warehouse
+                inventory_2
               </span>
               Stock
+              <CountBadge count={counts.stock} label="waiting to hand over" />
             </Link>
           )}
 

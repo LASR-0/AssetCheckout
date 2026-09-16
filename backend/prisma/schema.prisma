@@ -132,6 +132,7 @@ model Request {
   rejectedAt        DateTime?
 
   modelRequest   ModelRequest?
+  seenBy         RequestSeen[]
   correctionDetail CorrectionDetail?
   quoteDetail    QuoteDetail?
   selfProcured   SelfProcuredDetail?
@@ -170,6 +171,41 @@ model ModelRequest {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+/* ===================== REQUEST SEEN ===================== */
+/// One row per (person, request) they have laid eyes on.
+///
+/// WHY READ STATE AND NOT JUST WORKFLOW STATE. The row marker answers "what
+/// is new and mine", which is two questions: whether a request is blocked on
+/// you, and whether you already know about it. The first is derivable from
+/// the request; the second is not knowable from anything the app already
+/// stores, because it is a fact about a PERSON rather than about the request.
+///
+/// DISMISSIBLE ON PURPOSE. A request can sit blocked on an approver for a
+/// fortnight while everyone waits on a supplier, and nagging somebody who is
+/// not the reason for the delay is how an indicator gets tuned out. Clearing
+/// the marker never clears the work: the "Needs you" filter is state-based
+/// and still finds it.
+///
+/// ROWS ONLY EXIST FOR THINGS SEEN, so the table is bounded by actual
+/// attention rather than by users × requests. Nothing writes a row for a
+/// request somebody never looked at.
+model RequestSeen {
+  id        Int      @id @default(autoincrement())
+
+  requestId Int
+  request   Request  @relation(fields: [requestId], references: [id])
+
+  /// Snipe user id — the same identity every other actor column is keyed on.
+  userId    Int
+
+  seenAt    DateTime @default(now())
+
+  /// Seeing something twice is not a new fact, and the write path relies on
+  /// this to make "mark seen" idempotent.
+  @@unique([requestId, userId])
+  @@index([userId])
 }
 
 /* ===================== REQUEST EDITS ===================== */

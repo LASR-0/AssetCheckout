@@ -1714,6 +1714,7 @@ export async function getAssetsByLocation(locationId: number): Promise<LocationA
       // instance, so reading the meta flag beats matching on label names.
       available: asset.status_label?.status_meta === "deployable",
       assignedTo,
+      lastCheckout: asset.last_checkout?.datetime ?? null,
     };
   });
 }

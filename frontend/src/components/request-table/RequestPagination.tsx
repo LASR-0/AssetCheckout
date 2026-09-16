@@ -4,6 +4,14 @@ type Props = {
   count: number;
   total: number;
   totalItems: number;
+  /**
+   * What is being paginated, for the label. Defaults to "requests" so every
+   * existing caller is unchanged.
+   *
+   * Shared rather than copied: the stock ledger paginates the same way, and
+   * two hand-matched pagination bars drift the first time either is touched.
+   */
+  noun?: string;
 };
 
 export default function RequestsPagination({
@@ -11,13 +19,14 @@ export default function RequestsPagination({
   setPage,
   count,
   total,
-  totalItems
+  totalItems,
+  noun = "requests"
 }: Props) {
 
   const start = (page - 1) * total + 1;
   const end = Math.min(page * total, totalItems);
 
-  const label = `Showing ${start}-${end} requests, page ${page} of ${count}`;
+  const label = `Showing ${start}-${end} ${noun}, page ${page} of ${count}`;
 
   return (
     

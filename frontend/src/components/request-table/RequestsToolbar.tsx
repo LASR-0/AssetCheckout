@@ -72,6 +72,9 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
   //   DONE         the terminal stages, i.e. the requester actually has it
   const statusOptions = [
     { label: "All", value: "ALL", icon: "list" },
+    // First after All, because it is the one filter somebody arrives looking
+    // for — the nav badge told them a number and this is where it resolves.
+    { label: "Needs you", value: "NEEDS_ME", icon: "notifications_active" },
     { label: "In progress", value: "IN_PROGRESS", icon: "pending" },
     { label: "Pending", value: "PENDING", icon: "schedule" },
     { label: "Awaiting IT", value: "AWAITING_IT", icon: "shield_person" },

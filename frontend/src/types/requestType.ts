@@ -227,6 +227,15 @@ export interface Request {
    */
   legacyShipment?: boolean;
 
+  /**
+   * Whether the SIGNED-IN viewer has already laid eyes on this row. Per
+   * person, so it differs between two people looking at the same request.
+   *
+   * Drives the "new and yours" marker together with needsMyAction — read
+   * state alone is not interesting, and neither is workflow state alone.
+   */
+  seenByMe?: boolean;
+
   createdAt: string;
 
   adminApprovedBy?: string | null;

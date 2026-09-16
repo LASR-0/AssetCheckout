@@ -40,6 +40,87 @@ export function isApprover(
 
 
 ///  +-----------------------------------------------------------------+
+///  |                   WHAT IS WAITING ON YOU                        |
+///  +-----------------------------------------------------------------+
+//
+//  The nav badge says "5 requests need you" and then leaves the reader to
+//  find them in a table of a hundred rows. This is the predicate that closes
+//  that loop — it drives the row marker and the "Needs you" filter, so the
+//  number, the dots and the filtered list are three views of one rule rather
+//  than three rules that happen to agree today.
+//
+//  MIRRORS /api/requests/action-counts. If the two drift, the badge counts
+//  rows the filter won't show, which is worse than having no badge: it sends
+//  somebody hunting for work that isn't there.
+//
+//  DELIBERATELY NARROW. It is not "rows you could act on" — an admin can
+//  touch almost anything, and a badge that counts the whole table is
+//  furniture. These are the states where somebody is actually blocked waiting
+//  for a reply. Stock-keeper handovers are excluded on purpose: they have
+//  their own badge on the Stock tab, and counting them here would double up.
+///  +-----------------------------------------------------------------+
+
+export function needsMyAction(
+  request: Request,
+  role: Role,
+  userId: number | null,
+  userName: string
+): boolean {
+  // Your approval, and the requester is waiting on it.
+  if (request.status === "PENDING" && isApprover(request, userId, userName)) {
+    return true;
+  }
+
+  // Your device, marked ready, and nobody has confirmed you picked it up.
+  if (
+    request.status === "COMPLETED" &&
+    !!request.collectionReadyAt &&
+    !request.receivedAt &&
+    isRequestee(request, userId, userName)
+  ) {
+    return true;
+  }
+
+  // IT sign-off outstanding after the manager approved it.
+  if (
+    role === "ADMIN" &&
+    request.status === "APPROVED" &&
+    !request.adminApprovedAt
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Should this row carry the "new and yours" marker?
+ *
+ * BOTH HALVES, deliberately. Workflow state alone would nag somebody for a
+ * fortnight about a request that is blocked on a supplier, not on them —
+ * which is how an indicator gets tuned out. Read state alone would mark
+ * everything new, including rows that are none of their business.
+ *
+ * The marker is dismissible; the WORK is not. Hovering clears this, and the
+ * "Needs you" filter — which is needsMyAction on its own — still finds the
+ * request afterwards. That separation is the whole point: stop the nudge
+ * without hiding the job.
+ *
+ * Note this is the requests log's rule only. The stock page's queues stay
+ * purely state-based and cannot be dismissed, because a device waiting to be
+ * handed over is never blocked on anybody but its keeper.
+ */
+export function isUnseenAction(
+  request: Request,
+  role: Role,
+  userId: number | null,
+  userName: string
+): boolean {
+  if (request.seenByMe) return false;
+  return needsMyAction(request, role, userId, userName);
+}
+
+///  +-----------------------------------------------------------------+
 ///  |                   ACTING AS A STOCK KEEPER                      |
 ///  +-----------------------------------------------------------------+
 //

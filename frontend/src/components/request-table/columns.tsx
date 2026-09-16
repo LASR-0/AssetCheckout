@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
+import CountBadge from "@/components/ui/countbadge";
 import { getInitials } from "@/lib/utils";
 import {
   canActAsStockKeeper,
+  isUnseenAction,
   canEditRequest,
   isApprover,
   isRequestee,
@@ -57,6 +59,8 @@ export type RequestsTableMeta = {
   onReviewSelfProcured: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
+  /** Clears the row's "new" marker once the reader has dwelled on it. */
+  onSeen: (request: Request) => void;
 };
 
 // --- Sort indicator ---
@@ -990,10 +994,36 @@ export const columns: ColumnDef<Request>[] = [
     id: "userName",
     enableSorting: true,
     header: ({ column }) => <SortableHeader column={column} icon="person" label="Requester" />,
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
+      const meta = table.options.meta as RequestsTableMeta;
       const initials = getInitials(row.original.userName);
+
+      // NEW AND YOURS. Sits in the row's left corner, ahead of the requester,
+      // because that is the first thing the eye lands on when scanning down
+      // the column — and it clears itself a second after the pointer rests on
+      // the row.
+      //
+      // NOT the row's left border: that is spoken for by request KIND, and the
+      // comment in RequestsTable is explicit that binding it to a phase would
+      // make the edge of the table change colour as work progressed.
+      const needsMe = isUnseenAction(
+        row.original,
+        meta.role,
+        meta.currentUserId,
+        meta.currentUserName
+      );
+
       return (
         <div className="flex items-center">
+          {/* A FIXED SLOT, occupied or not. Rendering the badge only when
+              present would shunt the avatar left on unmarked rows, so the
+              column would visibly jitter as markers cleared under the
+              pointer. */}
+          <span className="flex w-6 flex-shrink-0 items-center justify-start">
+            {needsMe && (
+              <CountBadge count={1} label="new, waiting on you" />
+            )}
+          </span>
           <div className="h-10 w-10 flex-shrink-0 rounded-full bg-primary-container flex items-center justify-center mr-3">
             <span className="text-requester-text bg-requester-bg/30 rounded-full py-1 px-1.5 font-bold text-sm">
               {initials}

@@ -331,4 +331,11 @@ export type LocationAsset = {
   available: boolean;
   /** Who currently holds it, when it is checked out to a person. */
   assignedTo: string | null;
+  /**
+   * When it was last checked out, ISO-ish as Snipe returns it, or null if it
+   * never has been. Drives the "how long has this been out?" column and the
+   * refresh-check tile — a laptop issued four years ago is the one worth
+   * asking about, and nothing in this app could see that before.
+   */
+  lastCheckout: string | null;
 };

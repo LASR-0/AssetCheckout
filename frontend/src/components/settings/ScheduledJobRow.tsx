@@ -260,6 +260,11 @@ export default function ScheduledJobRow({
             </span>
           </button>
 
+          {/* A manual-only job has no settings to expand, so it renders no
+              chevron — and without a placeholder its "Run now" slid right by
+              the chevron's width and sat out of line with every other row. */}
+          {!hasConfig && <span aria-hidden className="inline-block h-[30px] w-[30px]" />}
+
           {hasConfig && (
             <CollapsibleTrigger asChild>
               <button

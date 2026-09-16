@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -12,6 +12,7 @@ import {
 import type { Request } from "@/types/requestType";
 import { columns, type RequestsTableMeta } from "./columns";
 import type { Role, StockKeeperLocation } from "@/types/authType";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 type Props = {
   requests: Request[];
@@ -33,6 +34,8 @@ type Props = {
   onSkipQuote: (request: Request) => void;
   onMarkShipped: (request: Request) => void;
   onMarkReceived: (request: Request) => void;
+  /** Clears a row's "new" marker once the reader has dwelled on it. */
+  onSeen: (request: Request) => void;
   globalFilter: string;
   page: number;
   pageSize: number;
@@ -120,12 +123,68 @@ const globalFilterFn = (
   return deepMatch(r, needle);
 };
 
+///  +-----------------------------------------------------------------+
+///  |            DWELL, NOT A BARE MOUSEENTER                         |
+///  +-----------------------------------------------------------------+
+//
+//  A pointer crossing the table on its way somewhere else is not attention.
+//  Marking on mouseenter would clear every marker the reader swept past
+//  reaching for the scrollbar, and they would never learn why their
+//  notifications kept vanishing.
+//
+//  TOUCH HAS NO HOVER. On a touch device the dwell never fires and the
+//  markers would be permanent, so rows are marked seen once they have been
+//  rendered — the reader has the list in front of them, which is the same
+//  claim hovering makes on a desktop.
+///  +-----------------------------------------------------------------+
+
+const DWELL_MS = 1000;
+
+function useSeenOnDwell(
+  rows: { original: Request }[],
+  onSeen: (request: Request) => void
+) {
+  const isDesktop = useIsDesktop();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Touch fallback. Guarded on `seenByMe` so it only fires for rows that
+  // still carry a marker, rather than posting once per row per render.
+  useEffect(() => {
+    if (isDesktop) return;
+    for (const row of rows) {
+      if (!row.original.seenByMe) onSeen(row.original);
+    }
+  }, [isDesktop, rows, onSeen]);
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+
+  function dwellHandlers(request: Request) {
+    if (!isDesktop) return {};
+    return {
+      onMouseEnter: () => {
+        if (timer.current) clearTimeout(timer.current);
+        if (request.seenByMe) return;
+        timer.current = setTimeout(() => onSeen(request), DWELL_MS);
+      },
+      onMouseLeave: () => {
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = null;
+      },
+    };
+  }
+
+  return dwellHandlers;
+}
+
 export default function RequestsTable({
   requests,
   role,
   currentUserName,
   currentUserId,
   stockKeeperLocations,
+  onSeen,
   onApprove,
   onReject,
   onCreateModel,
@@ -177,6 +236,7 @@ export default function RequestsTable({
       currentUserName,
       currentUserId,
       stockKeeperLocations,
+      onSeen,
       onApprove,
       onReject,
       onCreateModel,
@@ -205,6 +265,7 @@ export default function RequestsTable({
 
   const rows = table.getRowModel().rows;
   const totalCols = table.getVisibleLeafColumns().length;
+  const dwellHandlers = useSeenOnDwell(rows, onSeen);
 
   return (
     <div data-tour="requests-table" className="bg-surface-container-lowest overflow-hidden">
@@ -248,6 +309,7 @@ export default function RequestsTable({
               rows.map((row, rowIndex) => (
                 <tr
                   key={row.id}
+                  {...dwellHandlers(row.original)}
                   // Every row carries a left accent naming its KIND, so the
                   // table can be read by scanning its edge rather than by
                   // reading the reason cell. Driven off requestType, never off

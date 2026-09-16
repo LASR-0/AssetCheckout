@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import RequestsToolbar from "@/components/request-table/RequestsToolbar";
 import RequestsPagination from "@/components/request-table/RequestPagination";
@@ -6,11 +6,16 @@ import RequestsTable from "@/components/request-table/RequestsTable";
 import CreateModelDialog from "@/components/dialogs/CreateModelDialog";
 import RejectionReasonDialog from "@/components/dialogs/RejectRequestDialog";
 import ShipDialog from "@/components/dialogs/ShipDialog";
-import { getRequests } from "@/api/requests";
+import { getRequests, markRequestSeen } from "@/api/requests";
 import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
 import { deriveStage, isDoneStage } from "@/components/ui/statusbadge";
-import { getColumnVisibility, isApprover, isStockKeeper } from "@/lib/permissions";
+import {
+  getColumnVisibility,
+  isApprover,
+  isStockKeeper,
+  needsMyAction,
+} from "@/lib/permissions";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/api/client";
 import AssetDetailsDialog from "@/components/dialogs/AssetDetailsDialog";
@@ -29,6 +34,10 @@ import ReviewSelfProcuredDialog from "@/components/dialogs/ReviewSelfProcuredDia
 import { skipQuote } from "@/api/quotes";
 import { markUserProcured } from "@/api/selfProcurement";
 import { useTourReady } from "@/components/tour/TourProvider";
+import {
+  notifyActionCountsChanged,
+  notifySeenCleared,
+} from "@/hooks/useActionCounts";
 
 /**
  * Filter values the status dropdown can hold — one per badge the table shows,
@@ -48,6 +57,9 @@ import { useTourReady } from "@/components/tour/TourProvider";
  */
 const SELECTABLE_STATUSES = [
   "ALL",
+  // Not a stage — the rows blocked on the signed-in person, which is what the
+  // nav badge counts. Listed here so the badge has somewhere to send people.
+  "NEEDS_ME",
   "IN_PROGRESS",
   "PENDING",
   "AWAITING_IT",
@@ -72,6 +84,8 @@ export default function RequestTablePage() {
   /** Whether the first fetch has settled — the tour waits for it, so that a
    *  step pointing at a row's actions has rows to find. */
   const [loaded, setLoaded] = useState(false);
+  /** Distinguishes the mount fetch from a post-action reload — see loadRequests. */
+  const hasLoadedOnce = useRef(false);
 
   // Seeded from the URL so widgets elsewhere can deep-link into a view:
   // ?status=IN_PROGRESS&q=<name> is what the home page's "In progress" tile
@@ -222,6 +236,15 @@ export default function RequestTablePage() {
       const data = await getRequests({});
 
       setRequests(data.requests);
+      // Approving, handing over and confirming a collection all land here via
+      // a reload. Each of them changes what is waiting on somebody, so the
+      // badges are told to recheck rather than waiting for a navigation.
+      //
+      // Skipped on the FIRST load: the hook fetches on mount anyway, and
+      // signalling here too would cost a second identical query on every
+      // visit to this page for no new information.
+      if (hasLoadedOnce.current) notifyActionCountsChanged();
+      hasLoadedOnce.current = true;
     } catch (err) {
       console.error("Failed to load requests", err);
     } finally {
@@ -284,6 +307,14 @@ export default function RequestTablePage() {
 
     if (status === "ALL") return scoped;
 
+    // Answers "which of the 5 are they?" — same predicate the row markers and
+    // the nav badge use, so the three cannot disagree.
+    if (status === "NEEDS_ME") {
+      return scoped.filter((r) =>
+        needsMyAction(r, role, currentUserId, currentUserName)
+      );
+    }
+
     return scoped.filter((r) => {
       const stage = deriveStage(r);
       if (status === "DONE") return isDoneStage(stage);
@@ -292,7 +323,7 @@ export default function RequestTablePage() {
         return !isDoneStage(stage) && stage !== "REJECTED";
       return stage === status;
     });
-  }, [requests, status, pinnedId, location]);
+  }, [requests, status, pinnedId, location, role, currentUserId, currentUserName]);
 
   /** Drop the pin and strip it from the URL, so a refresh doesn't reinstate a
    *  filter the user just dismissed. Other params (status, q) are preserved. */
@@ -632,6 +663,35 @@ export default function RequestTablePage() {
     setEditRequestOpen(true);
   }
 
+  ///  +-----------------------------------------------------------------+
+  ///  |             DISMISSING A MARKER, NOT THE WORK                   |
+  ///  +-----------------------------------------------------------------+
+  //
+  //  Flips the row locally first so the dot disappears the instant the dwell
+  //  fires, then tells the server. No rollback on failure, deliberately: the
+  //  only consequence is that the marker returns on the next load, and
+  //  restoring a dot under somebody's cursor a second after it vanished would
+  //  read as a glitch rather than as information.
+  //
+  //  The row itself is untouched — the request is still pending, still
+  //  approvable, and still turned up by the "Needs you" filter.
+  ///  +-----------------------------------------------------------------+
+  function handleSeen(request: Request) {
+    // The dwell fires on every unseen row, but only the ones the badge was
+    // actually counting should move it. Checked BEFORE the optimistic update
+    // below, since that update is what makes it stop qualifying.
+    const wasCounted =
+      !request.seenByMe &&
+      needsMyAction(request, role, currentUserId, currentUserName);
+
+    setRequests((prev) =>
+      prev.map((r) => (r.id === request.id ? { ...r, seenByMe: true } : r))
+    );
+    void markRequestSeen(request.id);
+
+    if (wasCounted) notifySeenCleared();
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
 
   return (
@@ -676,6 +736,7 @@ export default function RequestTablePage() {
             currentUserName={currentUserName}
             currentUserId={currentUserId}
             stockKeeperLocations={stockKeeperLocations}
+            onSeen={handleSeen}
             onApprove={handleApprove}
             onReject={handleRejectClick}
             onCreateModel={handleCreateModel}

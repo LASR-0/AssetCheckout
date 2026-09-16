@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { LocationAsset } from "@/types/snipeTypes";
+import type { LocationAccessory, LocationAsset } from "@/types/snipeTypes";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  THE STOCK KEEPER'S INVENTORY                   |
@@ -18,4 +18,17 @@ export async function getAssetsAtLocation(
     `/api/stock/assets?locationId=${encodeURIComponent(locationId)}`
   );
   return data.assets ?? [];
+}
+
+/**
+ * Accessory lines at one site. Same permission rule as the assets call —
+ * a 403 means the caller asked about a location they don't keep.
+ */
+export async function getAccessoriesAtLocation(
+  locationId: number
+): Promise<LocationAccessory[]> {
+  const data = await apiFetch<{ accessories: LocationAccessory[] }>(
+    `/api/stock/accessories?locationId=${encodeURIComponent(locationId)}`
+  );
+  return data.accessories ?? [];
 }
