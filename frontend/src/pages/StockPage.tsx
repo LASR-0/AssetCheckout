@@ -129,7 +129,10 @@ export default function StockPage() {
   //  hiding half the handover queue behind a ledger toggle would be a good way
   //  to lose track of one.
   ///  +-----------------------------------------------------------------+
-  const [mode, setMode] = useState<"ASSETS" | "ACCESSORIES">("ASSETS");
+  // ACCESSORIES FIRST. A keeper hands out far more keyboards, docks and
+  // headsets than laptops, so the ledger they open on should be the one they
+  // reach for most. Assets are a click away.
+  const [mode, setMode] = useState<"ASSETS" | "ACCESSORIES">("ACCESSORIES");
   const [accessoriesBySite, setAccessoriesBySite] = useState<
     Map<number, LocationAccessory[]>
   >(new Map());
@@ -435,22 +438,22 @@ export default function StockPage() {
             ? "Pick a location to see what's there."
             : ""
         }
-      action={
-        isAdmin ? (
-          <LocationPicker
-            locations={allLocations}
-            currentId={siteId}
-            open={locationsOpen}
-            setOpen={setLocationsOpen}
-            onPick={(l) => {
-              setAdminSite({ id: l.id, name: l.name });
-              setSiteId(l.id);
-              setFilters(EMPTY_FILTERS);
-              setPage(1);
-            }}
-          />
-        ) : undefined
-      }
+        left={
+          isAdmin ? (
+            <LocationPicker
+              locations={allLocations}
+              currentId={siteId}
+              open={locationsOpen}
+              setOpen={setLocationsOpen}
+              onPick={(l) => {
+                setAdminSite({ id: l.id, name: l.name });
+                setSiteId(l.id);
+                setFilters(EMPTY_FILTERS);
+                setPage(1);
+              }}
+            />
+          ) : undefined
+        }
       >
         <div className="rounded-xl border border-outline bg-surface-container-lowest p-6 space-y-2">
           <p className="text-sm font-semibold text-on-surface">
@@ -478,25 +481,23 @@ export default function StockPage() {
   return (
     <Shell
       subtitle={`What's at ${site?.name ?? "your location"}, who's holding it, and what's waiting on you.`}
-      action={
-        <>
-          <LedgerModeSelect mode={mode} setMode={switchMode} />
-          {isAdmin && (
-            <LocationPicker
-              locations={allLocations}
-              currentId={siteId}
-              open={locationsOpen}
-              setOpen={setLocationsOpen}
-              onPick={(l) => {
-                setAdminSite({ id: l.id, name: l.name });
-                setSiteId(l.id);
-                setFilters(EMPTY_FILTERS);
-                setPage(1);
-              }}
-            />
-          )}
-        </>
+      left={
+        isAdmin ? (
+          <LocationPicker
+            locations={allLocations}
+            currentId={siteId}
+            open={locationsOpen}
+            setOpen={setLocationsOpen}
+            onPick={(l) => {
+              setAdminSite({ id: l.id, name: l.name });
+              setSiteId(l.id);
+              setFilters(EMPTY_FILTERS);
+              setPage(1);
+            }}
+          />
+        ) : undefined
       }
+      right={<LedgerModeSelect mode={mode} setMode={switchMode} />}
     >
       {/* LOCATION BAR — chips with live counts, only when there's a choice. */}
       {stockKeeperLocations.length > 1 && (
@@ -1073,34 +1074,52 @@ export default function StockPage() {
 function Shell({
   children,
   subtitle,
-  action,
+  left,
+  right,
 }: {
   children: React.ReactNode;
   subtitle: string;
-  action?: React.ReactNode;
+  /** Which site you are looking at. */
+  left?: React.ReactNode;
+  /** Which ledger you are looking at. */
+  right?: React.ReactNode;
 }) {
   return (
     <main className="min-h-screen bg-landing-bg text-on-background">
-      {/* Same header treatment as the Request Log and the request forms:
-          centred, the tab's own nav icon beside the title, subtitle beneath.
-          The icon is inventory_2 rather than a page-specific one so the tab
-          somebody clicked and the page they land on agree. */}
-      <div className="text-center pb-4 pt-28">
-        <div className="flex items-center justify-center">
-          <span className="material-symbols-outlined mx-5 !text-4xl"> inventory_2 </span>
-          <h1 className="text-4xl text-nav-tab-selected font-bold">Stock</h1>
+      <div className="mx-auto max-w-[1240px] px-4 pb-4 pt-28 sm:px-6">
+        {/* THREE PARTS, ONE ROW. `1fr auto 1fr` rather than a flex
+            space-between: equal side columns are what keep the title on the
+            page's centre line, instead of on the centre of whatever space the
+            two controls happen to leave it. A wide location name on the left
+            would otherwise shove the heading right.
+            
+            The title comes FIRST in the DOM and is placed into the middle
+            column explicitly, so the single-column mobile stack reads
+            title → location → ledger rather than burying the heading between
+            two controls. */}
+        <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
+          <div className="sm:col-start-2 sm:row-start-1">
+            {/* Same header treatment as the Request Log and the request forms:
+                the tab's own nav icon beside the title, subtitle beneath. */}
+            <div className="flex items-center justify-center">
+              <span className="material-symbols-outlined mx-5 !text-4xl"> inventory_2 </span>
+              <h1 className="text-4xl text-nav-tab-selected font-bold">Stock</h1>
+            </div>
+            {subtitle && (
+              <p className="text-info-light mt-2 text-center">{subtitle}</p>
+            )}
+          </div>
+
+          <div className="flex justify-center sm:col-start-1 sm:row-start-1 sm:justify-start">
+            {left}
+          </div>
+          <div className="flex justify-center sm:col-start-3 sm:row-start-1 sm:justify-end">
+            {right}
+          </div>
         </div>
-        {subtitle && <p className="text-info-light mt-2">{subtitle}</p>}
       </div>
 
       <div className="mx-auto flex max-w-[1240px] flex-col gap-5 px-4 pb-16 sm:px-6">
-        {/* The controls keep their own line now the title is centred — hanging
-            them off a centred heading would pull the heading off-centre.
-            Composed by the caller, because Shell has no business knowing which
-            ledger is showing. */}
-        {action && (
-          <div className="flex flex-wrap items-center justify-end gap-2">{action}</div>
-        )}
         {children}
       </div>
     </main>
@@ -1232,7 +1251,24 @@ function LocationPicker({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="max-h-[320px] w-[260px] overflow-y-auto bg-surface p-1.5">
+      {/* LEFT EDGE PINNED TO THE BUTTON, free to grow right.
+          
+          The trigger's width is a FLOOR, not a fixed size: pinning the panel
+          to it exactly made long location names truncate, since the button
+          only ever shows one name while the list has to show them all. So
+          `w-max` sizes to the longest entry and `min-w` keeps it from ending
+          up narrower than the control it hangs off.
+          
+          Growing rightward rather than leftward is what keeps it stable. The
+          picker sits at the left of the header, so a panel that overhung the
+          button's left side would run at the screen edge on narrower windows
+          and get shifted back inwards by collision handling — which is what
+          threw the alignment off before. There is room to the right. */}
+      <PopoverContent
+        align="start"
+        collisionPadding={8}
+        className="max-h-[320px] w-max min-w-[var(--radix-popover-trigger-width)] max-w-[min(360px,calc(100vw-2rem))] overflow-y-auto bg-surface p-1.5"
+      >
         <p className="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-info-light">
           Every location
         </p>
