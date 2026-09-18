@@ -1040,7 +1040,7 @@ export const columns: ColumnDef<Request>[] = [
     accessorKey: "categoryName",
     id: "requestType",
     enableSorting: true,
-    header: ({ column }) => <SortableHeader column={column} icon="Devices" label="Request Type" />,
+    header: ({ column }) => <SortableHeader column={column} icon="devices" label="Request Type" />,
     cell: ({ row }) => {
       const r = row.original;
       // FIXED: numberOption is authoritative where present; newNumber remains

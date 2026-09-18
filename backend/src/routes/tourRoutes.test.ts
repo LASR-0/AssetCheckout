@@ -10,17 +10,22 @@ import type { Server } from "http";
 //  feature, so almost everything worth testing is a failure path. Three
 //  contracts, and the client is written against all three:
 //
-//    * no email, no Snipe account, or Snipe unreachable -> identified: false
-//      and NEVER a 500. The client fails closed on that flag; if it ever saw
-//      a thrown error or an optimistic `true`, a tour would run, fail to
-//      record, and run again on every navigation.
+//    * no email on the request -> identified: false, and NEVER a 500. The
+//      client fails closed on that flag; if it ever saw a thrown error or an
+//      optimistic `true`, a tour would run, fail to record, and run again on
+//      every navigation.
 //    * an unknown tour id is a 400 that never reaches the database, so the
 //      table cannot fill with ids nothing reads.
 //    * recording is fire-and-forget: a write that fails still answers 204,
 //      because there is nothing the browser could usefully do about it.
+//
+//  THERE IS NO SNIPE MOCK HERE ANY MORE, and its absence is the point of the
+//  rework. Identity is the header the proxy already injected, so the two
+//  failure modes this file used to spend half its cases on — no Snipe account
+//  for the address, and Snipe unreachable — cannot happen. What is left is a
+//  key, taken straight off the request and lowercased.
 ///  +-----------------------------------------------------------------+
 
-const resolveActorUserId = vi.fn();
 const getSetting = vi.fn();
 const upsert = vi.fn();
 const findMany = vi.fn();
@@ -38,10 +43,6 @@ vi.mock("../db/prisma.js", () => ({
 
 vi.mock("../services/settings.js", () => ({ getSetting: (k: string) => getSetting(k) }));
 
-vi.mock("../services/snipeitassets.js", () => ({
-  resolveActorUserId: (e: string) => resolveActorUserId(e),
-}));
-
 const { default: tourRoutes } = await import("./tourRoutes.js");
 
 let server: Server;
@@ -49,6 +50,9 @@ let baseUrl = "";
 
 /** The proxy-injected identity header, as Caddy sends it in production. */
 const AS_SAM = { "x-user-email": "sam.taylor@ksb.com" };
+
+/** The same person, as a proxy that likes title case would send them. */
+const AS_SAM_SHOUTING = { "x-user-email": " Sam.Taylor@KSB.com " };
 
 beforeAll(async () => {
   const app = express();
@@ -71,7 +75,6 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   getSetting.mockResolvedValue("true");
-  resolveActorUserId.mockResolvedValue(4242);
   findMany.mockResolvedValue([{ tourId: "home" }]);
   upsert.mockResolvedValue({});
   deleteMany.mockResolvedValue({ count: 1 });
@@ -85,35 +88,23 @@ describe("reading the checklist", () => {
     expect(await res.json()).toEqual({ enabled: true, identified: true, seen: ["home"] });
   });
 
+  it("looks them up by the address the proxy sent, and nothing else", async () => {
+    await fetch(baseUrl, { headers: AS_SAM });
+
+    // One query, keyed on the header. This is the whole rework: there is no
+    // directory call in front of it to fail or go stale.
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userEmail: "sam.taylor@ksb.com" } })
+    );
+  });
+
   it("is not identified when the proxy sent no email", async () => {
     const res = await fetch(baseUrl);
 
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ identified: false, seen: [] });
-    // Nothing to look up, so nothing was looked up.
-    expect(resolveActorUserId).not.toHaveBeenCalled();
-  });
-
-  it("is not identified when Snipe has no account for them", async () => {
-    // A contractor or a service login. Real, and not an error.
-    resolveActorUserId.mockResolvedValue(null);
-
-    const res = await fetch(baseUrl, { headers: AS_SAM });
-
-    expect(await res.json()).toMatchObject({ identified: false, seen: [] });
+    // Nothing to key on, so nothing was read.
     expect(findMany).not.toHaveBeenCalled();
-  });
-
-  it("degrades rather than throwing when Snipe is unreachable", async () => {
-    // resolveActorUserId throws by design and leaves the choice to callers.
-    // For a tour the choice is always to go quiet — a directory outage must
-    // not turn every page load into a 500.
-    resolveActorUserId.mockRejectedValue(new Error("ECONNREFUSED"));
-
-    const res = await fetch(baseUrl, { headers: AS_SAM });
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ identified: false });
   });
 
   it("degrades rather than throwing when the database is unreachable", async () => {
@@ -149,9 +140,25 @@ describe("recording a completion", () => {
     expect(res.status).toBe(204);
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId_tourId: { userId: 4242, tourId: "home" } },
+        where: { userEmail_tourId: { userEmail: "sam.taylor@ksb.com", tourId: "home" } },
         update: {},
       })
+    );
+  });
+
+  it("writes and reads the same key however the header was cased", async () => {
+    // The one new way this design can break: if a write stored the header
+    // verbatim and a read lowercased it, somebody would be two people and
+    // would sit through every tour twice.
+    await fetch(`${baseUrl}/home/seen`, { method: "POST", headers: AS_SAM_SHOUTING });
+    await fetch(baseUrl, { headers: AS_SAM });
+
+    expect(upsert.mock.calls[0][0].create).toEqual({
+      userEmail: "sam.taylor@ksb.com",
+      tourId: "home",
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userEmail: "sam.taylor@ksb.com" } })
     );
   });
 
@@ -160,15 +167,10 @@ describe("recording a completion", () => {
 
     expect(res.status).toBe(400);
     expect(upsert).not.toHaveBeenCalled();
-    // Nor did it bother resolving who they were for a request it was always
-    // going to reject.
-    expect(resolveActorUserId).not.toHaveBeenCalled();
   });
 
   it("accepts, but does not record, when nobody can be identified", async () => {
-    resolveActorUserId.mockResolvedValue(null);
-
-    const res = await fetch(`${baseUrl}/home/seen`, { method: "POST", headers: AS_SAM });
+    const res = await fetch(`${baseUrl}/home/seen`, { method: "POST" });
 
     expect(res.status).toBe(204);
     expect(upsert).not.toHaveBeenCalled();
@@ -191,9 +193,11 @@ describe("forgetting one", () => {
     const res = await fetch(`${baseUrl}/home`, { method: "DELETE", headers: AS_SAM });
 
     expect(res.status).toBe(204);
-    // Scoped to the resolved actor, which is what makes this safe without an
-    // admin guard: the only rows reachable are your own.
-    expect(deleteMany).toHaveBeenCalledWith({ where: { userId: 4242, tourId: "home" } });
+    // Scoped to the caller's own address, which is what makes this safe
+    // without an admin guard: the only rows reachable are your own.
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { userEmail: "sam.taylor@ksb.com", tourId: "home" },
+    });
   });
 
   it("refuses an unknown tour", async () => {

@@ -1,6 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+// First, matching where the Google Fonts <link> used to sit in index.html:
+// this is unlayered and index.css restates nothing from it, but the icon face
+// must be declared before anything can reference it.
+import './styles/material-symbols.css'
 import './index.css'
 import './styles/presets.css'
 // Last: the tour overrides driver.js's shipped stylesheet, and both are

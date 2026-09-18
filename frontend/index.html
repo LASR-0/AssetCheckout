@@ -3,15 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!--
+      NO WEBFONT LINKS HERE. There were four, and all of them were costing
+      more than they returned:
 
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
-      rel="stylesheet"
-    />
+        * Manrope and Inter were never used by anything. The body face is
+          Figtree, self-hosted through @fontsource in index.css. Two render-
+          blocking round trips to a third party for nothing.
+        * Material Symbols was requested TWICE, and the fuller of the two
+          resolves to a 3.98 MB woff2 — every one of the 4,284 glyphs in the
+          library, to draw the ~140 this app uses. Worse than the size: these
+          icons are addressed by ligature, so until the font arrived each one
+          rendered as its own name, and the page showed the words "error",
+          "close" and "content_copy" where the icons belonged.
+
+      The icon font is now a 146 KB subset built by scripts/build-icon-font.mjs
+      and imported from main.tsx, so Vite fingerprints it and it is served from
+      our own origin under an immutable cache header. Fonts loaded through the
+      bundle also need no preconnect — there is no third-party origin left to
+      warm up, which is just as well, since the preconnects that were here sat
+      BELOW the stylesheets they were meant to accelerate and so did nothing.
+    -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!--

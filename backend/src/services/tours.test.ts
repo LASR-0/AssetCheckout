@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma.js";
 import {
   TOUR_IDS,
   isTourId,
+  normalizeActor,
   listCompletedTours,
   markTourSeen,
   forgetTour,
@@ -18,14 +19,25 @@ import {
 //  second row, or a moved completedAt, would mean the table cannot answer
 //  "when did they first see this" and would grow one row per replay.
 //
-//  Ids are chosen high enough not to collide with anything the seed inserts.
+//  THE SECOND THING WORTH TESTING IS CASING. The key is now an address off a
+//  proxy header, and the same person arriving as Sam.Taylor@ and sam.taylor@
+//  must be one person — otherwise the checklist looks empty and every tour
+//  replays. Normalisation lives in one function precisely so read and write
+//  cannot drift apart, and these tests go through the public functions rather
+//  than that function to prove they actually do.
+//
+//  Addresses are on a domain nothing else in the suite uses, so a stray row
+//  cannot collide with seeded data.
 ///  +-----------------------------------------------------------------+
 
-const USER = 900_001;
-const OTHER = 900_002;
+const USER = "tour.tester@tours.test";
+const OTHER = "other.tester@tours.test";
+const STRANGER = "never.been.here@tours.test";
 
 afterAll(async () => {
-  await prisma.tourCompletion.deleteMany({ where: { userId: { in: [USER, OTHER] } } });
+  await prisma.tourCompletion.deleteMany({
+    where: { userEmail: { in: [USER, OTHER, STRANGER] } },
+  });
 });
 
 describe("recording", () => {
@@ -39,14 +51,14 @@ describe("recording", () => {
     // not add a row, and must not rewrite when they first saw it.
     await markTourSeen(USER, "settings");
     const first = await prisma.tourCompletion.findUnique({
-      where: { userId_tourId: { userId: USER, tourId: "settings" } },
+      where: { userEmail_tourId: { userEmail: USER, tourId: "settings" } },
     });
 
     await markTourSeen(USER, "settings");
     await markTourSeen(USER, "settings");
 
     const rows = await prisma.tourCompletion.findMany({
-      where: { userId: USER, tourId: "settings" },
+      where: { userEmail: USER, tourId: "settings" },
     });
 
     expect(rows).toHaveLength(1);
@@ -62,22 +74,62 @@ describe("recording", () => {
 
   it("has nothing for somebody who has never been here", async () => {
     // The new-user case the whole feature exists for.
-    expect(await listCompletedTours(999_999)).toEqual([]);
+    expect(await listCompletedTours(STRANGER)).toEqual([]);
+  });
+});
+
+describe("the same person, spelled differently", () => {
+  it("is one person however the proxy cased the header", async () => {
+    // Written one way, read back another. If these ever disagreed, everybody
+    // whose proxy changed its casing would be handed an empty checklist and
+    // sit through every tour again.
+    await markTourSeen(` ${USER.toUpperCase()} `, "troubleshooting");
+
+    expect(await listCompletedTours(USER)).toContain("troubleshooting");
+    expect(await listCompletedTours(`  ${USER}  `)).toContain("troubleshooting");
+  });
+
+  it("stores the normalised form, not what arrived", async () => {
+    // Belt and braces on the above: a row written in mixed case would still
+    // read back correctly through these functions, but would break anything
+    // querying the table directly.
+    const rows = await prisma.tourCompletion.findMany({
+      where: { tourId: "troubleshooting", userEmail: USER },
+    });
+
+    expect(rows).toHaveLength(1);
+  });
+
+  it("does nothing at all without an address", async () => {
+    // The unauthenticated path. Not an error — there is simply nothing to key
+    // a row on, so the read is empty and the writes are no-ops.
+    expect(await listCompletedTours("")).toEqual([]);
+    await expect(markTourSeen("   ", "home")).resolves.toBeUndefined();
+    await expect(forgetTour("", "home")).resolves.toBeUndefined();
+
+    expect(await prisma.tourCompletion.count({ where: { userEmail: "" } })).toBe(0);
+  });
+
+  it("normalizeActor reports what it cannot use", () => {
+    expect(normalizeActor(" Sam.Taylor@KSB.com ")).toBe("sam.taylor@ksb.com");
+    for (const blank of ["", "   ", null, undefined]) {
+      expect(normalizeActor(blank), String(blank)).toBeNull();
+    }
   });
 });
 
 describe("forgetting", () => {
   it("removes one tour and leaves the rest", async () => {
-    await markTourSeen(USER, "troubleshooting");
-    await forgetTour(USER, "troubleshooting");
+    await markTourSeen(USER, "requests-manager");
+    await forgetTour(USER, "requests-manager");
 
     const seen = await listCompletedTours(USER);
-    expect(seen).not.toContain("troubleshooting");
+    expect(seen).not.toContain("requests-manager");
     expect(seen).toContain("home");
   });
 
   it("is silent about a tour that was never had", async () => {
-    await expect(forgetTour(999_999, "home")).resolves.toBeUndefined();
+    await expect(forgetTour(STRANGER, "home")).resolves.toBeUndefined();
   });
 });
 
@@ -97,7 +149,7 @@ describe("the id list", () => {
     // A row written by an older build for a tour since retired. The client
     // must not be told about it, and it is not worth a migration to delete.
     await prisma.tourCompletion.create({
-      data: { userId: USER, tourId: "a-tour-that-was-retired" },
+      data: { userEmail: USER, tourId: "a-tour-that-was-retired" },
     });
 
     expect(await listCompletedTours(USER)).not.toContain("a-tour-that-was-retired");

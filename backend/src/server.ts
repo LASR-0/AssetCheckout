@@ -81,7 +81,46 @@ if (process.env.NODE_ENV === 'production') {
   //  deploy. The volume is mounted FIRST so that replacing a screenshot
   //  shadows the bundled copy rather than being shadowed by it.
   app.use('/troubleshooting', express.static(troubleshootingImagesDir()));
-  app.use(express.static(frontendDist));
+
+  //  +---------------------------------------------------------------+
+  //  |          CACHE THE FINGERPRINTED BUILD, NOT THE SHELL         |
+  //  +---------------------------------------------------------------+
+  //
+  //  express.static defaults to no caching at all, so every asset was
+  //  revalidated on every page load -- a conditional request per JS chunk,
+  //  per stylesheet, per font, before anything could paint. Over a WAN link
+  //  to a branch office that is most of the "slow first second"; the bytes
+  //  were already in the browser, we were just asking permission to use them.
+  //
+  //  IT IS SAFE HERE ONLY BECAUSE VITE FINGERPRINTS. Everything under
+  //  /assets carries a content hash in its filename, so a changed file is a
+  //  changed URL and a cached copy can never be stale. That is what earns
+  //  `immutable`: the browser is told not even to revalidate, which is the
+  //  part that removes the round trip.
+  //
+  //  INDEX.HTML IS THE EXCEPTION, and getting it wrong is how a deploy
+  //  strands people on the old app. Its name never changes, and it is what
+  //  names the hashed bundles -- so a cached copy points at chunks that no
+  //  longer exist. It is served `no-cache`, which still lets the browser
+  //  keep a copy but forces a revalidation on each load: one cheap 304 for
+  //  the shell, then everything it references comes from cache for free.
+  //  The SPA fallback below sends the same file and sets the same header.
+  const ONE_YEAR_SECONDS = 31_536_000;
+
+  app.use(
+    express.static(frontendDist, {
+      // A directory index would shadow the SPA fallback and answer '/' with
+      // an uncached index.html, bypassing the header set below.
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+          return;
+        }
+        res.setHeader('Cache-Control', `public, max-age=${ONE_YEAR_SECONDS}, immutable`);
+      },
+    })
+  );
 
   //  A REAL 404 FOR MISSING SCREENSHOTS, before the SPA fallback below.
   //
@@ -116,6 +155,9 @@ if (process.env.NODE_ENV === 'production') {
   });
 
   app.use((_req: Request, res: Response) => {
+    // Same shell, same rule as above: revalidate it, so a deploy is picked up
+    // on the next load rather than whenever a cache happens to expire.
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }

@@ -10,12 +10,17 @@ import type { TourId } from "@/lib/tours/types";
 //  work out who is asking, so a completion could not be recorded — and a tour
 //  that runs but cannot be recorded runs again on the next navigation, and the
 //  one after that. The provider fails closed on it.
+//
+//  It is now rarely false. The server keys the checklist on the address the
+//  forward auth injects, rather than resolving that address through Snipe
+//  first, so "who is asking" fails only for a request that arrived with no
+//  identity header at all.
 ///  +-----------------------------------------------------------------+
 
 export type TourState = {
   /** The feature switch. False stops tours starting; it forgets nobody. */
   enabled: boolean;
-  /** Whether the server resolved the caller to a Snipe user. */
+  /** Whether the server has an identity to record completions against. */
   identified: boolean;
   seen: TourId[];
 };

@@ -6,7 +6,19 @@ import { prisma } from "../db/prisma.js";
 //
 //  A checklist. One row per (person, tour), written once they have had it, and
 //  read on page load to decide whether a tour should run. See the
-//  TourCompletion model for why it holds a Snipe user id and nothing else.
+//  TourCompletion model for why it holds an email and nothing else.
+//
+//  IDENTITY IS THE ADDRESS THE PROXY INJECTED, used as the key directly. It
+//  used to be resolved through Snipe into a user id first, which put a
+//  directory round trip on the read path of every page load and meant anybody
+//  Snipe did not know could not be recorded at all — so their tours ran, and
+//  ran again. Reading the checklist is now one indexed lookup on this table.
+//
+//  NORMALISED IN ONE PLACE. Every exported function funnels its email through
+//  normalizeActor, because the three of them have to agree about what counts
+//  as the same person: if the read lowercased and the write did not, a proxy
+//  that changed its header casing would hand somebody an empty checklist and
+//  replay every tour they had already had.
 //
 //  THE TOUR IDS LIVE HERE, not in the database. What tours exist is a fact
 //  about the frontend — a route gains one, a page is redesigned and its tour
@@ -34,10 +46,26 @@ export function isTourId(value: unknown): value is TourId {
   return typeof value === "string" && (TOUR_IDS as readonly string[]).includes(value);
 }
 
+/**
+ * The key a row is stored under, or null when there is no usable identity.
+ *
+ * Null for an absent or blank email, which is the only way this can fail now
+ * that nothing is looked up: an unauthenticated request, or a proxy that did
+ * not inject the header. Callers treat it the way they treated an unresolvable
+ * Snipe id — accept the request, record nothing.
+ */
+export function normalizeActor(email: string | null | undefined): string | null {
+  const key = (email ?? "").trim().toLowerCase();
+  return key.length > 0 ? key : null;
+}
+
 /** Which tours this person has already had. Empty for somebody new. */
-export async function listCompletedTours(userId: number): Promise<TourId[]> {
+export async function listCompletedTours(email: string): Promise<TourId[]> {
+  const userEmail = normalizeActor(email);
+  if (!userEmail) return [];
+
   const rows = await prisma.tourCompletion.findMany({
-    where: { userId },
+    where: { userEmail },
     select: { tourId: true },
   });
 
@@ -53,10 +81,13 @@ export async function listCompletedTours(userId: number): Promise<TourId[]> {
  * The empty `update` is deliberate — see the header. A second call is a no-op
  * that leaves the original completedAt alone.
  */
-export async function markTourSeen(userId: number, tourId: TourId): Promise<void> {
+export async function markTourSeen(email: string, tourId: TourId): Promise<void> {
+  const userEmail = normalizeActor(email);
+  if (!userEmail) return;
+
   await prisma.tourCompletion.upsert({
-    where: { userId_tourId: { userId, tourId } },
-    create: { userId, tourId },
+    where: { userEmail_tourId: { userEmail, tourId } },
+    create: { userEmail, tourId },
     update: {},
   });
 }
@@ -69,6 +100,9 @@ export async function markTourSeen(userId: number, tourId: TourId): Promise<void
  * id: there is no "forget everything", because the only caller that would want
  * it is a mistake.
  */
-export async function forgetTour(userId: number, tourId: TourId): Promise<void> {
-  await prisma.tourCompletion.deleteMany({ where: { userId, tourId } });
+export async function forgetTour(email: string, tourId: TourId): Promise<void> {
+  const userEmail = normalizeActor(email);
+  if (!userEmail) return;
+
+  await prisma.tourCompletion.deleteMany({ where: { userEmail, tourId } });
 }

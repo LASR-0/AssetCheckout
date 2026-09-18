@@ -1,9 +1,9 @@
 import { Router, Request as ExpressRequest, Response } from "express";
 import { getActorEmail } from "../config/auth.js";
-import { resolveActorUserId } from "../services/snipeitassets.js";
 import { getSetting } from "../services/settings.js";
 import {
   isTourId,
+  normalizeActor,
   listCompletedTours,
   markTourSeen,
   forgetTour,
@@ -16,21 +16,24 @@ import {
 //  Three endpoints over one table: what have I already seen, I have just seen
 //  this, and forget that I did.
 //
-//  IDENTITY IS A SNIPE USER ID, resolved from the proxy-injected email the
-//  same way authRoutes does. resolveActorUserId is a ten-minute cache that
-//  also caches negatives, and /api/auth/role already calls it on every page
-//  load, so the lookup here is a cache read rather than a round trip.
+//  IDENTITY IS THE PROXY-INJECTED EMAIL, used as the key and nothing more.
+//  This used to resolve that address into a Snipe user id first, which was a
+//  directory lookup on the read path of every page load for a decorative
+//  feature, and which failed in three ordinary ways — no Snipe account for the
+//  address, Snipe unreachable on a cache miss, a cached negative. Every one of
+//  them meant the completion could not be recorded, so the tour ran again on
+//  the next navigation and the one after that. There is nothing left to look
+//  up: if the proxy sent an address, this works.
 //
-//  IT NEVER FAILS THE PAGE. resolveActorUserId throws when Snipe is
-//  unreachable — its docblock says so, and deliberately leaves deny-vs-fall-
-//  back to the caller. This is a decorative feature sitting on the critical
-//  path of every page load, so the answer here is always "fall back": an
-//  unreachable directory means `identified: false`, never a 500.
+//  IT NEVER FAILS THE PAGE. The database can still be unreachable, and this
+//  still sits on the critical path of every page load, so the answer there is
+//  what it always was: go quiet, never 500.
 //
-//  `identified` IS LOAD-BEARING on the client. False means the POST could not
-//  persist anything, so the client must not start a tour — otherwise it would
-//  run, fail to record, and run again on the next navigation, forever. The
-//  client fails closed on it.
+//  `identified` IS LOAD-BEARING on the client, and its meaning is unchanged —
+//  "a completion posted now would be recorded". False means the client must
+//  not start a tour, because one that runs and cannot be recorded runs again
+//  forever. What changed is how rarely it is false: only a request with no
+//  email on it at all, or a checklist read that threw.
 ///  +-----------------------------------------------------------------+
 
 const router = Router();
@@ -38,22 +41,14 @@ const router = Router();
 const TOURS_ENABLED_KEY = "tours_enabled";
 
 /**
- * The caller's Snipe user id, or null.
+ * The caller's normalised email, or null when the request carries none.
  *
- * Null covers all three ways this can go wrong — no email on the request, no
- * Snipe account for that address, and Snipe being down — because the client
- * does the same thing in every case: nothing.
+ * Null is a request the proxy did not stamp — an unauthenticated probe, or a
+ * dev session with no impersonation header set. The client does nothing in
+ * that case, same as before.
  */
-async function actorId(req: ExpressRequest): Promise<number | null> {
-  const email = getActorEmail(req);
-  if (!email) return null;
-
-  try {
-    return await resolveActorUserId(email);
-  } catch (err) {
-    console.error("[tours] could not resolve actor to a Snipe user:", err);
-    return null;
-  }
+function actorEmail(req: ExpressRequest): string | null {
+  return normalizeActor(getActorEmail(req));
 }
 
 async function toursEnabled(): Promise<boolean> {
@@ -66,18 +61,19 @@ async function toursEnabled(): Promise<boolean> {
 /// ── What have I already had? ─────────────────────────────────────────────
 
 router.get("/", async (req: ExpressRequest, res: Response) => {
-  const [enabled, userId] = await Promise.all([toursEnabled(), actorId(req)]);
+  const enabled = await toursEnabled();
+  const email = actorEmail(req);
 
-  if (userId === null) {
+  if (email === null) {
     return res.json({ enabled, identified: false, seen: [] });
   }
 
   try {
-    return res.json({ enabled, identified: true, seen: await listCompletedTours(userId) });
+    return res.json({ enabled, identified: true, seen: await listCompletedTours(email) });
   } catch (err) {
-    // A database error here must not break the page either. Reporting no
-    // identity is the safe lie: the client stays quiet rather than running a
-    // tour it cannot record.
+    // A database error here must not break the page. Reporting no identity is
+    // the safe lie: the client stays quiet rather than running a tour it
+    // cannot record.
     console.error("[tours] could not read completions:", err);
     return res.json({ enabled, identified: false, seen: [] });
   }
@@ -94,15 +90,15 @@ router.post("/:tourId/seen", async (req: ExpressRequest, res: Response) => {
     return res.status(400).json({ success: false, message: "Unknown tour" });
   }
 
-  const userId = await actorId(req);
+  const email = actorEmail(req);
 
   // Nothing to key a row on. Not an error: the tour ran and was useful, we
   // just cannot remember it, and telling the browser that changes nothing it
   // would do.
-  if (userId === null) return res.status(204).end();
+  if (email === null) return res.status(204).end();
 
   try {
-    await markTourSeen(userId, tourId);
+    await markTourSeen(email, tourId);
   } catch (err) {
     console.error("[tours] could not record completion:", err);
   }
@@ -112,8 +108,8 @@ router.post("/:tourId/seen", async (req: ExpressRequest, res: Response) => {
 
 /// ── Forget it, so it runs again ──────────────────────────────────────────
 //
-//  Scoped to the caller's own id, which is what makes this safe without an
-//  admin guard: the only rows you can reach are your own.
+//  Scoped to the caller's own address, which is what makes this safe without
+//  an admin guard: the only rows you can reach are your own.
 
 router.delete("/:tourId", async (req: ExpressRequest, res: Response) => {
   const { tourId } = req.params;
@@ -122,11 +118,11 @@ router.delete("/:tourId", async (req: ExpressRequest, res: Response) => {
     return res.status(400).json({ success: false, message: "Unknown tour" });
   }
 
-  const userId = await actorId(req);
-  if (userId === null) return res.status(204).end();
+  const email = actorEmail(req);
+  if (email === null) return res.status(204).end();
 
   try {
-    await forgetTour(userId, tourId);
+    await forgetTour(email, tourId);
   } catch (err) {
     console.error("[tours] could not forget completion:", err);
   }

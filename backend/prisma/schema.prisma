@@ -823,20 +823,29 @@ model TroubleshootingArchivedArticle {
 /// has never opened the app. "Have they had the home tour?" is answered by the
 /// row's existence, which is the only question anything asks.
 ///
-/// NOTHING PERSONAL IS STORED. The Snipe user id is the whole identity — no
-/// name, no email. Snipe is already the directory of record, so copying a
-/// display name in here would duplicate it into a table with no way of
-/// noticing when it changes, in service of nothing that reads it. To find out
-/// who a row belongs to, ask the directory: getSnipeUser(userId) in
-/// services/snipeitassets.ts. A leaver's row is then a bare integer.
+/// KEYED ON THE PROXY-INJECTED EMAIL, which is the identity the app is
+/// actually handed. The first version keyed on a Snipe user id instead, to
+/// keep an address out of the table -- and paid for that privacy twice over:
+/// every page load had to turn the email into an id through the directory,
+/// and anybody the directory did not know (a contractor, a service login, or
+/// simply Snipe being down that minute) could not be recorded at all, so
+/// their tours ran again on every navigation. The address buys none of that
+/// back: requests already store requester and approver identity, so this
+/// table was never what kept personal data out of the database.
+///
+/// STORED LOWERCASED AND TRIMMED, normalised once in services/tours.ts. The
+/// header casing a proxy sends is not guaranteed stable, and a stray capital
+/// would silently mean a second identity with an empty checklist -- every
+/// tour, again.
 ///
 /// A COMPOUND PRIMARY KEY, not a surrogate id: the pair IS the fact, there is
 /// nothing else to say about a row, and it makes recording an upsert with no
-/// second lookup — see markTourSeen, where the empty `update` is what makes a
+/// second lookup -- see markTourSeen, where the empty `update` is what makes a
 /// second completion a no-op that preserves the original completedAt.
 model TourCompletion {
-  /// Snipe user id, from resolveActorUserId(email).
-  userId      Int
+  /// The SSO address, normalised. See normalizeActor in services/tours.ts --
+  /// nothing writes this column without going through it.
+  userEmail   String
 
   /// Which tour. A string rather than an enum: tours are frontend content and
   /// are added and retired far more often than the schema should move.
@@ -846,6 +855,6 @@ model TourCompletion {
 
   completedAt DateTime @default(now())
 
-  @@id([userId, tourId])
+  @@id([userEmail, tourId])
   @@index([tourId])
 }
