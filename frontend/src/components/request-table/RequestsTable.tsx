@@ -50,6 +50,9 @@ type Props = {
   onSubmitSelfProcuredDetails: (request: Request) => void;
   /** Admin reviews what was bought and completes the request. */
   onReviewSelfProcured: (request: Request) => void;
+  /** Hotspot loans: IT assigns one; a keeper closes the loan on return. */
+  onAssignHotspot: (request: Request) => void;
+  onReturnHotspot: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
 };
@@ -206,6 +209,8 @@ export default function RequestsTable({
   onMarkUserProcured,
   onSubmitSelfProcuredDetails,
   onReviewSelfProcured,
+  onAssignHotspot,
+  onReturnHotspot,
   onEdit,
 }: Props) {
   // Default sort: newest first
@@ -253,6 +258,8 @@ export default function RequestsTable({
       onMarkUserProcured,
       onSubmitSelfProcuredDetails,
       onReviewSelfProcured,
+      onAssignHotspot,
+      onReturnHotspot,
       onEdit,
     } as RequestsTableMeta,
   });

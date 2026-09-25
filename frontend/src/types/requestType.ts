@@ -1,13 +1,13 @@
 // CORRECTION is not a spec level. It exists so every provisioning branch that
 // tests for STANDARD or NON_STANDARD excludes corrections by construction.
-export type RequestType = "STANDARD" | "NON_STANDARD" | "CORRECTION";
+export type RequestType = "STANDARD" | "NON_STANDARD" | "CORRECTION" | "HOTSPOT";
 export type RequestStatus = "PENDING" | "COMPLETED" | "REJECTED" | "APPROVED";
 // FIXED: number decision enum, matching the Prisma NumberOption enum
 export type NumberOption = "NEW" | "REUSE" | "NONE";
 // Accessories chapter: matches the Prisma RequestKind enum. Optional on
 // the interface — records created before the accessories expansion won't
 // carry it, and absent means ASSET.
-export type RequestKind = "ASSET" | "ACCESSORY" | "CORRECTION";
+export type RequestKind = "ASSET" | "ACCESSORY" | "CORRECTION" | "HOTSPOT";
 
 /** What a correction is asking IT to fix. */
 export type CorrectionKind = "UNLOGGED" | "NO_LONGER_HELD" | "WRONG_MODEL";
@@ -78,6 +78,44 @@ export type SelfProcuredDetail = {
   reviewedBy?: string | null;
   reviewedAt?: string | null;
   status: SelfProcuredStatus;
+};
+
+///  +-----------------------------------------------------------------+
+///  |                      HOTSPOT LOANS                              |
+///  +-----------------------------------------------------------------+
+//
+//  Present only on HOTSPOT rows. The post-collection half of a loan is
+//  derived entirely from endDate and returnedAt — see deriveLoanStage in
+//  statusbadge.tsx — so a row that arrives without this reads as an ordinary
+//  COLLECTED request and offers no way to close the loan.
+///  +-----------------------------------------------------------------+
+
+export type HotspotLoan = {
+  /** ISO. The window the requester asked for; endDate is the due-back date. */
+  startDate: string;
+  endDate: string;
+  /** What it is for, in the requester's words. Often absent. */
+  eventName?: string | null;
+
+  /** The Snipe accessory IT assigned, and what it was called. Null until then. */
+  snipeAccessoryId?: number | null;
+  accessoryName?: string | null;
+  checkedOutAt?: string | null;
+
+  /** Set only once Snipe accepted the check-in — see checkinError. */
+  returnedAt?: string | null;
+  returnedBy?: string | null;
+
+  /**
+   * Why a return could not be written to Snipe. Set means the hotspot is
+   * physically BACK but Snipe still shows it out, so the row stays in the
+   * returns queue and the action re-reads as "Retry return". Null once it
+   * applies.
+   */
+  checkinError?: string | null;
+
+  /** The overdue ladder's own counter. Not rendered; here for completeness. */
+  reminderStage?: number;
 };
 
 export type CorrectionDetail = {
@@ -172,6 +210,8 @@ export interface Request {
   /** Present only on non-standard ACCESSORY rows IT has handed off to the
    *  requester instead of selecting an accessory. */
   selfProcured?: SelfProcuredDetail | null;
+  /** Present only on HOTSPOT rows. Drives everything after collection. */
+  hotspotLoan?: HotspotLoan | null;
 
   /** The last time IT corrected this request, if they ever did. Drives the
    *  "Edited" marker in the Reason column. */

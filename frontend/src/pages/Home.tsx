@@ -885,6 +885,12 @@ function QuickLinks() {
       desc: "Request Asset Accessories here.",
       to: "/accessories",
     },
+    {
+      icon: "wifi",
+      title: "Book a Hotspot",
+      desc: "Borrow a mobile hotspot for an event.",
+      to: "/hotspot",
+    },
   ];
 
   return (

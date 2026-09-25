@@ -153,3 +153,39 @@ export async function setStockKeepersForLocation(
     maxPerLocation: data.maxPerLocation ?? DEFAULT_MAX_STOCK_KEEPERS,
   };
 }
+
+///  +-----------------------------------------------------------------+
+///  |                  HOTSPOT LOAN CONFIGURATION                     |
+///  +-----------------------------------------------------------------+
+
+export type HotspotConfig = {
+  /** The Snipe ACCESSORY category the loan pool lives in. Null turns loans off. */
+  categoryId: number | null;
+  /** Longest window a requester may book, in days. */
+  maxLoanDays: number;
+};
+
+export async function getHotspotConfig(): Promise<HotspotConfig> {
+  const data = await apiFetch<HotspotConfig>("/api/settings/hotspots");
+  return {
+    categoryId: data.categoryId ?? null,
+    maxLoanDays: data.maxLoanDays ?? 30,
+  };
+}
+
+/** Returns the authoritative config to adopt, as the other setters here do. */
+export async function setHotspotConfig(
+  config: Partial<HotspotConfig>
+): Promise<HotspotConfig> {
+  const data = await apiFetch<HotspotConfig>("/api/settings/hotspots", {
+    method: "PUT",
+    body: {
+      categoryId: config.categoryId ?? null,
+      ...(config.maxLoanDays !== undefined ? { maxLoanDays: config.maxLoanDays } : {}),
+    },
+  });
+  return {
+    categoryId: data.categoryId ?? null,
+    maxLoanDays: data.maxLoanDays ?? 30,
+  };
+}

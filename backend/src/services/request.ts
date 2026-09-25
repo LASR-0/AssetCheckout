@@ -86,7 +86,9 @@ type NotificationKind =
   | "DEVICE_SHIPPED"
   | "SHIPMENT_INBOUND"
   | "REQUEST_REJECTED"
-  | "REQUEST_EDITED";
+  | "REQUEST_EDITED"
+  | "HOTSPOT_REQUESTED"
+  | "HOTSPOT_RETURNED";
 
 /**
  * `extra` is merged into the job payload for the handful of kinds that need
@@ -348,7 +350,7 @@ type RequesteeFacts = {
   userLocationName: string | null;
 };
 
-async function resolveRequesteeFacts(
+export async function resolveRequesteeFacts(
   requesteeUserId: number,
   submitterId: number | null | undefined
 ): Promise<RequesteeFacts> {
@@ -1296,6 +1298,19 @@ export async function approveRequest(
       request.correctionDetail,
       actor.name,
       resolution
+    );
+  }
+
+  // HOTSPOTS ARE NOT APPROVED HERE, ON THE SAME TERMS AS CORRECTIONS ABOVE.
+  // requestType is HOTSPOT, so none of the provisioning branches below can
+  // match anyway — this is the explicit half of that belt and braces. A loan's
+  // sign-off is inseparable from choosing WHICH hotspot to hand over, so it
+  // lives on the assign route, which takes the accessory id this one has no
+  // way to carry.
+  if (request.requestKind === "HOTSPOT") {
+    throw new AppError(
+      "A hotspot loan is approved by assigning a hotspot to it — use the assign action.",
+      400
     );
   }
 

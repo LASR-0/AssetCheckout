@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import RequestFormPage from "@/pages/RequestFormPage";
 import AccessoryRequestFormPage from "@/pages/AccessoryFormPage";
+import HotspotFormPage from "@/pages/HotspotFormPage";
 import SuccessRedirect from "@/pages/SuccessRedirect";
 import RequestTablePage from "@/pages/RequestsTablePage"
 import StockPage from "@/pages/StockPage";
@@ -40,6 +41,12 @@ function App() {
           } />
           <Route path="/accessories" element={
             <ProtectedRoute requireRole={false}><AccessoryRequestFormPage /></ProtectedRoute>
+          } />
+          {/* Loans. requireRole={false} like the two forms above: booking a
+              hotspot is not an approver's or an admin's job, and a requester
+              who has never filed anything else is exactly who books one. */}
+          <Route path="/hotspot" element={
+            <ProtectedRoute requireRole={false}><HotspotFormPage /></ProtectedRoute>
           } />
           <Route path="/success" element={<SuccessRedirect />} />
           <Route

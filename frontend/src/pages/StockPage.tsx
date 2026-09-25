@@ -10,7 +10,7 @@ import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
 import { getLocations } from "@/api/snipe";
 import RequestsPagination from "@/components/request-table/RequestPagination";
 import { getRequests } from "@/api/requests";
-import { deriveFulfilment } from "@/components/ui/statusbadge";
+import { deriveFulfilment, isReturnable } from "@/components/ui/statusbadge";
 import { canActAsStockKeeper } from "@/lib/permissions";
 import CountBadge from "@/components/ui/countbadge";
 import { iconForCategory } from "@/lib/categoryIcon";
@@ -323,6 +323,37 @@ export default function StockPage() {
     );
   }, [requests, siteId]);
 
+  /**
+   * Hotspots out with a borrower and due back — the loan queue.
+   *
+   * The only queue on this page whose rows are NOT sitting in the storeroom:
+   * these are out in the world, and the keeper's job is to chase them and
+   * close them off when they come back. Ordered soonest-due first so the
+   * genuinely late ones surface at the top.
+   *
+   * Uses isReturnable rather than a stage comparison so it agrees exactly
+   * with the row's Return button — a queue listing a loan the keeper cannot
+   * yet act on is worse than not listing it.
+   */
+  const hotspotsDueBack = useMemo(() => {
+    if (siteId === null) return [];
+    return requests
+      .filter((r) => {
+        if ((r.userLocationId ?? null) !== siteId) return false;
+        if (r.requestKind !== "HOTSPOT") return false;
+        const loan = r.hotspotLoan;
+        if (!loan || loan.returnedAt) return false;
+        // Not yet collected means it is still in the handover queue above.
+        if (!r.receivedAt) return false;
+        return isReturnable(loan);
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.hotspotLoan!.endDate).getTime() -
+          new Date(b.hotspotLoan!.endDate).getTime()
+      );
+  }, [requests, siteId]);
+
   // ── Ledger derivation ──
   const filtered = useMemo(
     () => applyFilters(siteAssets, filters),
@@ -622,6 +653,15 @@ export default function StockPage() {
           rows={awaitingCollection}
           badge="With you"
           badgeClass="border-primary/30 bg-primary/10 text-primary"
+        />
+        <QueueCard
+          icon="wifi"
+          title="Hotspots due back"
+          count={hotspotsDueBack.length}
+          empty="No hotspots are due back."
+          rows={hotspotsDueBack}
+          badge="Chase"
+          badgeClass="border-intent-stop/30 bg-intent-stop/10 text-intent-stop"
         />
       </div>
 

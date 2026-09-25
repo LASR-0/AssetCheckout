@@ -11,6 +11,7 @@ import { syncRequestsToSharepointHandler } from "./handlers/syncRequestsToSharep
 import { refreshAccessoriesCacheHandler } from "./handlers/refreshAccessoriesCachehandler.js";
 import { logCapexPurchaseHandler } from "./handlers/logCapexPurchase.js";
 import { backfillRequestLocationsHandler } from "./handlers/backfillRequestLocations.js";
+import { remindHotspotReturnsHandler } from "./handlers/remindHotspotReturns.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    JOB SYSTEM ENTRY POINT                       |
@@ -34,6 +35,7 @@ export async function startJobs(): Promise<void> {
   registerHandler("CLEANUP_ORPHAN_SNIPE_MODELS", cleanupOrphanSnipeModelsHandler);
   registerHandler("SEND_REQUEST_NOTIFICATION", sendRequestNotificationHandler);
   registerHandler("REMIND_SHIPPED_REQUESTS", remindShippedRequestsHandler);
+  registerHandler("REMIND_HOTSPOT_RETURNS", remindHotspotReturnsHandler);
   registerHandler("SYNC_REQUEST_TO_SHAREPOINT", syncRequestsToSharepointHandler );
   registerHandler("REFRESH_ACCESSORIES_CACHE", refreshAccessoriesCacheHandler);
   // Event-driven — enqueued at quote acceptance, so it has no scheduler entry.

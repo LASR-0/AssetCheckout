@@ -15,7 +15,11 @@ import {
   getStockKeepers,
   setStockKeepersForLocation,
   MAX_STOCK_KEEPERS_PER_LOCATION,
-  type StockKeeperEntry
+  type StockKeeperEntry,
+  getHotspotCategoryId,
+  setHotspotCategoryId,
+  getHotspotMaxLoanDays,
+  setHotspotMaxLoanDays,
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 
@@ -353,6 +357,67 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 
     const config = await getStockKeepers();
     res.json({ config, maxPerLocation: MAX_STOCK_KEEPERS_PER_LOCATION });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                  HOTSPOT LOAN CONFIGURATION                     |
+///  +-----------------------------------------------------------------+
+//
+//  Which Snipe accessory category holds the loan pool, and the longest window
+//  a requester may book. One GET/PUT pair for both, because they are one card
+//  in the settings UI and splitting them would mean two round trips to render
+//  it.
+
+router.get("/hotspots", async (_req, res, next) => {
+  try {
+    const [categoryId, maxLoanDays] = await Promise.all([
+      getHotspotCategoryId(),
+      getHotspotMaxLoanDays(),
+    ]);
+    res.json({ categoryId, maxLoanDays });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/hotspots", async (req, res, next) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { categoryId, maxLoanDays } = req.body ?? {};
+
+    // Null is a real value here — it turns hotspot loans off rather than
+    // leaving them pointed at a category that no longer exists.
+    if (
+      categoryId !== null &&
+      (typeof categoryId !== "number" || !Number.isInteger(categoryId) || categoryId <= 0)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "categoryId must be a positive integer or null" });
+    }
+    if (
+      maxLoanDays !== undefined &&
+      (typeof maxLoanDays !== "number" || !Number.isInteger(maxLoanDays) || maxLoanDays <= 0)
+    ) {
+      return res.status(400).json({ error: "maxLoanDays must be a positive integer" });
+    }
+
+    const actor = getActorEmail(req);
+    await setHotspotCategoryId(categoryId ?? null, actor);
+    if (maxLoanDays !== undefined) {
+      await setHotspotMaxLoanDays(maxLoanDays, actor);
+    }
+
+    // Echo the authoritative config back, as every other setter here does.
+    const [savedCategoryId, savedMaxLoanDays] = await Promise.all([
+      getHotspotCategoryId(),
+      getHotspotMaxLoanDays(),
+    ]);
+    res.json({ categoryId: savedCategoryId, maxLoanDays: savedMaxLoanDays });
   } catch (err) {
     next(err);
   }

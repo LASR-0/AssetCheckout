@@ -168,6 +168,23 @@ export default function Navbar() {
               Troubleshooting
             </Link>
 
+            <Link
+              to="/hotspot"
+              data-tour="nav-hotspot"
+              className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
+                isActive("/hotspot")
+                  ? "text-nav-tab-selected after:bg-underline"
+                  : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
+              }`}
+            >
+              <span
+                className="material-symbols-outlined !text-xl"
+              >
+                wifi
+              </span>
+              Hotspot
+            </Link>
+
           </nav>
         </div>
 
@@ -250,10 +267,24 @@ export default function Navbar() {
           via max-height + opacity. Background is the nav colour mixed 10%
           toward black so it reads a step darker than the primary bar. */}
       <div
-        className={`md:hidden overflow-hidden bg-[color-mix(in_srgb,var(--footer-bg),black_3%)] shadow-md transition-all duration-300 ease-in-out ${
+        // THE CAP HAS TO CLEAR THE TALLEST MENU, NOT THE COMMON ONE. The
+        // height is animated, so it needs a real max-height rather than
+        // `auto` — and the row count varies by who is looking: Stock only
+        // renders for a keeper or an admin. At max-h-72 (288px) a plain
+        // requester's six rows fitted and an admin's seven did not, so the
+        // last item was silently sheared off for exactly the people who
+        // have the most to reach. Measured content is 312px; 384 leaves
+        // room for the next item without the close animation visibly
+        // lagging.
+        //
+        // overflow-y-auto WHEN OPEN is the belt to that braces: if the menu
+        // ever does outgrow the cap again it scrolls, which the reader can
+        // see and act on, instead of clipping, which they cannot. Closed
+        // stays overflow-hidden so nothing peeks out of the collapsed strip.
+        className={`md:hidden bg-[color-mix(in_srgb,var(--footer-bg),black_3%)] shadow-md transition-all duration-300 ease-in-out ${
           mobileNavOpen
-            ? "max-h-72 opacity-100 border-t border-outline/20"
-            : "max-h-0 opacity-0 border-t-0"
+            ? "max-h-96 overflow-y-auto opacity-100 border-t border-outline/20"
+            : "max-h-0 overflow-hidden opacity-0 border-t-0"
         }`}
       >
         <nav className="px-8 py-3 flex flex-col gap-3">
@@ -360,6 +391,24 @@ export default function Navbar() {
               troubleshoot
             </span>
             Troubleshooting
+          </Link>
+
+          <Link
+            to="/hotspot"
+            onClick={() => setMobileNavOpen(false)}
+            className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
+              isActive("/hotspot")
+                ? "text-nav-tab-selected"
+                : "text-nav-tab hover:text-nav-tab-selected"
+            }`}
+          >
+            <span
+              className="material-symbols-outlined !text-xl"
+              style={{ fontVariationSettings: `'FILL' 1` }}
+            >
+              wifi
+            </span>
+            Hotspot
           </Link>
 
         </nav>

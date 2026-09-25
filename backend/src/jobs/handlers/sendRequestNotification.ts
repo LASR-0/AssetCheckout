@@ -8,6 +8,7 @@ import {
 } from "../../services/settings.js";
 import { readQuoteDocument } from "../../services/quoteStorage.js";
 import { appLink } from "./appLinks.js";
+import { formatLoanDate } from "../../services/hotspot.js";
 import {
   renderEmail,
   esc,
@@ -37,6 +38,13 @@ const KINDS = [
   "REQUEST_EDITED",
   "SELF_PROCUREMENT_NEEDED",
   "SELF_PROCUREMENT_SUBMITTED",
+  /// Hotspot loans. The three DUE_* kinds are the rungs of the due-back
+  /// ladder and are driven by REMIND_HOTSPOT_RETURNS, not by a state change.
+  "HOTSPOT_REQUESTED",
+  "HOTSPOT_DUE_SOON",
+  "HOTSPOT_DUE_BACK",
+  "HOTSPOT_OVERDUE",
+  "HOTSPOT_RETURNED",
 ] as const;
 type NotificationKind = (typeof KINDS)[number];
 
@@ -171,7 +179,7 @@ export async function sendRequestNotificationHandler(
 
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    include: { quoteDetail: true, selfProcured: true },
+    include: { quoteDetail: true, selfProcured: true, hotspotLoan: true },
   });
   if (!request) {
     return { skipped: true, reason: "request_not_found", requestId, kind };
@@ -201,6 +209,20 @@ export async function sendRequestNotificationHandler(
   const userFirst = firstNameFromDisplayName(request.userName);
   const category = esc(request.categoryName);
   const userName = esc(request.userName);
+
+  // Loan facts, resolved once for the five HOTSPOT_* cases below. Null on
+  // every other kind, where the loan row does not exist — reading them there
+  // is harmless and none of those cases do.
+  const loan = request.hotspotLoan;
+  const loanDue = loan ? formatLoanDate(loan.endDate) : "";
+  const loanWindow = loan
+    ? loan.startDate.getTime() === loan.endDate.getTime()
+      ? formatLoanDate(loan.startDate)
+      : `${formatLoanDate(loan.startDate)} to ${formatLoanDate(loan.endDate)}`
+    : "";
+  const loanPurpose = loan?.eventName ?? request.reason ?? null;
+  const loanAccessory = loan?.accessoryName ?? null;
+  const loanSite = request.userLocationName ?? null;
 
   let to: string | string[] | null = null;
   let subject = "";
@@ -476,6 +498,161 @@ export async function sendRequestNotificationHandler(
           `If you have it, please mark it as collected. If you haven't picked it up yet, no action is needed — we'll check in again soon.`,
         ],
         cta: { label: "Mark as collected", url: reviewLink },
+      };
+      break;
+    }
+
+    ///  +-------------------------------------------------------------+
+    ///  |                    HOTSPOT LOANS                            |
+    ///  +-------------------------------------------------------------+
+    //
+    //  DEVICE_ASSIGNED and DEVICE_READY_FOR_COLLECTION already serve the
+    //  middle of a loan and are not duplicated here — what a borrower needs
+    //  at those two points is exactly what anybody else needs.
+    //
+    //  These five cover the two ends: telling IT one has been asked for, the
+    //  three rungs of the due-back ladder, and the receipt at the end. The
+    //  ladder's rungs differ in TONE and in WHO IS COPIED, which is the whole
+    //  reason they are three kinds rather than one with a day count in it.
+
+    case "HOTSPOT_REQUESTED": {
+      // IT only. There is no manager on a loan, so there is nobody else to
+      // tell — and the requester already saw the confirmation on submit.
+      to = ADMIN_EMAILS;
+      const window = loanWindow;
+      subject = `Hotspot requested: ${request.userName}, ${window}`;
+      text =
+        `${request.userName} has requested a Wi-Fi hotspot for ${window}.\n\n` +
+        (loanPurpose ? `What for: ${loanPurpose}\n\n` : "") +
+        `No manager approval is needed — this is waiting on IT to assign a hotspot.`;
+      content = {
+        eyebrow: "Awaiting IT",
+        title: "A hotspot has been requested",
+        paragraphs: [
+          greeting(null),
+          `<strong style="color:#27242e; font-weight:600;">${userName}</strong> has requested a Wi-Fi hotspot for <strong style="color:#27242e; font-weight:600;">${esc(window)}</strong>.`,
+          ...(loanPurpose ? [`What for: ${esc(loanPurpose)}`] : []),
+          `A loan has no manager stage, so this is waiting on IT to assign one.`,
+        ],
+        ...(loanSite ? { highlight: { heading: "Collecting from", lines: [esc(loanSite)] } } : {}),
+        cta: { label: "Assign a hotspot", url: reviewLink },
+      };
+      break;
+    }
+
+    case "HOTSPOT_DUE_SOON": {
+      // The one rung that is a courtesy rather than a chase, so nobody is
+      // copied. Getting this wrong — cc'ing IT the day BEFORE something is
+      // due — is how a whole ladder gets filtered to a folder.
+      to = await resolveUserEmail(request.userId);
+      subject = `Your hotspot is due back ${loanDue}`;
+      text =
+        `A reminder that the Wi-Fi hotspot you borrowed is due back ${loanDue}.\n\n` +
+        `Please drop it back to ${loanSite ?? "your stock keeper"}, who will close the loan off.`;
+      content = {
+        eyebrow: "Due soon",
+        title: "Your hotspot is due back soon",
+        paragraphs: [
+          greeting(userFirst),
+          `Just a reminder that the Wi-Fi hotspot you borrowed is due back <strong style="color:#27242e; font-weight:600;">${esc(loanDue)}</strong>.`,
+          `Please drop it back to ${loanSite ? `<strong style="color:#27242e; font-weight:600;">${esc(loanSite)}</strong>` : "your stock keeper"}, who will close the loan off in KSB Checkout.`,
+        ],
+        cta: { label: "View your loan", url: reviewLink },
+      };
+      break;
+    }
+
+    case "HOTSPOT_DUE_BACK": {
+      to = await resolveUserEmail(request.userId);
+      subject = `Your hotspot is due back today`;
+      text =
+        `The Wi-Fi hotspot you borrowed is due back today.\n\n` +
+        `Please return it to ${loanSite ?? "your stock keeper"}. They will mark it returned, ` +
+        `which checks it back in and frees it for the next booking.`;
+      content = {
+        eyebrow: "Due today",
+        title: "Your hotspot is due back today",
+        paragraphs: [
+          greeting(userFirst),
+          `The Wi-Fi hotspot you borrowed is due back <strong style="color:#27242e; font-weight:600;">today</strong>.`,
+          `Please return it to ${loanSite ? `<strong style="color:#27242e; font-weight:600;">${esc(loanSite)}</strong>` : "your stock keeper"}. They will mark it returned, which checks it back in and frees it for the next booking.`,
+        ],
+        cta: { label: "View your loan", url: reviewLink },
+      };
+      break;
+    }
+
+    case "HOTSPOT_OVERDUE": {
+      // WIDENS WITH THE STAGE. Rung 3 brings in the site's keeper — they are
+      // who the hotspot comes back TO, so they are who can chase it in
+      // person. Rung 4 adds IT, and that is what makes it an escalation
+      // rather than a fourth reminder (the same distinction SHIPMENT_OVERDUE
+      // draws above).
+      const stage = Number(payload.stage);
+      const escalated = Number.isFinite(stage) && stage >= 4;
+
+      const userEmail = await resolveUserEmail(request.userId);
+      const { emails: keeperEmails } = await resolveStockKeeperEmails(
+        request.userLocationId
+      );
+      to = Array.from(
+        new Set(
+          [
+            userEmail,
+            ...keeperEmails,
+            ...(escalated ? ADMIN_EMAILS : []),
+          ].filter((e): e is string => !!e)
+        )
+      );
+
+      const overdue = Number(payload.daysOverdue);
+      const late =
+        Number.isFinite(overdue) && overdue > 0
+          ? `${overdue} day${overdue === 1 ? "" : "s"} overdue`
+          : "overdue";
+
+      subject = escalated
+        ? `Escalation: ${request.userName}'s hotspot is ${late}`
+        : `Overdue: your hotspot was due back ${loanDue}`;
+      text =
+        `The Wi-Fi hotspot loaned to ${request.userName} was due back ${loanDue} and is now ${late}.\n\n` +
+        `${request.userName}: please return it to ${loanSite ?? "your stock keeper"} as soon as you can. ` +
+        `Snipe-IT still shows it checked out, and it can't be booked by anyone else until it comes back.` +
+        (escalated ? `\n\nIT has been notified.` : "");
+      content = {
+        eyebrow: "Overdue",
+        title: escalated ? "Hotspot still not returned" : "Your hotspot is overdue",
+        paragraphs: [
+          greeting(null),
+          `The Wi-Fi hotspot loaned to <strong style="color:#27242e; font-weight:600;">${userName}</strong> was due back <strong style="color:#27242e; font-weight:600;">${esc(loanDue)}</strong> and is now <strong style="color:#27242e; font-weight:600;">${esc(late)}</strong>.`,
+          `<strong style="color:#27242e; font-weight:600;">${userName}</strong>: please return it to ${loanSite ? `<strong style="color:#27242e; font-weight:600;">${esc(loanSite)}</strong>` : "your stock keeper"} as soon as you can. It still shows as checked out, and nobody else can book it until it is back.`,
+          ...(escalated ? [`IT has been notified.`] : []),
+        ],
+        ...(loanAccessory
+          ? { highlight: { heading: "On loan", lines: [esc(loanAccessory)] } }
+          : {}),
+        cta: { label: "View the loan", url: reviewLink },
+      };
+      break;
+    }
+
+    case "HOTSPOT_RETURNED": {
+      // The receipt. Short on purpose — it exists so the borrower has proof
+      // the loan is closed and stops being chased about it.
+      to = await resolveUserEmail(request.userId);
+      subject = `Hotspot returned — thanks`;
+      text =
+        `Thanks — the Wi-Fi hotspot you borrowed has been returned and checked back in.\n\n` +
+        `Nothing further is needed from you.`;
+      content = {
+        eyebrow: "Closed",
+        title: "Your hotspot loan is closed",
+        paragraphs: [
+          greeting(userFirst),
+          `Thanks — the Wi-Fi hotspot you borrowed has been returned and checked back in.`,
+          `Nothing further is needed from you.`,
+        ],
+        cta: { label: "Open KSB Checkout", url: reviewLink },
       };
       break;
     }

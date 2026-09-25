@@ -29,6 +29,9 @@ import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 import EditRequestDialog from "@/components/dialogs/EditRequestDialog";
 import ConfirmActionDialog from "@/components/dialogs/ConfirmActionDialog";
+import AssignHotspotDialog from "@/components/dialogs/AssignHotspotDialog";
+import { returnHotspot } from "@/api/hotspots";
+import { isReturnable } from "@/components/ui/statusbadge";
 import EnterSelfProcuredDetailsDialog from "@/components/dialogs/EnterSelfProcuredDetailsDialog";
 import ReviewSelfProcuredDialog from "@/components/dialogs/ReviewSelfProcuredDialog";
 import { skipQuote } from "@/api/quotes";
@@ -70,6 +73,13 @@ const SELECTABLE_STATUSES = [
   "ASSIGNED",
   "READY_TO_COLLECT",
   "SHIPPED",
+  // Hotspot loans. ON_LOAN and the two overdue stages are IN FLIGHT, not
+  // done — the hardware is still out — which is why they are listed
+  // separately rather than folded into DONE.
+  "ON_LOAN",
+  "DUE_BACK",
+  "OVERDUE",
+  "RETURNED",
   "DONE",
   "REJECTED",
   // Accepted for backwards compatibility only: links minted before the stage
@@ -125,6 +135,13 @@ export default function RequestTablePage() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [shipDialogOpen, setShipDialogOpen] = useState(false);
+  // Hotspot loans. The return uses the open/pending/error triple the other
+  // confirm actions use, because a refused Snipe check-in has to be shown
+  // inside the dialog rather than closing it as though it worked.
+  const [assignHotspotOpen, setAssignHotspotOpen] = useState(false);
+  const [returnHotspotOpen, setReturnHotspotOpen] = useState(false);
+  const [returnHotspotPending, setReturnHotspotPending] = useState(false);
+  const [returnHotspotError, setReturnHotspotError] = useState<string | null>(null);
   const [tiers, setTiers] = useState<string[]>([]);
 
   const [filteredCount, setFilteredCount] = useState(0);
@@ -529,6 +546,52 @@ export default function RequestTablePage() {
     }
   }
 
+  ///  +-----------------------------------------------------------------+
+  ///  |                     HOTSPOT LOANS                               |
+  ///  +-----------------------------------------------------------------+
+  //
+  //  Assignment opens a dialog (it has a choice to make); the return is a
+  //  confirm, because it has none — the hotspot is either back or it is not.
+
+  const handleAssignHotspot = (request: Request) => {
+    setSelectedRequest(request);
+    setAssignHotspotOpen(true);
+  };
+
+  const handleReturnHotspot = (request: Request) => {
+    setSelectedRequest(request);
+    setReturnHotspotError(null);
+    setReturnHotspotOpen(true);
+  };
+
+  const handleConfirmReturnHotspot = async () => {
+    if (!selectedRequest) return;
+    setReturnHotspotPending(true);
+    setReturnHotspotError(null);
+    try {
+      const result = await returnHotspot(selectedRequest.id);
+
+      // A refused check-in is a RESULT, not an exception: the hotspot is
+      // physically back, Snipe just would not record it. Keeping the dialog
+      // open with the reason is the only honest thing to do — closing it
+      // would read as success, and the loan is deliberately still open.
+      if (!result.checkedIn) {
+        setReturnHotspotError(result.message);
+        await loadRequests();
+        return;
+      }
+
+      await loadRequests();
+      setReturnHotspotOpen(false);
+      setSelectedRequest(null);
+    } catch (err: any) {
+      console.error("Hotspot return failed:", err);
+      setReturnHotspotError(err.message || "Failed to close the loan.");
+    } finally {
+      setReturnHotspotPending(false);
+    }
+  };
+
   const handleRejectClick = (request: Request) => {
     setSelectedRequest(request);
     setRejectDialogOpen(true);
@@ -758,6 +821,8 @@ export default function RequestTablePage() {
             onMarkUserProcured={handleMarkUserProcured}
             onSubmitSelfProcuredDetails={handleSubmitSelfProcuredDetails}
             onReviewSelfProcured={handleReviewSelfProcured}
+            onAssignHotspot={handleAssignHotspot}
+            onReturnHotspot={handleReturnHotspot}
             onEdit={handleEdit}
           />
           {/* DIALOGS */}
@@ -927,6 +992,68 @@ export default function RequestTablePage() {
             open={shipDialogOpen}
             onOpenChange={setShipDialogOpen}
             onConfirm={handleConfirmShip}
+          />
+
+          <AssignHotspotDialog
+            request={selectedRequest}
+            open={assignHotspotOpen}
+            onOpenChange={(next) => {
+              setAssignHotspotOpen(next);
+              if (!next) setSelectedRequest(null);
+            }}
+            onSuccess={loadRequests}
+          />
+
+          <ConfirmActionDialog
+            open={returnHotspotOpen}
+            onOpenChange={(next) => {
+              setReturnHotspotOpen(next);
+              if (!next) {
+                setReturnHotspotError(null);
+                setSelectedRequest(null);
+              }
+            }}
+            icon="assignment_turned_in"
+            title={
+              selectedRequest?.hotspotLoan &&
+              !isReturnable(selectedRequest.hotspotLoan)
+                ? "Close this loan early?"
+                : "Mark the hotspot returned?"
+            }
+            description={
+              <>
+                Confirms{" "}
+                <strong className="text-modal-text-primary">
+                  {selectedRequest?.hotspotLoan?.accessoryName ?? "the hotspot"}
+                </strong>{" "}
+                is back from{" "}
+                <strong className="text-modal-text-primary">
+                  {selectedRequest?.userName}
+                </strong>
+                . It will be checked back in to Snipe-IT and become available to
+                book again.
+                {selectedRequest?.hotspotLoan &&
+                  !isReturnable(selectedRequest.hotspotLoan) && (
+                    <>
+                      {" "}
+                      This loan isn't due back until{" "}
+                      {new Date(
+                        selectedRequest.hotspotLoan.endDate
+                      ).toLocaleDateString("en-AU", {
+                        day: "numeric",
+                        month: "long",
+                        timeZone: "UTC",
+                      })}
+                      .
+                    </>
+                  )}
+              </>
+            }
+            confirmLabel="Mark returned"
+            pendingLabel="Checking in..."
+            pending={returnHotspotPending}
+            error={returnHotspotError}
+            onConfirm={handleConfirmReturnHotspot}
           />
 
           <StandardApprovalResultDialog

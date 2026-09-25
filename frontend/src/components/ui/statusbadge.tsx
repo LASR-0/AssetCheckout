@@ -24,7 +24,92 @@ export type FulfilmentInput = {
   receivedAt?: string | null;
   /** CORRECTION rows have no fulfilment chain — see the guard below. */
   requestKind?: string | null;
+  /** HOTSPOT rows only. Present from collection onwards is what turns a
+   *  finished handover into a running loan — see deriveLoanStage. */
+  hotspotLoan?: LoanInput | null;
 };
+
+///  +-----------------------------------------------------------------+
+///  |                 WHERE A LOAN IS UP TO                           |
+///  +-----------------------------------------------------------------+
+//
+//  A hotspot is borrowed, not issued. Its handover half is byte-for-byte the
+//  ordinary one — IT assigns, a keeper makes it ready, the requester collects
+//  it — and deriveFulfilment below is left to answer that half unchanged, so
+//  the stock keeper's queues pick loans up without knowing they exist.
+//
+//  What differs is that collection is the START of the interesting part, not
+//  the end of the story. So only the BADGE diverges after receivedAt, and it
+//  diverges here.
+//
+//  COMPARED AS CALENDAR DAYS, NOT INSTANTS. "Due back on the 5th" means the
+//  whole of the 5th, and a loan due at some particular millisecond is not a
+//  thing anybody asked for. The due date is written as UTC midnight of the day
+//  the requester picked, so its UTC parts ARE that calendar date; today is
+//  read in the viewer's local parts. Comparing those two as day numbers is
+//  what stops a Brisbane keeper being told a hotspot is overdue at 10am on the
+//  day it is actually due, which is what any instant comparison gives you.
+///  +-----------------------------------------------------------------+
+
+export type LoanInput = {
+  /** ISO. The due-back date — the day the return action unlocks. */
+  endDate: string;
+  /** Set only once Snipe agreed to the check-in. */
+  returnedAt?: string | null;
+};
+
+/** A calendar date as one comparable integer, e.g. 2026-10-05 -> 20261005. */
+function dayKey(year: number, month: number, day: number): number {
+  return year * 10000 + month * 100 + day;
+}
+
+/** The due date's own calendar day, read from its UTC parts — see above. */
+function dueDayKey(endDate: string): number {
+  const d = new Date(endDate);
+  if (Number.isNaN(d.getTime())) return Number.POSITIVE_INFINITY;
+  return dayKey(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+}
+
+/** Today, in the viewer's own timezone. */
+function todayKey(now: Date): number {
+  return dayKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+export type LoanStage = "ON_LOAN" | "DUE_BACK" | "OVERDUE" | "RETURNED";
+
+/**
+ * Where a collected loan is up to. `now` is injectable so the day-boundary
+ * cases are testable without freezing the clock.
+ *
+ * DUE_BACK and OVERDUE are one decision, not two: the return unlocks on the
+ * due date and stays unlocked, and the split exists only so a loan nobody has
+ * brought back reads red rather than amber. Anything that asks "can this be
+ * returned" should call isReturnable, not test the stage.
+ */
+export function deriveLoanStage(loan: LoanInput, now: Date = new Date()): LoanStage {
+  if (loan.returnedAt) return "RETURNED";
+
+  const due = dueDayKey(loan.endDate);
+  const today = todayKey(now);
+
+  if (today > due) return "OVERDUE";
+  if (today === due) return "DUE_BACK";
+  return "ON_LOAN";
+}
+
+/**
+ * Has the loan reached its due date? This is the unlock rule for the stock
+ * keeper's Return action.
+ *
+ * ADMINS ARE NOT HELD TO IT — see the return route. An event that finishes
+ * early still ends with somebody standing at the desk holding a hotspot, and
+ * refusing to take it back because the spreadsheet says Thursday is worse
+ * than the inconsistency.
+ */
+export function isReturnable(loan: LoanInput, now: Date = new Date()): boolean {
+  if (loan.returnedAt) return false;
+  return todayKey(now) >= dueDayKey(loan.endDate);
+}
 
 export type FulfilmentStage = {
   isCompleted: boolean;
@@ -94,10 +179,18 @@ export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
 
   const isReceivedOrCollected = isCompleted && !!receivedAt;
 
+  // A LOAN DOES NOT END AT COLLECTION. Every boolean above stays honest for a
+  // hotspot — the handover half really is the ordinary one, which is what lets
+  // the stock keeper's queues pick loans up without knowing they exist. Only
+  // the badge diverges, and only from receivedAt onwards, because that is
+  // where "the requester has it" stops meaning "finished" and starts meaning
+  // "the clock is running".
+  const loan = request.requestKind === "HOTSPOT" ? request.hotspotLoan ?? null : null;
+
   const badgeKey = !isCompleted
     ? request.status
     : isReceivedOrCollected
-    ? (needsShipping ? "RECEIVED" : "COLLECTED")
+    ? (loan ? deriveLoanStage(loan) : needsShipping ? "RECEIVED" : "COLLECTED")
     // Before isShipped, which a handed-over shipment no longer satisfies
     // anyway — ordered this way so the two can't both be true by accident.
     : isReadyToCollect
@@ -174,6 +267,14 @@ export function deriveStage(request: StageInput): string {
       return "AWAITING_IT";
     if (request.modelRequest?.status === "PENDING") return "AWAITING_IT";
 
+    // A loan has no manager stage, so APPROVED is where it is BORN rather than
+    // somewhere it was promoted to, and adminApprovedAt is the only sign-off it
+    // will ever collect. Without this it fell through to the bare "Approved"
+    // below and the one row in the system that is genuinely sitting in IT's lap
+    // was the one that did not say so.
+    if (request.requestKind === "HOTSPOT" && !request.adminApprovedAt)
+      return "AWAITING_IT";
+
     // Handed off to the requester instead of an accessory being selected —
     // waiting on them to report what they bought, then on IT to review it.
     // Checked before APPROVED falls through below, on the same terms as
@@ -198,7 +299,10 @@ export function deriveStage(request: StageInput): string {
 /** Terminal stages: the requester actually has the thing (or the correction was
  *  applied). Everything else is still in flight — which is the whole point of
  *  the split, since RequestStatus.COMPLETED spans both. */
-const DONE_STAGES = new Set(["COLLECTED", "RECEIVED", "COMPLETED"]);
+//  RETURNED joins them and ON_LOAN deliberately does not: a running loan is a
+//  request whose hardware is still out, which is the opposite of done however
+//  settled it looks. DUE_BACK and OVERDUE are likewise in flight.
+const DONE_STAGES = new Set(["COLLECTED", "RECEIVED", "COMPLETED", "RETURNED"]);
 
 export function isDoneStage(stage: string): boolean {
   return DONE_STAGES.has(stage);
@@ -267,6 +371,12 @@ const labelMap: Record<string, string> = {
   AWAITING_PROCUREMENT_REVIEW: "Awaiting IT review",
   READY_TO_COLLECT: "Ready to collect",
   READY_TO_SHIP: "Ready to ship",
+  // Hotspot loans. ON_LOAN is the only "done" state that is not an ending —
+  // see deriveLoanStage.
+  ON_LOAN: "On loan",
+  DUE_BACK: "Due back",
+  OVERDUE: "Overdue",
+  RETURNED: "Returned",
   SHIPPED: "Shipped",
   COLLECTED: "Collected",
   RECEIVED: "Received",
@@ -307,6 +417,16 @@ const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
   AWAITING_PROCUREMENT_REVIEW: { ...PROGRESS, icon: "fact_check" },
   READY_TO_COLLECT: { ...DONE, icon: "package_2" },
   READY_TO_SHIP: { ...DONE, icon: "local_shipping" },
+  // ON_LOAN is `done` because nobody owes an action while a loan is running —
+  // the requester is simply using the thing. It becomes `progress` the day it
+  // is owed back, and `stop` once it is late, which is the only point in the
+  // whole flow where a row goes backwards through the three intents. That is
+  // correct: a loan nobody returned IS a problem, and it should not keep
+  // reading like a finished request.
+  ON_LOAN: { ...DONE, icon: "wifi" },
+  DUE_BACK: { ...PROGRESS, icon: "event_upcoming" },
+  OVERDUE: { ...STOP, icon: "running_with_errors" },
+  RETURNED: { ...DONE, icon: "assignment_turned_in" },
   SHIPPED: { ...DONE, icon: "local_shipping" },
   COLLECTED: { ...DONE, icon: "check_circle" },
   RECEIVED: { ...DONE, icon: "check_circle" },

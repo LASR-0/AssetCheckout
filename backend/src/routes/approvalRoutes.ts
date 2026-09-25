@@ -13,6 +13,12 @@ import {
   addAccessoryStockForRequest,
 } from "../services/request.js";
 import {
+  listHotspotOptions,
+  findClashingLoans,
+  assignHotspotToRequest,
+  markHotspotReturned,
+} from "../services/hotspot.js";
+import {
   createQuoteForRequest,
   acceptQuoteForRequest,
   rejectQuoteForRequest,
@@ -783,6 +789,168 @@ router.post("/:requestId/receive", async (req, res, next) => {
     }
 
     const result = await markRequestReceived(requestId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                      HOTSPOT LOAN ROUTES                        |
+///  +-----------------------------------------------------------------+
+//
+//  Three routes, and only three, because the middle of a loan is the ordinary
+//  flow: /ready-for-collection and /receive serve hotspots unchanged, and
+//  deliberately were not touched. What is here is the two ends — IT choosing a
+//  hotspot, and the keeper getting it back.
+///  +-----------------------------------------------------------------+
+
+/**
+ * Everything IT can assign. Admin-only: this reads the loan pool and the next
+ * call checks hardware out of Snipe against it.
+ *
+ * Deliberately NOT routed through /search-accessories. That endpoint's
+ * `requestKind !== "ACCESSORY"` guard is there because it once answered
+ * `{matches: []}` for every term an admin could type on a request whose
+ * category it could never match — a silent wrong answer. Loosening it to let
+ * hotspots through would reopen exactly that hole for the next kind.
+ */
+router.get("/:requestId/hotspot/options", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { requestKind: true, hotspotLoan: { select: { startDate: true, endDate: true } } },
+    });
+    if (!request) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+    if (request.requestKind !== "HOTSPOT" || !request.hotspotLoan) {
+      return res.status(400).json({
+        success: false,
+        message: "This isn't a hotspot request, so there is no hotspot to assign.",
+      });
+    }
+
+    // The clash list rides along with the options rather than sitting behind a
+    // second call: the pool is a single unit, so "is it already promised to
+    // somebody over these dates" is not extra detail, it is the decision.
+    const [options, clashes] = await Promise.all([
+      listHotspotOptions(),
+      findClashingLoans(
+        request.hotspotLoan.startDate,
+        request.hotspotLoan.endDate,
+        requestId
+      ),
+    ]);
+
+    res.json({
+      success: true,
+      options,
+      clashes: clashes.map((c) => ({
+        requestId: c.requestId,
+        userName: c.request.userName,
+        accessoryId: c.snipeAccessoryId,
+        accessoryName: c.accessoryName,
+        startDate: c.startDate,
+        endDate: c.endDate,
+        collected: c.request.receivedAt !== null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** IT's sign-off: pick the hotspot, check it out, complete the request. */
+router.post("/:requestId/hotspot/assign", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+    if (!isAdminEmail(getActorEmail(req))) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const accessoryId = Number(req.body?.accessoryId);
+    if (!Number.isInteger(accessoryId) || accessoryId <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "accessoryId must be a positive number" });
+    }
+
+    const result = await assignHotspotToRequest(requestId, accessoryId, actorName);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * The hotspot is back. Gated on the request's OWN location, exactly as
+ * /ready-for-collection is and for the same reason: a keeper at Brisbane has
+ * no business closing a loan whose hotspot is sitting in Bundamba.
+ *
+ * ADMINS MAY RETURN EARLY, keepers may not. The unlock-on-the-due-date rule is
+ * what stops a keeper closing a loan the borrower is still using; it is not a
+ * reason to refuse hardware somebody is physically handing back because their
+ * event finished on Tuesday. An admin is who gets to make that call, so the
+ * override is theirs and it is recorded in the same returnedBy column.
+ */
+router.post("/:requestId/hotspot/return", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    const actorName = getActorName(req);
+
+    if (!actorName) {
+      return res.status(401).json({ success: false, message: "Missing actor identity" });
+    }
+    if (Number.isNaN(requestId)) {
+      return res.status(400).json({ success: false, message: "Invalid requestId" });
+    }
+
+    // Loaded for its location before the permission check, since the check is
+    // about WHERE the hotspot is — same ordering as /ready-for-collection.
+    const target = await prisma.request.findUnique({
+      where: { id: requestId },
+      select: { userLocationId: true },
+    });
+    if (!target) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    const actor = await resolveStockKeeperActor(req);
+    if (!canActAsStockKeeper(actor, target.userLocationId)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          target.userLocationId === null
+            ? "This request has no recorded location, so only an admin can close the loan"
+            : "You aren't a stock keeper for this location",
+      });
+    }
+
+    const result = await markHotspotReturned(requestId, actorName, {
+      allowEarly: actor.isAdmin,
+    });
     res.json(result);
   } catch (err) {
     next(err);

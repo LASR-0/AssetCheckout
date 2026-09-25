@@ -66,6 +66,12 @@ const SCHEDULED_JOBS: ScheduledJob[] = [
     description: "Reminds users to confirm receipt of shipped devices, escalating to IT if overdue.",
   },
   {
+    type: "REMIND_HOTSPOT_RETURNS",
+    label: "Hotspot due-back reminders",
+    description:
+      "Chases hotspot loans as they approach their return date, then escalates to the site's stock keeper and IT once they are overdue.",
+  },
+  {
     type: "SYNC_REQUEST_TO_SHAREPOINT",
     label: "SharePoint Request Sync",
     description: "Sends new requests to the SharePoint ordering ledger nightly via Power Automate.",

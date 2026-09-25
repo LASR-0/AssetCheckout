@@ -20,6 +20,7 @@ import {
   createCorrectionRequest,
   editRequest,
 } from "../services/request.js";
+import { createHotspotRequest } from "../services/hotspot.js";
 import {
   getActorName,
   getActorEmail,
@@ -148,6 +149,46 @@ router.post("/corrections", async (req, res, next) => {
 //
 //  PATCH, not PUT: the body is a sparse set of fields to change, and an
 //  omitted key means "leave it alone" rather than "clear it".
+///  +-----------------------------------------------------------------+
+///  |                      POST HOTSPOT LOAN                          |
+///  +-----------------------------------------------------------------+
+//
+//  Its own endpoint for the same reason POST /corrections is: createRequest's
+//  input shape is a provisioning order, and a loan is not one. It also enters
+//  the workflow at a different state and carries a date window nothing else
+//  has, so routing it through the shared create would be one mis-set field
+//  away from filing a hotspot as an asset request.
+//
+//  ON-BEHALF-OF IS ALLOWED, as it is on the accessory form: somebody books the
+//  hotspot for the person running the event as often as not. The SUBMITTER is
+//  still resolved server-side and never taken from the body.
+
+router.post("/hotspots", async (req, res, next) => {
+  try {
+    const actorEmail = getActorEmail(req);
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Missing actor identity" });
+    }
+
+    let submittedById: number | null = null;
+    if (actorEmail) {
+      try {
+        submittedById = await resolveActorUserId(actorEmail);
+      } catch (err) {
+        console.error("[hotspots] could not resolve submitter to a Snipe user:", err);
+      }
+    }
+
+    const result = await createHotspotRequest({ ...req.body, submittedById });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 router.patch("/:requestId", requireAdmin, async (req, res, next) => {
   try {
@@ -338,6 +379,13 @@ router.get("/", async (req, res, next) => {
         // "Enter item details" / "Review procurement" actions and badge.
         // Same visibility reasoning as quoteDetail above.
         selfProcured: true,
+        // Null for everything but a HOTSPOT row. Carries the loan window, and
+        // the frontend's whole post-collection half is derived from its
+        // endDate — without it every loan reads as a plain COLLECTED request
+        // and the return action never appears. Same visibility reasoning as
+        // the three above; a keeper who can see the row is precisely who has
+        // to get the hotspot back.
+        hotspotLoan: true,
         // The most recent correction an admin made to the row, if any. One
         // row, newest first — the table only ever shows "this was edited, by
         // whom, when", and the full history is not something the log renders.
@@ -694,6 +742,36 @@ router.get("/action-counts", async (req, res, next) => {
           },
         });
         stock = candidates.filter((r) => !isLegacyShipment(r, cutover)).length;
+
+        // Loans out past their due date at the keeper's sites. Added to the
+        // STOCK badge rather than the requests one because that is the badge
+        // on the page where the action lives — the Stock tab's "Hotspots due
+        // back" queue.
+        //
+        // NOT gated on seenBy, unlike the requests badge. A loan that is
+        // overdue is not a notification somebody can decide they already know
+        // about; it is hardware nobody has back, and it stays counted until
+        // it is returned. Same reasoning as the handover queue above, which
+        // is likewise state-based.
+        //
+        // The date comparison is whole-day: endDate is stored as UTC midnight
+        // of the day chosen, so "due today" is endDate <= today's midnight,
+        // and the count agrees with isReturnable on the client.
+        const now = new Date();
+        const todayUtc = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+        );
+        stock += await prisma.hotspotLoan.count({
+          where: {
+            returnedAt: null,
+            endDate: { lte: todayUtc },
+            request: {
+              userLocationId: { in: sites },
+              status: "COMPLETED",
+              receivedAt: { not: null },
+            },
+          },
+        });
       }
     }
 

@@ -114,6 +114,9 @@ const MOBILE_LEADING_DIGIT_KEY = "mobile_leading_digit";
 const REQUESTABLE_ACCESSORY_CATEGORIES_KEY = "requestable_accessory_categories";
 const STANDARD_ACCESSORIES_KEY = "standard_accessories";
 const ACCESSORY_ASSET_CATEGORY_MAP_KEY = "accessory_asset_category_map";
+// Hotspot loans chapter
+const HOTSPOT_CATEGORY_KEY = "hotspot_category_id";
+const HOTSPOT_MAX_LOAN_DAYS_KEY = "hotspot_max_loan_days";
 // Stock keepers chapter
 const STOCK_KEEPERS_KEY = "stock_keepers";
 const STOCK_KEEPER_FLOW_CUTOVER_KEY = "stock_keeper_flow_enabled_at";
@@ -489,6 +492,52 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     envVar: "REMINDER_DAYS_3",
     defaultValue: "30",
     description: "Days after shipping to escalate to the user and admins (overdue)" 
+  },
+  {
+    key: HOTSPOT_CATEGORY_KEY,
+    envVar: "HOTSPOT_CATEGORY_ID",
+    defaultValue: "18",
+    description:
+      "Snipe-IT ACCESSORY category id holding the loanable Wi-Fi hotspots. Every hotspot request is for something in this category, so there is no category picker on the form — IT is offered the records in here and nothing else. Seeded to the live 'Wi-Fi Hotspot' category; change it if the pool moves.",
+  },
+  {
+    key: HOTSPOT_MAX_LOAN_DAYS_KEY,
+    envVar: "HOTSPOT_MAX_LOAN_DAYS",
+    defaultValue: "30",
+    description:
+      "Longest loan window a requester may ask for, in days. A backstop against a mis-typed year turning into an indefinite checkout, not a policy — IT can still assign whatever was asked for.",
+  },
+  {
+    key: "jobs.hotspotReminderCron",
+    envVar: "JOBS_HOTSPOT_REMINDER_CRON",
+    defaultValue: "0 9 * * *",
+    description: "Schedule for the hotspot due-back reminder job",
+  },
+  {
+    key: "hotspot_reminder_days_1",
+    envVar: "HOTSPOT_REMINDER_DAYS_1",
+    defaultValue: "-1",
+    description:
+      "Days RELATIVE TO the due date for the first due-back nudge to the borrower. Negative means before it: -1 is the day before. The other three keys work the same way.",
+  },
+  {
+    key: "hotspot_reminder_days_2",
+    envVar: "HOTSPOT_REMINDER_DAYS_2",
+    defaultValue: "0",
+    description: "Days relative to the due date for the it's-due-today nudge to the borrower",
+  },
+  {
+    key: "hotspot_reminder_days_3",
+    envVar: "HOTSPOT_REMINDER_DAYS_3",
+    defaultValue: "3",
+    description:
+      "Days after the due date to chase the borrower AND the site's stock keeper about an overdue hotspot",
+  },
+  {
+    key: "hotspot_reminder_days_4",
+    envVar: "HOTSPOT_REMINDER_DAYS_4",
+    defaultValue: "7",
+    description: "Days after the due date to escalate an overdue hotspot to IT admins",
   },
   { key: "feedback_enabled",
     envVar: "FEEDBACK_ENABLED",
@@ -1340,6 +1389,90 @@ function normalizeStockKeepersEnv(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+///  +-----------------------------------------------------------------+
+///  |                      HOTSPOT LOANS                              |
+///  +-----------------------------------------------------------------+
+//
+//  ONE CATEGORY, NOT A LIST. A hotspot request is for a hotspot — there is no
+//  branch of it that is for something else — so the category is configuration
+//  rather than a question the form asks. Holding it as a setting instead of a
+//  constant only means the pool can move in Snipe without a deploy.
+///  +-----------------------------------------------------------------+
+
+/**
+ * The Snipe ACCESSORY category the loanable hotspots live in.
+ *
+ * Null when the setting has been blanked or set to something that is not a
+ * positive id. Callers must treat that as "hotspot loans are not configured"
+ * and say so, rather than falling back to a guess: the wrong category here
+ * would offer IT a list of headphones to check out as a hotspot.
+ */
+export async function getHotspotCategoryId(): Promise<number | null> {
+  const raw = await getSetting(HOTSPOT_CATEGORY_KEY);
+  const parsed = Number((raw ?? "").trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+export async function setHotspotCategoryId(
+  categoryId: number | null,
+  actorEmail?: string
+): Promise<void> {
+  if (categoryId !== null && (!Number.isInteger(categoryId) || categoryId <= 0)) {
+    throw new AppError("hotspot category id must be a positive integer", 400);
+  }
+  await setSetting(
+    HOTSPOT_CATEGORY_KEY,
+    categoryId === null ? "" : String(categoryId),
+    actorEmail
+  );
+}
+
+/**
+ * Longest window a requester may ask for. A backstop against a mis-typed year,
+ * not a policy: it bounds what the FORM will submit, and IT can still assign
+ * whatever was asked for.
+ *
+ * Falls back to 30 rather than to "unbounded" if the setting is unreadable —
+ * an unparseable limit should not quietly become no limit at all.
+ */
+export async function getHotspotMaxLoanDays(): Promise<number> {
+  const raw = await getSetting(HOTSPOT_MAX_LOAN_DAYS_KEY);
+  const parsed = Number((raw ?? "").trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 30;
+}
+
+export async function setHotspotMaxLoanDays(
+  days: number,
+  actorEmail?: string
+): Promise<void> {
+  if (!Number.isInteger(days) || days <= 0) {
+    throw new AppError("hotspot max loan days must be a positive integer", 400);
+  }
+  await setSetting(HOTSPOT_MAX_LOAN_DAYS_KEY, String(days), actorEmail);
+}
+
+/**
+ * The four rungs of the due-back ladder, as offsets in days from the due date.
+ * Negative is before it. Returned sorted ascending so the job can walk them in
+ * order and trust that stage N is never later than stage N+1 — a hand-edited
+ * setting that puts them out of order would otherwise fire the escalation
+ * before the polite reminder.
+ */
+export async function getHotspotReminderOffsets(): Promise<number[]> {
+  const defaults = [-1, 0, 3, 7];
+  const raws = await Promise.all([
+    getSetting("hotspot_reminder_days_1"),
+    getSetting("hotspot_reminder_days_2"),
+    getSetting("hotspot_reminder_days_3"),
+    getSetting("hotspot_reminder_days_4"),
+  ]);
+  const parsed = raws.map((raw, i) => {
+    const n = Number((raw ?? "").trim());
+    return Number.isInteger(n) ? n : defaults[i];
+  });
+  return parsed.sort((a, b) => a - b);
 }
 
 /**

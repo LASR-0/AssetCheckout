@@ -12,7 +12,12 @@ import {
 } from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
-import { StatusBadge, deriveFulfilment, deriveStage } from "@/components/ui/statusbadge";
+import {
+  StatusBadge,
+  deriveFulfilment,
+  deriveStage,
+  isReturnable,
+} from "@/components/ui/statusbadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Role, StockKeeperLocation } from "@/types/authType";
 
@@ -57,6 +62,10 @@ export type RequestsTableMeta = {
   onSubmitSelfProcuredDetails: (request: Request) => void;
   /** Admin reviews what was bought and completes the request. */
   onReviewSelfProcured: (request: Request) => void;
+  /** Hotspot loans: IT picks a unit and checks it out; a keeper closes the
+   *  loan when it comes back. */
+  onAssignHotspot: (request: Request) => void;
+  onReturnHotspot: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
   /** Clears the row's "new" marker once the reader has dwelled on it. */
@@ -558,9 +567,128 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
   }
 
   // ──────────────────────────────────────────────────
+  // HOTSPOT — IT's sign-off
+  // ──────────────────────────────────────────────────
+  //
+  // A loan has no manager stage: it is filed straight into APPROVED and the
+  // only approval it will ever collect is this one. The action carries the
+  // accessory choice with it, which is why this is its own dialog rather than
+  // the shared Approve button — approving a loan and picking which hotspot to
+  // hand over are the same decision.
+  if (
+    request.requestKind === "HOTSPOT" &&
+    requestStatus === "APPROVED" &&
+    !request.adminApprovedAt
+  ) {
+    if (role === "ADMIN") {
+      return (
+        <ActionRow>
+          <ActionButton
+            icon="wifi"
+            label="Assign hotspot"
+            color="text-intent-progress"
+            hoverBg="hover:bg-intent-progress/10"
+            border="border-intent-progress/40"
+            title="Pick a hotspot and check it out to the requester"
+            onClick={() => meta.onAssignHotspot(request)}
+          />
+        </ActionRow>
+      );
+    }
+    return (
+      <BadgeWithTooltip
+        status="AWAITING_IT"
+        tip="Waiting for IT to assign a hotspot"
+      />
+    );
+  }
+
+  // ──────────────────────────────────────────────────
   // COMPLETED — post-fulfilment stage (all roles)
   // ──────────────────────────────────────────────────
   if (isCompleted) {
+    ///  +-------------------------------------------------------------+
+    ///  |        A LOAN'S TAIL, WHERE EVERY OTHER REQUEST ENDS         |
+    ///  +-------------------------------------------------------------+
+    //
+    //  MUST STAY ABOVE the terminal branch below. isReceivedOrCollected is
+    //  true the moment the borrower picks the hotspot up, and that branch
+    //  answers with a bare badge — which for a loan is precisely the point at
+    //  which there is still work to do. Below it, this code is unreachable
+    //  and the loan can never be closed.
+    //
+    //  Everything BEFORE collection deliberately falls through to the shared
+    //  handover branches further down: making a hotspot ready and collecting
+    //  it are the ordinary actions, done by the ordinary people.
+    if (request.requestKind === "HOTSPOT" && isReceivedOrCollected) {
+      const loan = request.hotspotLoan ?? null;
+
+      // No loan row on a HOTSPOT request is a data fault, not a stage. Fall
+      // through to the badge rather than rendering an action whose handler
+      // has nothing to act on.
+      if (loan) {
+        if (loan.returnedAt) {
+          return (
+            <BadgeWithTooltip
+              status="RETURNED"
+              tip={`Returned${loan.returnedBy ? ` — closed by ${loan.returnedBy}` : ""}`}
+            />
+          );
+        }
+
+        // The hotspot is physically back but Snipe refused the check-in, so
+        // the loan is deliberately still open. Named on the row so it is
+        // visible without opening anything — same treatment as a blocked
+        // correction.
+        const blocked = !!loan.checkinError;
+
+        // Admins may close a loan early; keepers may not. An event that
+        // finishes on Tuesday still ends with somebody holding a hotspot, and
+        // the person who can make that call is an admin. Mirrors the route.
+        const due = isReturnable(loan);
+        const mayReturn = canKeepStock && (due || role === "ADMIN");
+
+        if (mayReturn) {
+          return (
+            <ActionRow>
+              <ActionButton
+                icon={blocked ? "sync_problem" : "assignment_turned_in"}
+                label={blocked ? "Retry return" : due ? "Mark returned" : "Return early"}
+                color={blocked ? "text-intent-stop" : "text-intent-done"}
+                hoverBg={blocked ? "hover:bg-intent-stop/10" : "hover:bg-intent-done/10"}
+                border={blocked ? "border-intent-stop/40" : "border-intent-done/40"}
+                title={
+                  blocked
+                    ? `Snipe-IT wouldn't check this back in: ${loan.checkinError}`
+                    : due
+                    ? "Confirm the hotspot is back and check it in to Snipe-IT"
+                    : `Not due until ${new Date(loan.endDate).toLocaleDateString("en-AU", {
+                        day: "numeric",
+                        month: "short",
+                        timeZone: "UTC",
+                      })} — close it early`
+                }
+                onClick={() => meta.onReturnHotspot(request)}
+              />
+            </ActionRow>
+          );
+        }
+
+        // Everyone else, the borrower included: the stage, and when it is due.
+        return (
+          <BadgeWithTooltip
+            status={completedBadgeKey}
+            tip={`Due back ${new Date(loan.endDate).toLocaleDateString("en-AU", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+              timeZone: "UTC",
+            })}`}
+          />
+        );
+      }
+    }
+
     // Terminal: received/collected → badge only, everyone.
     if (isReceivedOrCollected) {
       return <BadgeWithTooltip status={completedBadgeKey} tip={completedTip} />;
