@@ -276,6 +276,13 @@ export interface Request {
    */
   seenByMe?: boolean;
 
+  /**
+   * The requestee's first day ("YYYY-MM-DDT00:00:00.000Z"), on a request
+   * NextHRT filed ahead of an onboarding. While it is in the future the
+   * reminder ladder holds — see lib/startDate.ts. Null everywhere else.
+   */
+  startDate?: string | null;
+
   createdAt: string;
 
   adminApprovedBy?: string | null;

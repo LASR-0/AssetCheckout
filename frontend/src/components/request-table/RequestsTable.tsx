@@ -55,6 +55,8 @@ type Props = {
   onReturnHotspot: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
+  /** Admin-only: move a new starter's start date (from the row's chip). */
+  onSetStartDate: (request: Request) => void;
 };
 
 /**
@@ -212,6 +214,7 @@ export default function RequestsTable({
   onAssignHotspot,
   onReturnHotspot,
   onEdit,
+  onSetStartDate,
 }: Props) {
   // Default sort: newest first
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -261,6 +264,7 @@ export default function RequestsTable({
       onAssignHotspot,
       onReturnHotspot,
       onEdit,
+      onSetStartDate,
     } as RequestsTableMeta,
   });
 

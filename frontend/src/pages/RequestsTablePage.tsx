@@ -28,6 +28,7 @@ import SendQuoteDialog from "@/components/dialogs/SendQuoteDialog";
 import ReviewQuoteDialog from "@/components/dialogs/ReviewQuoteDialog";
 import ManageCorrectionDialog from "@/components/dialogs/ManageCorrectionDialog";
 import EditRequestDialog from "@/components/dialogs/EditRequestDialog";
+import SetStartDateDialog from "@/components/dialogs/SetStartDateDialog";
 import ConfirmActionDialog from "@/components/dialogs/ConfirmActionDialog";
 import AssignHotspotDialog from "@/components/dialogs/AssignHotspotDialog";
 import { returnHotspot } from "@/api/hotspots";
@@ -170,6 +171,7 @@ export default function RequestTablePage() {
   const [feedbackNudgeOpen, setFeedbackNudgeOpen] = useState(false);
   const [manageCorrectionOpen, setManageCorrectionOpen] = useState(false);
   const [editRequestOpen, setEditRequestOpen] = useState(false);
+  const [startDateOpen, setStartDateOpen] = useState(false);
   const [sendQuoteOpen, setSendQuoteOpen] = useState(false);
   const [reviewQuoteOpen, setReviewQuoteOpen] = useState(false);
 
@@ -726,6 +728,14 @@ export default function RequestTablePage() {
     setEditRequestOpen(true);
   }
 
+  // A new starter's first day moved. Reached from the row's "Starts" chip
+  // rather than the edit dialog, which refuses fulfilled requests — and a
+  // fulfilled request is when this date is doing its work.
+  function handleSetStartDate(request: Request) {
+    setSelectedRequest(request);
+    setStartDateOpen(true);
+  }
+
   ///  +-----------------------------------------------------------------+
   ///  |             DISMISSING A MARKER, NOT THE WORK                   |
   ///  +-----------------------------------------------------------------+
@@ -824,6 +834,7 @@ export default function RequestTablePage() {
             onAssignHotspot={handleAssignHotspot}
             onReturnHotspot={handleReturnHotspot}
             onEdit={handleEdit}
+            onSetStartDate={handleSetStartDate}
           />
           {/* DIALOGS */}
           <RejectionReasonDialog
@@ -1080,6 +1091,16 @@ export default function RequestTablePage() {
             // Only fires when something was actually written — the dialog
             // stays quiet on a cancel, or on a save that changed nothing.
             onSuccess={loadRequests}
+          />
+
+          <SetStartDateDialog
+            request={selectedRequest}
+            open={startDateOpen}
+            onOpenChange={(next) => {
+              setStartDateOpen(next);
+              if (!next) setSelectedRequest(null);
+            }}
+            onSaved={loadRequests}
           />
 
           <ManageCorrectionDialog

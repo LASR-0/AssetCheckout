@@ -39,6 +39,7 @@ import type {
   SnipeNamedRecord,
 } from "@/types/snipeTypes";
 import type { Request } from "@/types/requestType";
+import StartDateChip from "@/components/request-table/StartDateChip";
 
 ///  +-----------------------------------------------------------------+
 ///  |                     THE STOCK KEEPER'S PAGE                     |
@@ -1421,7 +1422,10 @@ function QueueCard({
                   {r.userName}
                   <span className="text-info-light"> · {r.categoryName}</span>
                 </span>
-                <span className="font-mono text-[11.5px] text-info-light">#{r.id}</span>
+                <span className="flex items-center gap-2">
+                  <span className="font-mono text-[11.5px] text-info-light">#{r.id}</span>
+                  <StartDateChip startDate={r.startDate} />
+                </span>
               </span>
               <span
                 className={`ml-auto inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badgeClass}`}

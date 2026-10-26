@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Column, ColumnDef, Row, RowData, Table } from "@tanstack/react-table";
 import type { Request } from "@/types/requestType";
 import CountBadge from "@/components/ui/countbadge";
+import StartDateChip from "@/components/request-table/StartDateChip";
 import { getInitials } from "@/lib/utils";
 import {
   canActAsStockKeeper,
@@ -68,6 +69,9 @@ export type RequestsTableMeta = {
   onReturnHotspot: (request: Request) => void;
   /** Admin-only: correct a request that was filed wrong, in place. */
   onEdit: (request: Request) => void;
+  /** Admin-only: move a new starter's start date. Reached from the chip, and
+   *  separate from onEdit because it also applies to fulfilled requests. */
+  onSetStartDate: (request: Request) => void;
   /** Clears the row's "new" marker once the reader has dwelled on it. */
   onSeen: (request: Request) => void;
 };
@@ -1157,8 +1161,14 @@ export const columns: ColumnDef<Request>[] = [
               {initials}
             </span>
           </div>
-          <div>
+          <div className="flex flex-col gap-1">
             <div className="text-sm font-semibold text-on-surface-variant">{row.original.userName}</div>
+            <StartDateChip
+              startDate={row.original.startDate}
+              onClick={
+                meta.role === "ADMIN" ? () => meta.onSetStartDate(row.original) : undefined
+              }
+            />
           </div>
         </div>
       );

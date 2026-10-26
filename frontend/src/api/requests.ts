@@ -91,6 +91,18 @@ export async function editRequest(
   });
 }
 
+/** Admin-only. Sets or clears a new starter's start date ("YYYY-MM-DD" or
+ *  null). Works on fulfilled requests; logged, and emails nobody. */
+export async function setRequestStartDate(
+  id: number,
+  startDate: string | null
+): Promise<{ success: true; request: Request; message: string }> {
+  return apiFetch(`/api/requests/${id}/start-date`, {
+    method: "PATCH",
+    body: { startDate },
+  });
+}
+
 /**
  * NOTE: likely dead code — RequestTablePage calls the approval endpoints
  * directly via apiFetch, and the backend derives the actor from identity
