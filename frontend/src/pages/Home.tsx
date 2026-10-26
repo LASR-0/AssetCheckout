@@ -886,7 +886,7 @@ function QuickLinks() {
       to: "/accessories",
     },
     {
-      icon: "wifi",
+      icon: "devices",
       title: "Book a Loan",
       desc: "Borrow a hotspot, KVM or other device for a set period.",
       to: "/loan",

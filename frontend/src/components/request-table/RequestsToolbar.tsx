@@ -86,7 +86,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
     { label: "Ready to collect", value: "READY_TO_COLLECT", icon: "package_2" },
     { label: "Shipped", value: "SHIPPED", icon: "local_shipping" },
     // Loans, in the order a loan passes through them.
-    { label: "On loan", value: "ON_LOAN", icon: "wifi" },
+    { label: "On loan", value: "ON_LOAN", icon: "devices" },
     { label: "Due back", value: "DUE_BACK", icon: "event_upcoming" },
     { label: "Overdue", value: "OVERDUE", icon: "running_with_errors" },
     { label: "Returned", value: "RETURNED", icon: "assignment_turned_in" },

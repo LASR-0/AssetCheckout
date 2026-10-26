@@ -180,7 +180,7 @@ export default function Navbar() {
               <span
                 className="material-symbols-outlined !text-xl"
               >
-                wifi
+                devices
               </span>
               Loan
             </Link>
@@ -406,7 +406,7 @@ export default function Navbar() {
               className="material-symbols-outlined !text-xl"
               style={{ fontVariationSettings: `'FILL' 1` }}
             >
-              wifi
+              devices
             </span>
             Loan
           </Link>

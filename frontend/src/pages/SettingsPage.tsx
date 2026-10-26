@@ -145,7 +145,7 @@ export default function SettingsPage() {
           <p className="text-sm text-info-light mb-4">
             Devices like Wi-Fi hotspots and KVMs are borrowed for a fixed window rather than issued.
             A request goes straight to IT — there is no manager stage — and IT
-            assigns a unit from the category below. The stock keeper hands it
+            assigns one of the devices below. The stock keeper hands it
             over, the requester collects it, and the keeper closes the loan off
             when it comes back, which checks it in to Snipe-IT.
           </p>

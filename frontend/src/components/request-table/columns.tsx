@@ -588,7 +588,7 @@ function StageActions({ row, table }: { row: Row<Request>; table: Table<Request>
       return (
         <ActionRow>
           <ActionButton
-            icon="wifi"
+            icon="devices"
             label="Assign device"
             color="text-intent-progress"
             hoverBg="hover:bg-intent-progress/10"

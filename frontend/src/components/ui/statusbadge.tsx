@@ -423,7 +423,7 @@ const styleMap: Record<string, { bg: string; text: string; icon: string }> = {
   // whole flow where a row goes backwards through the three intents. That is
   // correct: a loan nobody returned IS a problem, and it should not keep
   // reading like a finished request.
-  ON_LOAN: { ...DONE, icon: "wifi" },
+  ON_LOAN: { ...DONE, icon: "devices" },
   DUE_BACK: { ...PROGRESS, icon: "event_upcoming" },
   OVERDUE: { ...STOP, icon: "running_with_errors" },
   RETURNED: { ...DONE, icon: "assignment_turned_in" },

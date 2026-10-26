@@ -32,6 +32,8 @@ import { iconForCategory } from "@/lib/categoryIcon";
 
 const PICK_CATEGORY = "Pick a category first";
 
+const FIELD_LABEL = "block mb-2 text-xs font-medium text-on-surface-variant";
+
 function recordLabel(a: AccessorySummary): string {
   return `${a.name} · ${a.locationName ?? "no location"} (#${a.id})`;
 }
@@ -211,32 +213,32 @@ export default function LoanConfiguration() {
   const busy = loading || saving;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div>
-        <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-2">
+        <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-4">
           Loanable devices
         </label>
 
         {!loading && devices.length === 0 && (
-          <p className="rounded-lg border border-status-pending/30 bg-status-pending/10 p-3 text-sm text-on-surface">
+          <p className="mb-4 rounded-lg border border-status-pending/30 bg-status-pending/10 px-4 py-3 text-sm text-on-surface">
             <strong className="text-status-pending">Loans are currently disabled.</strong>{" "}
             Add at least one device below and the Loan form opens up.
           </p>
         )}
 
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {devices.map((d, i) => {
             const rec = recordNames[d.snipeId];
             return (
               <li
                 key={d.id ?? d.snipeId}
-                className="rounded-lg border border-outline bg-surface-container-low p-4"
+                className="rounded-xl border border-outline bg-surface-container-low p-5"
               >
-                <div className="flex items-start gap-3">
-                  <span className="material-symbols-outlined mt-2 text-info-light">
+                <div className="flex items-start gap-4">
+                  <span className="material-symbols-outlined mt-2.5 text-info-light">
                     {iconForCategory(d.displayName)}
                   </span>
-                  <div className="min-w-0 flex-1 space-y-2">
+                  <div className="min-w-0 flex-1 space-y-3">
                     <input
                       type="text"
                       defaultValue={d.displayName}
@@ -248,7 +250,7 @@ export default function LoanConfiguration() {
                         if (!v) e.target.value = d.displayName;
                         else updateDevice(i, { displayName: v });
                       }}
-                      className="w-full rounded-lg border border-outline bg-surface-container-lowest px-3 py-2 text-sm font-semibold text-on-surface focus:border-primary focus:outline-none disabled:opacity-50"
+                      className="w-full rounded-lg border border-outline bg-surface-container-lowest px-3.5 py-2.5 text-sm font-semibold text-on-surface focus:border-primary focus:outline-none disabled:opacity-50"
                     />
                     <input
                       type="text"
@@ -258,13 +260,13 @@ export default function LoanConfiguration() {
                       placeholder="Help text on the form (optional), e.g. For remote support of iPads"
                       aria-label="Help text"
                       onBlur={(e) => updateDevice(i, { description: e.target.value.trim() || null })}
-                      className="w-full rounded-lg border border-outline bg-surface-container-lowest px-3 py-2 text-xs text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none disabled:opacity-50"
+                      className="w-full rounded-lg border border-outline bg-surface-container-lowest px-3.5 py-2.5 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none disabled:opacity-50"
                     />
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-info-light">
+                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pt-1 text-xs text-info-light">
                       <span className="truncate">
                         Snipe-IT: {rec ? recordLabel(rec) : `accessory #${d.snipeId}`}
                       </span>
-                      <label className="flex items-center gap-2">
+                      <label className="flex items-center gap-3">
                         Ask for an event name
                         <Switch
                           className="hover:cursor-pointer shrink-0 rounded-full border-2 transition-colors data-[state=checked]:bg-status-success border-outline/70 data-[state=unchecked]:bg-surface-container-high"
@@ -275,7 +277,7 @@ export default function LoanConfiguration() {
                       </label>
                     </div>
                   </div>
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1.5">
                     <button
                       type="button"
                       title="Move up"
@@ -311,56 +313,65 @@ export default function LoanConfiguration() {
         </ul>
 
         {/* ADD */}
-        <div className="mt-4 rounded-lg border border-dashed border-outline p-4 space-y-3">
+        <div className="mt-6 rounded-xl border border-dashed border-outline p-5 md:p-6 space-y-5">
           <div className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
             Add a device
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <ComboboxField
-              items={categories.map((c) => c.name)}
-              defaultValue={addCategoryName}
-              keyHint={`loan-add-category-${addCategoryId ?? "none"}`}
-              disabled={busy}
-              placeholder="Accessory category"
-              onSelect={(name) => void pickCategory(name)}
-            />
-            <ComboboxField
-              items={addRecords.map(recordLabel)}
-              defaultValue={addRecord ? recordLabel(addRecord) : ""}
-              keyHint={`loan-add-record-${addCategoryId ?? "none"}-${addRecordId ?? "none"}`}
-              disabled={busy || addCategoryId === null}
-              placeholder={addCategoryId === null ? PICK_CATEGORY : "Accessory record"}
-              disabledValues={new Set(addRecords.filter((r) => onList.has(r.id)).map(recordLabel))}
-              onSelect={pickRecord}
-            />
+          <div className="grid gap-5 md:grid-cols-2">
+            <div>
+              <span className={FIELD_LABEL}>Category</span>
+              <ComboboxField
+                items={categories.map((c) => c.name)}
+                defaultValue={addCategoryName}
+                keyHint={`loan-add-category-${addCategoryId ?? "none"}`}
+                disabled={busy}
+                placeholder="Accessory category"
+                onSelect={(name) => void pickCategory(name)}
+              />
+            </div>
+            <div>
+              <span className={FIELD_LABEL}>Snipe-IT record</span>
+              <ComboboxField
+                items={addRecords.map(recordLabel)}
+                defaultValue={addRecord ? recordLabel(addRecord) : ""}
+                keyHint={`loan-add-record-${addCategoryId ?? "none"}-${addRecordId ?? "none"}`}
+                disabled={busy || addCategoryId === null}
+                placeholder={addCategoryId === null ? PICK_CATEGORY : "Accessory record"}
+                disabledValues={new Set(addRecords.filter((r) => onList.has(r.id)).map(recordLabel))}
+                onSelect={pickRecord}
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              type="text"
-              value={addName}
-              disabled={busy}
-              onChange={(e) => setAddName(e.target.value)}
-              placeholder="Name on the form, e.g. KVM"
-              className="flex-1 rounded-lg border border-outline bg-surface-container-low px-3 py-2 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none disabled:opacity-50"
-            />
-            <button
-              type="button"
-              disabled={busy || !addRecord || !addName.trim()}
-              onClick={() => void addDevice()}
-              className="inline-flex items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="material-symbols-outlined !text-[18px]">add</span>
-              Add device
-            </button>
+          <div>
+            <span className={FIELD_LABEL}>Name on the form</span>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                type="text"
+                value={addName}
+                disabled={busy}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="e.g. KVM"
+                className="flex-1 rounded-lg border border-outline bg-surface-container-low px-3.5 py-2.5 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none disabled:opacity-50"
+              />
+              <button
+                type="button"
+                disabled={busy || !addRecord || !addName.trim()}
+                onClick={() => void addDevice()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg px-5 py-2.5 text-sm font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined !text-[18px]">add</span>
+                Add device
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-2">
+        <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-4">
           Longest booking
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <input
             type="number"
             min={1}
@@ -371,11 +382,11 @@ export default function LoanConfiguration() {
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
-            className="w-24 rounded-lg border border-outline bg-surface-container-low px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none disabled:opacity-50"
+            className="w-24 rounded-lg border border-outline bg-surface-container-low px-3.5 py-2.5 text-sm text-on-surface focus:border-primary focus:outline-none disabled:opacity-50"
           />
           <span className="text-sm text-info-light">days</span>
         </div>
-        <p className="mt-2 text-xs text-info-light">
+        <p className="mt-3 text-xs text-info-light">
           A backstop against a mis-typed date turning into an indefinite
           checkout, not a policy — IT can still assign whatever was asked for.
         </p>
