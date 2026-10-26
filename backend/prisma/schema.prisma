@@ -505,6 +505,15 @@ model Loan {
   /// is what a stock keeper needs on the row, and it is not a reason.
   eventName String?
 
+  /// WHAT THE REQUESTER ASKED FOR: the loan-device whitelist entry they picked
+  /// (LoanDevice.id in settings) and the Snipe record it pointed at then. IT
+  /// usually hands over exactly that, and the assign dialog pre-selects it, but
+  /// may swap it for another whitelisted record — so this is the request and
+  /// snipeAccessoryId below is the outcome. Null on loans filed before devices
+  /// were selectable, which were all hotspots from the one category.
+  deviceOptionId       String?
+  requestedAccessoryId Int?
+
   /// The Snipe accessory record IT picked, and what it was called at the time.
   /// Null until assignment. The name is a display snapshot on the same terms as
   /// Request.accessoryOption — it saves every reader a Snipe round trip and it

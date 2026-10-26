@@ -21,7 +21,7 @@ import {
   editRequest,
   setRequestStartDate,
 } from "../services/request.js";
-import { createLoanRequest } from "../services/loan.js";
+import { createLoanRequest, listLoanDevices } from "../services/loan.js";
 import {
   getActorName,
   getActorEmail,
@@ -164,6 +164,18 @@ router.post("/corrections", async (req, res, next) => {
 //  ON-BEHALF-OF IS ALLOWED, as it is on the accessory form: somebody books the
 //  device for the person running the event as often as not. The SUBMITTER is
 //  still resolved server-side and never taken from the body.
+
+/**
+ * The devices the loan form offers, with how many are free right now. Open to
+ * everyone who can file a loan, which is everyone — the form is not gated.
+ */
+router.get("/loans/devices", async (_req, res, next) => {
+  try {
+    res.json({ success: true, devices: await listLoanDevices() });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post("/loans", async (req, res, next) => {
   try {

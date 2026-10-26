@@ -115,7 +115,7 @@ const REQUESTABLE_ACCESSORY_CATEGORIES_KEY = "requestable_accessory_categories";
 const STANDARD_ACCESSORIES_KEY = "standard_accessories";
 const ACCESSORY_ASSET_CATEGORY_MAP_KEY = "accessory_asset_category_map";
 // Loans chapter
-const LOAN_CATEGORY_KEY = "loan_category_id";
+const LOAN_DEVICES_KEY = "loan_devices";
 const LOAN_MAX_DAYS_KEY = "loan_max_days";
 // Stock keepers chapter
 const STOCK_KEEPERS_KEY = "stock_keepers";
@@ -494,11 +494,20 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     description: "Days after shipping to escalate to the user and admins (overdue)" 
   },
   {
-    key: LOAN_CATEGORY_KEY,
-    envVar: "LOAN_CATEGORY_ID",
-    defaultValue: "18",
+    key: LOAN_DEVICES_KEY,
+    envVar: "LOAN_DEVICES_JSON",
+    defaultValue: "[]",
     description:
-      "Snipe-IT ACCESSORY category id holding the loanable Wi-Fi hotspots. Every hotspot request is for something in this category, so there is no category picker on the form — IT is offered the records in here and nothing else. Seeded to the live 'Wi-Fi Hotspot' category; change it if the pool moves.",
+      "The Snipe-IT accessory records that may be borrowed, as JSON: [{id, kind, snipeId, categoryId, displayName, description, showEventName}]. Edited from Settings → Loans. Empty turns loans off.",
+    // Ids are minted here because reads never mint them — an env-seeded list
+    // written without ids would otherwise be read back as empty.
+    normalize: (raw) => {
+      try {
+        return JSON.stringify(normaliseLoanDevices(JSON.parse(raw), { mintIds: true }));
+      } catch {
+        return null;
+      }
+    },
   },
   {
     key: LOAN_MAX_DAYS_KEY,
@@ -1395,38 +1404,122 @@ function normalizeStockKeepersEnv(raw: string): string | null {
 ///  |                      LOANS                                      |
 ///  +-----------------------------------------------------------------+
 //
-//  ONE CATEGORY, NOT A LIST. A hotspot request is for a hotspot — there is no
-//  branch of it that is for something else — so the category is configuration
-//  rather than a question the form asks. Holding it as a setting instead of a
-//  constant only means the pool can move in Snipe without a deploy.
+//  A WHITELIST OF RECORDS, NOT A CATEGORY. Loans began as hotspots only, and
+//  one Snipe category was the whole configuration. Lending KVMs too broke
+//  that: the two live in different categories, the requester now has to say
+//  WHICH device they want, and a category would also sweep in every unrelated
+//  record somebody files under it later. So admins name the specific Snipe
+//  accessory records that may be borrowed, each with the name the form shows.
+//
+//  STABLE IDS, as the standard accessory options have. A loan records which
+//  entry it was filed against by id, so renaming "Wi-Fi Hotspot" to "5G
+//  Hotspot" in settings does not orphan the loans already out.
+//
+//  `kind` is ACCESSORY for every entry today. It is there so an asset-backed
+//  device can be added later as a new kind rather than a new setting.
+//
+//  `categoryId` is captured when the entry is saved, not looked up when a
+//  loan is filed: Request.categoryId is required, and filing a loan must not
+//  depend on Snipe being reachable at that moment.
 ///  +-----------------------------------------------------------------+
 
+export type LoanDevice = {
+  id: string;
+  kind: "ACCESSORY";
+  snipeId: number;
+  categoryId: number | null;
+  /** What the form and the emails call it — "Wi-Fi Hotspot", "KVM". */
+  displayName: string;
+  /** Help text under the tile on the form. */
+  description: string | null;
+  /** Whether the form asks for an event name. Useful for a hotspot taken to
+   *  a roadshow; noise for a KVM borrowed to support an iPad. */
+  showEventName: boolean;
+};
+
+/** Generous; the form is a tile grid, and past this it stops being one. */
+export const MAX_LOAN_DEVICES = 24;
+
 /**
- * The Snipe ACCESSORY category the loanable hotspots live in.
+ * Clean whatever is stored (or submitted) into a list of LoanDevice.
  *
- * Null when the setting has been blanked or set to something that is not a
- * positive id. Callers must treat that as "loans are not configured"
- * and say so, rather than falling back to a guess: the wrong category here
- * would offer IT a list of headphones to check out as a hotspot.
+ * Entries without a positive snipeId or a display name are dropped. A second
+ * entry for the same Snipe record is dropped too — two tiles that check out
+ * the same thing would only invite a requester to pick the "other" one. Ids
+ * are minted on write and never on read, for the reason normaliseOptions
+ * gives above.
  */
-export async function getLoanCategoryId(): Promise<number | null> {
-  const raw = await getSetting(LOAN_CATEGORY_KEY);
-  const parsed = Number((raw ?? "").trim());
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+export function normaliseLoanDevices(
+  raw: unknown,
+  { mintIds }: { mintIds: boolean }
+): LoanDevice[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LoanDevice[] = [];
+  const seenSnipe = new Set<number>();
+  const seenIds = new Set<string>();
+
+  for (const e of raw) {
+    if (!e || typeof e !== "object") continue;
+    const entry = e as Record<string, unknown>;
+
+    const snipeId = Number(entry.snipeId);
+    if (!Number.isInteger(snipeId) || snipeId <= 0 || seenSnipe.has(snipeId)) continue;
+
+    const displayName =
+      typeof entry.displayName === "string" ? entry.displayName.trim() : "";
+    if (!displayName) continue;
+
+    const rawId = typeof entry.id === "string" ? entry.id.trim() : "";
+    let id = rawId && !seenIds.has(rawId) ? rawId : "";
+    if (!id && mintIds) id = randomUUID();
+    if (!id) continue;
+
+    const categoryId = Number(entry.categoryId);
+    const description =
+      typeof entry.description === "string" && entry.description.trim()
+        ? entry.description.trim()
+        : null;
+
+    seenSnipe.add(snipeId);
+    seenIds.add(id);
+    out.push({
+      id,
+      kind: "ACCESSORY",
+      snipeId,
+      categoryId: Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null,
+      displayName,
+      description,
+      showEventName: entry.showEventName === true,
+    });
+  }
+  return out;
 }
 
-export async function setLoanCategoryId(
-  categoryId: number | null,
-  actorEmail?: string
-): Promise<void> {
-  if (categoryId !== null && (!Number.isInteger(categoryId) || categoryId <= 0)) {
-    throw new AppError("hotspot category id must be a positive integer", 400);
+/** The whitelist, in the admin's order. Empty means loans are switched off. */
+export async function getLoanDevices(): Promise<LoanDevice[]> {
+  const raw = await getSetting(LOAN_DEVICES_KEY);
+  try {
+    return normaliseLoanDevices(JSON.parse(raw ?? "[]"), { mintIds: false });
+  } catch {
+    return [];
   }
-  await setSetting(
-    LOAN_CATEGORY_KEY,
-    categoryId === null ? "" : String(categoryId),
-    actorEmail
-  );
+}
+
+/**
+ * Persist an already-validated whitelist. Callers go through saveLoanDevices
+ * in services/loan.ts, which checks each new record against Snipe first —
+ * this module deliberately does not talk to Snipe.
+ */
+export async function setLoanDevices(
+  devices: LoanDevice[],
+  actorEmail?: string
+): Promise<LoanDevice[]> {
+  const cleaned = normaliseLoanDevices(devices, { mintIds: true });
+  if (cleaned.length > MAX_LOAN_DEVICES) {
+    throw new AppError(`At most ${MAX_LOAN_DEVICES} devices can be offered for loan`, 400);
+  }
+  await setSetting(LOAN_DEVICES_KEY, JSON.stringify(cleaned), actorEmail);
+  return cleaned;
 }
 
 /**

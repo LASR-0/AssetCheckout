@@ -14,7 +14,6 @@ import {
 } from "../services/request.js";
 import {
   listLoanOptions,
-  findClashingLoans,
   assignLoanToRequest,
   markLoanReturned,
 } from "../services/loan.js";
@@ -830,31 +829,10 @@ router.get("/:requestId/loan/options", async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }
 
-    const request = await prisma.request.findUnique({
-      where: { id: requestId },
-      select: { requestKind: true, loan: { select: { startDate: true, endDate: true } } },
-    });
-    if (!request) {
-      return res.status(404).json({ success: false, message: "Request not found" });
-    }
-    if (request.requestKind !== "LOAN" || !request.loan) {
-      return res.status(400).json({
-        success: false,
-        message: "This isn't a loan request, so there is nothing to assign.",
-      });
-    }
-
     // The clash list rides along with the options rather than sitting behind a
-    // second call: the pool is a single unit, so "is it already promised to
-    // somebody over these dates" is not extra detail, it is the decision.
-    const [options, clashes] = await Promise.all([
-      listLoanOptions(),
-      findClashingLoans(
-        request.loan.startDate,
-        request.loan.endDate,
-        requestId
-      ),
-    ]);
+    // second call: whether a record is already promised over these dates is
+    // not extra detail, it is the decision. See listLoanOptions.
+    const { options, clashes } = await listLoanOptions(requestId);
 
     res.json({
       success: true,

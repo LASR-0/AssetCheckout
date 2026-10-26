@@ -53,10 +53,42 @@ function dateOffset(days: number): Date {
 
 const created: number[] = [];
 
+/** The whitelist every test files against: a hotspot that asks for an event
+ *  name and a KVM that does not. */
+const DEVICES = [
+  {
+    id: "dev-hotspot",
+    kind: "ACCESSORY",
+    snipeId: 53,
+    categoryId: 18,
+    displayName: "Wi-Fi Hotspot",
+    description: "For events and site visits",
+    showEventName: true,
+  },
+  {
+    id: "dev-kvm",
+    kind: "ACCESSORY",
+    snipeId: 77,
+    categoryId: 30,
+    displayName: "KVM",
+    description: null,
+    showEventName: false,
+  },
+];
+
+async function setDevices(devices: unknown[]) {
+  await prisma.setting.upsert({
+    where: { key: "loan_devices" },
+    create: { key: "loan_devices", value: JSON.stringify(devices) },
+    update: { value: JSON.stringify(devices) },
+  });
+}
+
 async function file(overrides: Record<string, unknown> = {}) {
   const result = await createLoanRequest({
     userId: 901,
     userName: "Sam Taylor",
+    deviceOptionId: "dev-hotspot",
     startDate: dayOffset(0),
     endDate: dayOffset(3),
     reason: "Roadshow at Toowoomba — no site wifi",
@@ -91,6 +123,7 @@ async function collected(loanId: number, requestId: number, endDate: Date) {
 }
 
 beforeEach(async () => {
+  await setDevices(DEVICES);
   await prisma.loan.deleteMany({ where: { request: { userId: 901 } } });
   await prisma.request.deleteMany({ where: { userId: 901 } });
   created.length = 0;
@@ -99,6 +132,7 @@ beforeEach(async () => {
 afterAll(async () => {
   await prisma.loan.deleteMany({ where: { request: { userId: 901 } } });
   await prisma.request.deleteMany({ where: { userId: 901 } });
+  await setDevices([]);
 });
 
 describe("filing a loan", () => {
@@ -173,6 +207,42 @@ describe("filing a loan", () => {
   });
 });
 
+describe("filing against the device whitelist", () => {
+  it("records which device was asked for, named as the form showed it", async () => {
+    const { request, loan } = await file({ deviceOptionId: "dev-kvm" });
+
+    expect(request.categoryName).toBe("KVM");
+    expect(request.categoryId).toBe(30);
+    expect(loan.deviceOptionId).toBe("dev-kvm");
+    expect(loan.requestedAccessoryId).toBe(77);
+    // Requested, not yet assigned — IT may still hand over another one.
+    expect(loan.snipeAccessoryId).toBeNull();
+  });
+
+  it("keeps an event name only for a device whose form asks for one", async () => {
+    const hotspot = await file({ eventName: "Toowoomba roadshow" });
+    const kvm = await file({ deviceOptionId: "dev-kvm", eventName: "Toowoomba roadshow" });
+
+    expect(hotspot.loan.eventName).toBe("Toowoomba roadshow");
+    expect(kvm.loan.eventName).toBeNull();
+  });
+
+  it("refuses a device that is not on the whitelist", async () => {
+    await expect(file({ deviceOptionId: "dev-retired" })).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    await expect(file({ deviceOptionId: undefined })).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("is switched off — 503, not 400 — while the whitelist is empty", async () => {
+    // The cutover state: the whitelist starts empty and an admin fills it in.
+    await setDevices([]);
+    await expect(file()).rejects.toMatchObject({ statusCode: 503 });
+  });
+});
+
 describe("the due-date boundary", () => {
   it("is not due the day before, and is due on the day", () => {
     expect(isLoanDue({ endDate: dateOffset(1) })).toBe(false);
@@ -217,7 +287,7 @@ describe("returning", () => {
     );
   });
 
-  it("is refused when no hotspot was ever assigned", async () => {
+  it("is refused when nothing was ever assigned", async () => {
     const { request } = await file();
     await prisma.request.update({
       where: { id: request.id },

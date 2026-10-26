@@ -16,12 +16,12 @@ import {
   setStockKeepersForLocation,
   MAX_STOCK_KEEPERS_PER_LOCATION,
   type StockKeeperEntry,
-  getLoanCategoryId,
-  setLoanCategoryId,
+  getLoanDevices,
   getLoanMaxDays,
   setLoanMaxDays,
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
+import { saveLoanDevices } from "../services/loan.js";
 
 const router = Router();
 
@@ -366,18 +366,18 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 ///  |                  LOAN CONFIGURATION                             |
 ///  +-----------------------------------------------------------------+
 //
-//  Which Snipe accessory category holds the loan pool, and the longest window
-//  a requester may book. One GET/PUT pair for both, because they are one card
+//  Which Snipe accessory records may be borrowed, and the longest window a
+//  requester may book. One GET/PUT pair for both, because they are one card
 //  in the settings UI and splitting them would mean two round trips to render
 //  it.
 
 router.get("/loans", async (_req, res, next) => {
   try {
-    const [categoryId, maxLoanDays] = await Promise.all([
-      getLoanCategoryId(),
+    const [devices, maxLoanDays] = await Promise.all([
+      getLoanDevices(),
       getLoanMaxDays(),
     ]);
-    res.json({ categoryId, maxLoanDays });
+    res.json({ devices, maxLoanDays });
   } catch (err) {
     next(err);
   }
@@ -387,17 +387,12 @@ router.put("/loans", async (req, res, next) => {
   try {
     if (!requireAdmin(req, res)) return;
 
-    const { categoryId, maxLoanDays } = req.body ?? {};
+    const { devices, maxLoanDays } = req.body ?? {};
 
-    // Null is a real value here — it turns loans off rather than
-    // leaving them pointed at a category that no longer exists.
-    if (
-      categoryId !== null &&
-      (typeof categoryId !== "number" || !Number.isInteger(categoryId) || categoryId <= 0)
-    ) {
-      return res
-        .status(400)
-        .json({ error: "categoryId must be a positive integer or null" });
+    // An empty list is a real value here — it turns loans off. Absent means
+    // "leave the list alone", so the max-days field can be saved on its own.
+    if (devices !== undefined && !Array.isArray(devices)) {
+      return res.status(400).json({ error: "devices must be an array" });
     }
     if (
       maxLoanDays !== undefined &&
@@ -407,17 +402,19 @@ router.put("/loans", async (req, res, next) => {
     }
 
     const actor = getActorEmail(req);
-    await setLoanCategoryId(categoryId ?? null, actor);
+    if (devices !== undefined) {
+      await saveLoanDevices(devices, actor);
+    }
     if (maxLoanDays !== undefined) {
       await setLoanMaxDays(maxLoanDays, actor);
     }
 
     // Echo the authoritative config back, as every other setter here does.
-    const [savedCategoryId, savedMaxLoanDays] = await Promise.all([
-      getLoanCategoryId(),
+    const [savedDevices, savedMaxLoanDays] = await Promise.all([
+      getLoanDevices(),
       getLoanMaxDays(),
     ]);
-    res.json({ categoryId: savedCategoryId, maxLoanDays: savedMaxLoanDays });
+    res.json({ devices: savedDevices, maxLoanDays: savedMaxLoanDays });
   } catch (err) {
     next(err);
   }

@@ -2,15 +2,18 @@ import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/errors.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import {
-  getAccessoriesByCategory,
+  getAllAccessories,
   getAccessoryById,
   getAccessoryAssignments,
   checkoutAccessory,
   checkinAccessory,
 } from "./snipeitaccessories.js";
 import {
-  getLoanCategoryId,
+  getLoanDevices,
   getLoanMaxDays,
+  normaliseLoanDevices,
+  setLoanDevices,
+  type LoanDevice,
 } from "./settings.js";
 import { resolveRequesteeFacts } from "./request.js";
 import {
@@ -27,8 +30,12 @@ import type { Loan, Request } from "../../generated/prisma_client/client.js";
 ///  |                     LOANS                                       |
 ///  +-----------------------------------------------------------------+
 //
-//  A mobile hotspot borrowed for an event and given back afterwards. The
-//  hardware is an accessory in Snipe, and the MIDDLE of the flow is the
+//  A device borrowed for a fixed window and given back afterwards — a Wi-Fi
+//  hotspot for a roadshow, a KVM for remote support of an iPad. Which devices
+//  can be borrowed is an admin whitelist of Snipe accessory records (see
+//  LoanDevice in settings.ts); the requester picks one, and IT may hand over
+//  another from the same list. The hardware is an accessory in Snipe, and the
+//  MIDDLE of the flow is the
 //  ordinary one — IT hands it to a stock keeper, the keeper hands it to the
 //  requester — which is why nothing in that middle is reimplemented here.
 //  markReadyForCollection and markRequestReceived in request.ts serve loans
@@ -40,7 +47,7 @@ import type { Loan, Request } from "../../generated/prisma_client/client.js";
 //  the same state a manager-approved request sits in while it waits for IT —
 //  exactly the trick createCorrectionRequest uses, and for the same reason:
 //  the machine already spells "waiting on IT" that way, so no new status was
-//  needed. IT's sign-off is inseparable from choosing WHICH hotspot to hand
+//  needed. IT's sign-off is inseparable from choosing WHICH unit to hand
 //  over, so it lives on assignLoanToRequest rather than approveRequest.
 //
 //  At the back the request does not end when the requester collects it. That
@@ -80,12 +87,98 @@ export function isLoanDue(loan: Pick<Loan, "endDate">, now?: Date): boolean {
 }
 
 ///  +-----------------------------------------------------------------+
+///  |                  THE LOANABLE DEVICES                           |
+///  +-----------------------------------------------------------------+
+
+/** A whitelist entry as the request form shows it. */
+export type LoanDeviceChoice = {
+  id: string;
+  displayName: string;
+  description: string | null;
+  showEventName: boolean;
+  /** Units free right now, or null when Snipe could not be asked. Advisory:
+   *  the form says "none free" but still lets a booking for next week in. */
+  remaining: number | null;
+  qty: number | null;
+};
+
+/**
+ * What the request form offers. Records that have vanished from Snipe are
+ * left out — the requester can do nothing about them, and a tile that can
+ * never be assigned is a booking nobody can fulfil.
+ *
+ * SNIPE BEING DOWN IS NOT AN EMPTY LIST. The whitelist is ours; only the
+ * stock count is Snipe's. So an unreachable Snipe yields every device with an
+ * unknown count, rather than a form that says there is nothing to borrow.
+ */
+export async function listLoanDevices(): Promise<LoanDeviceChoice[]> {
+  const devices = await getLoanDevices();
+  if (devices.length === 0) return [];
+
+  let catalogue: Map<number, AccessorySummary> | null = null;
+  try {
+    catalogue = new Map((await getAllAccessories()).map((a) => [a.id, a]));
+  } catch (err) {
+    console.error("[loans] could not read accessory stock for the form:", err);
+  }
+
+  return devices
+    .filter((d) => catalogue === null || catalogue.has(d.snipeId))
+    .map((d) => {
+      const record = catalogue?.get(d.snipeId) ?? null;
+      return {
+        id: d.id,
+        displayName: d.displayName,
+        description: d.description,
+        showEventName: d.showEventName,
+        remaining: record ? record.remaining : null,
+        qty: record ? record.qty : null,
+      };
+    });
+}
+
+/**
+ * An admin's whitelist edit. Every record NEW to the list is read from Snipe:
+ * it must exist, and its category is captured onto the entry (see LoanDevice
+ * for why). Records already on the list keep what they had, so re-saving the
+ * list to fix a typo does not cost one Snipe call per device.
+ */
+export async function saveLoanDevices(
+  input: unknown,
+  actorEmail?: string
+): Promise<LoanDevice[]> {
+  const submitted = normaliseLoanDevices(input, { mintIds: true });
+  const existing = new Map((await getLoanDevices()).map((d) => [d.snipeId, d]));
+
+  const resolved: LoanDevice[] = [];
+  for (const device of submitted) {
+    const known = existing.get(device.snipeId);
+    if (known && known.categoryId !== null) {
+      resolved.push({ ...device, categoryId: known.categoryId });
+      continue;
+    }
+    const record = await getAccessoryById(device.snipeId);
+    if (!record) {
+      throw new AppError(
+        `Snipe-IT has no accessory #${device.snipeId} ("${device.displayName}") — it may have been deleted.`,
+        400
+      );
+    }
+    resolved.push({ ...device, categoryId: record.categoryId });
+  }
+
+  return setLoanDevices(resolved, actorEmail);
+}
+
+///  +-----------------------------------------------------------------+
 ///  |                          CREATE                                 |
 ///  +-----------------------------------------------------------------+
 
 export type CreateLoanInput = {
   userId: number;
   userName: string;
+  /** The whitelist entry the requester picked — LoanDevice.id. */
+  deviceOptionId?: unknown;
   startDate: unknown;
   endDate: unknown;
   reason?: unknown;
@@ -115,11 +208,18 @@ export async function createLoanRequest(
     throw new AppError("userId is required", 400);
   }
 
-  const categoryId = await getLoanCategoryId();
-  if (categoryId === null) {
+  const devices = await getLoanDevices();
+  if (devices.length === 0) {
     throw new AppError(
-      "Loans aren't configured yet — an admin needs to set the hotspot category in Settings.",
+      "Loans aren't configured yet — an admin needs to add loanable devices in Settings.",
       503
+    );
+  }
+  const device = devices.find((d) => d.id === input.deviceOptionId);
+  if (!device) {
+    throw new AppError(
+      "That device is no longer available to borrow — please pick again.",
+      400
     );
   }
 
@@ -140,22 +240,26 @@ export async function createLoanRequest(
   const maxDays = await getLoanMaxDays();
   if (days > maxDays) {
     throw new AppError(
-      `A hotspot can be booked for at most ${maxDays} days — this request is for ${days}.`,
+      `A loan can be booked for at most ${maxDays} days — this request is for ${days}.`,
       400
     );
   }
 
   const reason = typeof input.reason === "string" ? input.reason.trim() : "";
   if (!reason) {
-    throw new AppError("Please say what you need the hotspot for", 400);
+    throw new AppError(`Please say what you need the ${device.displayName} for`, 400);
   }
+  // Only kept for a device whose form asks for it. A stale client posting one
+  // for a KVM would otherwise put an event name on a row whose form has none.
   const eventName =
-    typeof input.eventName === "string" && input.eventName.trim()
+    device.showEventName &&
+    typeof input.eventName === "string" &&
+    input.eventName.trim()
       ? input.eventName.trim()
       : null;
 
   // Same location snapshot every other request gets, and it matters more here:
-  // it is what decides which stock keeper hands the hotspot over AND which one
+  // it is what decides which stock keeper hands the device over AND which one
   // is chased when it is late.
   const { userLocationId, userLocationName } = await resolveRequesteeFacts(
     input.userId,
@@ -168,8 +272,13 @@ export async function createLoanRequest(
       userName: input.userName,
       userLocationId,
       userLocationName,
-      categoryId,
-      categoryName: "Wi-Fi Hotspot",
+      // The device's Snipe category when it was whitelisted, else 0 — the
+      // same "nobody" value managerId uses below. Nothing provisions off a
+      // loan's category; it is display and filtering only.
+      categoryId: device.categoryId ?? 0,
+      // What the requester picked, as they read it. Every email and row names
+      // the loan by this.
+      categoryName: device.displayName,
       requestKind: "LOAN",
       // Not a spec level — the interlock that keeps loans out of every
       // provisioning branch. See the enum comment in schema.prisma.
@@ -182,11 +291,17 @@ export async function createLoanRequest(
       manager: null,
       status: "APPROVED",
       reason,
-      // Hotspots are collected, never couriered. A loan is for an event with a
+      // Loans are collected, never couriered. A loan is for an event with a
       // date on it; posting one is how it arrives after the event.
       needsShipping: false,
       loan: {
-        create: { startDate, endDate, eventName },
+        create: {
+          startDate,
+          endDate,
+          eventName,
+          deviceOptionId: device.id,
+          requestedAccessoryId: device.snipeId,
+        },
       },
     },
     include: { loan: true },
@@ -198,7 +313,7 @@ export async function createLoanRequest(
     success: true,
     request,
     loan: request.loan!,
-    message: `Hotspot request submitted for ${days} day${days === 1 ? "" : "s"} — IT will assign one`,
+    message: `${device.displayName} request submitted for ${days} day${days === 1 ? "" : "s"} — IT will assign one`,
   };
 }
 
@@ -206,34 +321,94 @@ export async function createLoanRequest(
 ///  |                     WHAT IT CAN ASSIGN                          |
 ///  +-----------------------------------------------------------------+
 
+/** A whitelisted record as the assign dialog sees it. */
+export type LoanOption = AccessorySummary & {
+  /** The whitelist's name for it — what the requester picked from. */
+  displayName: string;
+  /** This is the record the requester asked for. */
+  requested: boolean;
+  /** Other assigned, unreturned loans of THIS record over the same window. */
+  bookedOverWindow: number;
+};
+
+export type LoanOptionsResult = {
+  options: LoanOption[];
+  /** Loans on records that are fully booked over the window — see below. */
+  clashes: (Loan & { request: Request })[];
+};
+
 /**
- * Every loanable hotspot, with live stock.
+ * Every whitelisted record, with live stock, the requested one first.
  *
- * NOT A SEARCH. The pool is one category with a handful of records in it, and
- * a search box over a list that short is furniture — it asks the admin to
- * guess a name before showing them the only three answers. Records with no
- * stock are RETURNED, not filtered: "the hotspot is out" is the single most
- * useful thing this endpoint can tell somebody, and hiding the row turns it
- * into "there are no hotspots", which is a different and wrong answer.
+ * NOT A SEARCH. The whitelist is a handful of records, and a search box over
+ * a list that short is furniture — it asks the admin to guess a name before
+ * showing them the only answers there are. Records with no stock are
+ * RETURNED, not filtered: "it is out" is the single most useful thing this can
+ * tell somebody, and hiding the row turns it into "there is nothing to lend",
+ * which is a different and wrong answer.
+ *
+ * A CLASH IS A RECORD WITH NOTHING LEFT OVER THE WINDOW. A record of three
+ * hotspots with one already promised for the week is not a clash, it is two
+ * free; the same record with three promised is. So loans are counted against
+ * each record's quantity, and only fully-booked records surface their loans
+ * as clashes. Advisory either way — IT may know the first borrower is bringing
+ * it back early, so the assignment is never refused on this.
  */
-export async function listLoanOptions(): Promise<AccessorySummary[]> {
-  const categoryId = await getLoanCategoryId();
-  if (categoryId === null) {
+export async function listLoanOptions(requestId: number): Promise<LoanOptionsResult> {
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: { loan: true },
+  });
+  if (!request) throw new AppError("Request not found", 404);
+  if (request.requestKind !== "LOAN" || !request.loan) {
+    throw new AppError("This isn't a loan request, so there is nothing to assign.", 400);
+  }
+
+  const devices = await getLoanDevices();
+  if (devices.length === 0) {
     throw new AppError(
-      "Loans aren't configured yet — an admin needs to set the hotspot category in Settings.",
+      "Loans aren't configured yet — an admin needs to add loanable devices in Settings.",
       503
     );
   }
-  return getAccessoriesByCategory(categoryId);
+
+  const [catalogue, overlapping] = await Promise.all([
+    getAllAccessories(),
+    findClashingLoans(request.loan.startDate, request.loan.endDate, requestId),
+  ]);
+  const byId = new Map(catalogue.map((a) => [a.id, a]));
+  const requestedId = request.loan.requestedAccessoryId;
+
+  const options: LoanOption[] = [];
+  for (const device of devices) {
+    const record = byId.get(device.snipeId);
+    if (!record) continue; // gone from Snipe; nothing to check out
+    options.push({
+      ...record,
+      displayName: device.displayName,
+      requested: device.snipeId === requestedId,
+      bookedOverWindow: overlapping.filter((l) => l.snipeAccessoryId === record.id).length,
+    });
+  }
+  // Requested first; the rest keep the admin's whitelist order.
+  options.sort((a, b) => Number(b.requested) - Number(a.requested));
+
+  const fullyBooked = new Set(
+    options.filter((o) => o.bookedOverWindow >= o.qty).map((o) => o.id)
+  );
+  const clashes = overlapping.filter(
+    (l) => l.snipeAccessoryId !== null && fullyBooked.has(l.snipeAccessoryId)
+  );
+
+  return { options, clashes };
 }
 
 /**
- * Loans already out over a window, so the admin can see a clash before
- * creating one. The pool is small and a hotspot is a single unit, so two
- * overlapping loans is not a theoretical problem — it is the second request.
+ * Loans already out over a window, on any record. listLoanOptions narrows
+ * these to the records they actually exhaust.
  *
- * Overlap is the standard half-open test on whole days: two windows clash
- * unless one ends before the other starts.
+ * Overlap is the standard test on whole days: two windows clash unless one
+ * ends before the other starts.
  */
 export async function findClashingLoans(
   startDate: Date,
@@ -266,7 +441,7 @@ export type AssignLoanResponse = {
 };
 
 /**
- * IT's sign-off: pick a hotspot, check it out of Snipe, complete the request.
+ * IT's sign-off: pick a unit, check it out of Snipe, complete the request.
  *
  * Mirrors handleAdminAccessoryStandardApproval in request.ts — the ordering is
  * the same and deliberately so. The Snipe checkout is the one write that can
@@ -287,29 +462,31 @@ export async function assignLoanToRequest(
 
   if (!request) throw new AppError("Request not found", 404);
   if (request.requestKind !== "LOAN" || !request.loan) {
-    throw new AppError("This isn't a hotspot request", 400);
+    throw new AppError("This isn't a loan request", 400);
   }
   if (request.status === "REJECTED") {
     throw new AppError("This request was rejected", 400);
   }
   if (request.adminApprovedAt !== null) {
-    throw new AppError("A hotspot has already been assigned to this request", 400);
+    throw new AppError("A device has already been assigned to this request", 400);
   }
 
-  const categoryId = await getLoanCategoryId();
+  const devices = await getLoanDevices();
 
   // Read through to Snipe rather than the cache: this is the moment stock
-  // matters, and the catalog's TTL is long enough to hand out a hotspot that
+  // matters, and the catalog's TTL is long enough to hand out a unit that
   // was taken ten minutes ago. Same reasoning as getAccessoryById's own header.
   const accessory = await getAccessoryById(accessoryId);
   if (!accessory) {
-    throw new AppError("That hotspot no longer exists in Snipe-IT", 404);
+    throw new AppError("That device no longer exists in Snipe-IT", 404);
   }
-  // The guard that stops a mis-typed id checking a monitor out as a hotspot.
-  // The route cannot do it — it only sees a number.
-  if (categoryId !== null && accessory.categoryId !== categoryId) {
+  // The guard that stops a mis-typed id checking a monitor out as a loan.
+  // The route cannot do it — it only sees a number. The whitelist is the
+  // authority on what may be lent, so a record taken off it since the request
+  // was filed cannot be assigned either.
+  if (!devices.some((d) => d.snipeId === accessory.id)) {
     throw new AppError(
-      `"${accessory.name}" isn't in the hotspot category, so it can't be loaned as one.`,
+      `"${accessory.name}" isn't on the list of loanable devices, so it can't be lent. An admin can add it in Settings → Loans.`,
       400
     );
   }
@@ -339,7 +516,7 @@ export async function assignLoanToRequest(
         fulfilledAt: now,
         needsShipping: false,
         // Recorded for the same reason the accessory path records it: the
-        // handover is at the requester's site, and a loan whose hotspot lives
+        // handover is at the requester's site, and a loan whose device lives
         // somewhere else is a fact the keeper needs rather than an error.
         locationMissing: request.userLocationId === null,
       },
@@ -381,18 +558,18 @@ export type ReturnLoanResponse = {
   success: true;
   request: Request;
   loan: Loan;
-  /** False when the hotspot is physically back but Snipe refused the checkin. */
+  /** False when the device is physically back but Snipe refused the checkin. */
   checkedIn: boolean;
   message: string;
 };
 
 /**
- * The stock keeper has the hotspot back. Check it in to Snipe.
+ * The stock keeper has the device back. Check it in to Snipe.
  *
  * RETURNED MEANS SNIPE AGREES — the same stance handleCorrectionApproval takes,
  * and the reason is identical. If the checkin fails, returnedAt stays null and
  * the reason is recorded on checkinError, so the row stays in the returns queue
- * and can be retried. Stamping the return anyway would leave a hotspot that
+ * and can be retried. Stamping the return anyway would leave a device that
  * Snipe still shows as checked out indistinguishable from one that is genuinely
  * back — which is the exact class of wrong record this step exists to prevent.
  *
@@ -411,23 +588,23 @@ export async function markLoanReturned(
 
   if (!request) throw new AppError("Request not found", 404);
   if (request.requestKind !== "LOAN" || !request.loan) {
-    throw new AppError("This isn't a hotspot request", 400);
+    throw new AppError("This isn't a loan request", 400);
   }
 
   const loan = request.loan;
 
   if (loan.returnedAt !== null) {
-    throw new AppError("This hotspot is already marked returned", 400);
+    throw new AppError("This loan is already marked returned", 400);
   }
   if (loan.snipeAccessoryId === null) {
     throw new AppError(
-      "No hotspot was ever assigned to this request, so there is nothing to return",
+      "Nothing was ever assigned to this request, so there is nothing to return",
       400
     );
   }
   if (request.receivedAt === null) {
     throw new AppError(
-      "This hotspot hasn't been collected yet — there is nothing to return",
+      "This hasn't been collected yet — there is nothing to return",
       400
     );
   }
@@ -448,13 +625,13 @@ export async function markLoanReturned(
     const mine = assignments.find((a) => a.userId === request.userId);
     if (!mine) {
       failure =
-        `Snipe-IT doesn't show "${loan.accessoryName ?? "this hotspot"}" as checked out to ` +
+        `Snipe-IT doesn't show "${loan.accessoryName ?? "this device"}" as checked out to ` +
         `${request.userName}. It may already have been checked in by hand.`;
     } else {
       assignmentId = mine.assignmentId;
     }
   } catch (err) {
-    failure = `Couldn't read the hotspot's assignments from Snipe-IT: ${
+    failure = `Couldn't read the device's assignments from Snipe-IT: ${
       err instanceof Error ? err.message : String(err)
     }`;
   }
@@ -505,7 +682,7 @@ export async function markLoanReturned(
     request,
     loan: returned,
     checkedIn: true,
-    message: `${returned.accessoryName ?? "Hotspot"} returned and checked back in`,
+    message: `${returned.accessoryName ?? "Device"} returned and checked back in`,
   };
 }
 
@@ -525,7 +702,7 @@ export type DueLoan = Loan & {
  * COLLECTED ONLY. A loan the requester has not picked up yet cannot be
  * overdue, whatever the calendar says — it is still in the handover queue,
  * where the EXISTING shipment ladder is already chasing it. Chasing a borrower
- * for a hotspot nobody has given them is the precise failure the shipment
+ * for a device nobody has given them is the precise failure the shipment
  * reminders were once fixed for, and there is no reason to reintroduce it here.
  */
 export async function findLoansDueBack(
