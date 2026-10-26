@@ -317,53 +317,49 @@ export default function LoanConfiguration() {
           <div className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
             Add a device
           </div>
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <span className={FIELD_LABEL}>Category</span>
-              <ComboboxField
-                items={categories.map((c) => c.name)}
-                defaultValue={addCategoryName}
-                keyHint={`loan-add-category-${addCategoryId ?? "none"}`}
-                disabled={busy}
-                placeholder="Accessory category"
-                onSelect={(name) => void pickCategory(name)}
-              />
-            </div>
-            <div>
-              <span className={FIELD_LABEL}>Snipe-IT record</span>
-              <ComboboxField
-                items={addRecords.map(recordLabel)}
-                defaultValue={addRecord ? recordLabel(addRecord) : ""}
-                keyHint={`loan-add-record-${addCategoryId ?? "none"}-${addRecordId ?? "none"}`}
-                disabled={busy || addCategoryId === null}
-                placeholder={addCategoryId === null ? PICK_CATEGORY : "Accessory record"}
-                disabledValues={new Set(addRecords.filter((r) => onList.has(r.id)).map(recordLabel))}
-                onSelect={pickRecord}
-              />
-            </div>
+          <div>
+            <span className={FIELD_LABEL}>Category</span>
+            <ComboboxField
+              items={categories.map((c) => c.name)}
+              defaultValue={addCategoryName}
+              keyHint={`loan-add-category-${addCategoryId ?? "none"}`}
+              disabled={busy}
+              placeholder="Accessory category"
+              onSelect={(name) => void pickCategory(name)}
+            />
+          </div>
+          <div>
+            <span className={FIELD_LABEL}>Snipe-IT record</span>
+            <ComboboxField
+              items={addRecords.map(recordLabel)}
+              defaultValue={addRecord ? recordLabel(addRecord) : ""}
+              keyHint={`loan-add-record-${addCategoryId ?? "none"}-${addRecordId ?? "none"}`}
+              disabled={busy || addCategoryId === null}
+              placeholder={addCategoryId === null ? PICK_CATEGORY : "Accessory record"}
+              disabledValues={new Set(addRecords.filter((r) => onList.has(r.id)).map(recordLabel))}
+              onSelect={pickRecord}
+            />
           </div>
           <div>
             <span className={FIELD_LABEL}>Name on the form</span>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="text"
-                value={addName}
-                disabled={busy}
-                onChange={(e) => setAddName(e.target.value)}
-                placeholder="e.g. KVM"
-                className="flex-1 rounded-lg border border-outline bg-surface-container-low px-3.5 py-2.5 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none disabled:opacity-50"
-              />
-              <button
-                type="button"
-                disabled={busy || !addRecord || !addName.trim()}
-                onClick={() => void addDevice()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg px-5 py-2.5 text-sm font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="material-symbols-outlined !text-[18px]">add</span>
-                Add device
-              </button>
-            </div>
+            <input
+              type="text"
+              value={addName}
+              disabled={busy}
+              onChange={(e) => setAddName(e.target.value)}
+              placeholder="e.g. KVM"
+              className="w-full rounded-lg border border-outline bg-surface-container-low px-3.5 py-2.5 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none disabled:opacity-50"
+            />
           </div>
+          <button
+            type="button"
+            disabled={busy || !addRecord || !addName.trim()}
+            onClick={() => void addDevice()}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-5 py-2.5 text-sm font-bold text-white twilight-gradient hover:opacity-90 hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined !text-[18px]">add</span>
+            Add device
+          </button>
         </div>
       </div>
 
