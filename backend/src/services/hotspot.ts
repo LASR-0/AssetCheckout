@@ -13,6 +13,13 @@ import {
   getHotspotMaxLoanDays,
 } from "./settings.js";
 import { resolveRequesteeFacts } from "./request.js";
+import {
+  MS_PER_DAY,
+  parseCalendarDate,
+  todayUtc,
+  daysBetween,
+  formatCalendarDate,
+} from "../utils/calendarDate.js";
 import type { AccessorySummary } from "../types/snipeTypes.js";
 import type { HotspotLoan, Request } from "../../generated/prisma_client/client.js";
 
@@ -61,61 +68,8 @@ function notifyHotspot(
   );
 }
 
-///  +-----------------------------------------------------------------+
-///  |                  DATES AS CALENDAR DAYS                         |
-///  +-----------------------------------------------------------------+
-//
-//  A loan is measured in days, not instants. "Due back on the 5th" means the
-//  whole of the 5th, so every date here is normalised to UTC midnight of the
-//  chosen day on the way in, and every comparison is made between whole days.
-//
-//  This is the same contract the frontend's deriveLoanStage reads, and the
-//  two MUST agree: the client decides whether to show the Return button and
-//  the server decides whether to honour it. If they disagree about what day
-//  it is, the button appears and the API refuses it.
-///  +-----------------------------------------------------------------+
-
-const MS_PER_DAY = 86_400_000;
-
-/**
- * Parse a "YYYY-MM-DD" into UTC midnight of that day.
- *
- * Deliberately refuses anything else, a full ISO timestamp included. Accepting
- * one would mean the caller's timezone decided which calendar day the loan
- * fell on, and a Brisbane evening submission would book the day after.
- */
-function parseLoanDate(value: unknown, field: string): Date {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    throw new AppError(`${field} must be a date in YYYY-MM-DD form`, 400);
-  }
-  const date = new Date(`${value.trim()}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
-    throw new AppError(`${field} is not a real date`, 400);
-  }
-  return date;
-}
-
-/** UTC midnight of today — the reference point every day comparison uses. */
-function todayUtc(now: Date = new Date()): Date {
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-}
-
-/** Whole days from `from` to `to`; negative when `to` is earlier. */
-function daysBetween(from: Date, to: Date): number {
-  return Math.round((to.getTime() - from.getTime()) / MS_PER_DAY);
-}
-
-/** "5 October 2026" — for emails and checkout notes, never for parsing. */
-export function formatLoanDate(date: Date): string {
-  return date.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
+/** Loan dates are calendar days — see utils/calendarDate.ts. */
+export const formatLoanDate = formatCalendarDate;
 
 /**
  * Has the loan reached its due date? The server half of the unlock rule, and
@@ -169,8 +123,8 @@ export async function createHotspotRequest(
     );
   }
 
-  const startDate = parseLoanDate(input.startDate, "startDate");
-  const endDate = parseLoanDate(input.endDate, "endDate");
+  const startDate = parseCalendarDate(input.startDate, "startDate");
+  const endDate = parseCalendarDate(input.endDate, "endDate");
   const today = todayUtc();
 
   if (daysBetween(startDate, endDate) < 0) {
@@ -369,7 +323,7 @@ export async function assignHotspotToRequest(
   const loan = request.hotspotLoan;
   const note =
     `AssetCheckout loan #${request.id} for ${request.userName} — ` +
-    `due back ${formatLoanDate(loan.endDate)}` +
+    `due back ${formatCalendarDate(loan.endDate)}` +
     (loan.eventName ? ` (${loan.eventName})` : "");
 
   await checkoutAccessory(accessory.id, request.userId, note);
@@ -415,7 +369,7 @@ export async function assignHotspotToRequest(
     request: updated,
     loan: updatedLoan,
     accessory: { id: accessory.id, name: accessory.name },
-    message: `${accessory.name} assigned — due back ${formatLoanDate(loan.endDate)}`,
+    message: `${accessory.name} assigned — due back ${formatCalendarDate(loan.endDate)}`,
   };
 }
 
@@ -479,7 +433,7 @@ export async function markHotspotReturned(
   }
   if (!allowEarly && !isLoanDue(loan)) {
     throw new AppError(
-      `This loan isn't due back until ${formatLoanDate(loan.endDate)}.`,
+      `This loan isn't due back until ${formatCalendarDate(loan.endDate)}.`,
       400
     );
   }

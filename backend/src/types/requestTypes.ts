@@ -94,6 +94,12 @@ export type CreateRequestInput = {
    * Null when the actor couldn't be resolved to a Snipe user.
    */
   submittedById?: number | null;
+  /**
+   * The requestee's first day, already parsed to UTC midnight. Only the HRT
+   * integration supplies it — see Request.startDate in schema.prisma. Asset
+   * requests only; the accessory path ignores it.
+   */
+  startDate?: Date | null;
 };
 
 export type CreateResponse = {

@@ -19,6 +19,7 @@ import {
   createRequest,
   createCorrectionRequest,
   editRequest,
+  setRequestStartDate,
 } from "../services/request.js";
 import { createHotspotRequest } from "../services/hotspot.js";
 import {
@@ -29,6 +30,7 @@ import {
   stockKeeperCanSeeRequest,
 } from "../config/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
+import { parseCalendarDate } from "../utils/calendarDate.js";
 
 const router = express.Router();
 
@@ -189,6 +191,39 @@ router.post("/hotspots", async (req, res, next) => {
   }
 });
 
+
+/**
+ * Admin correction of a new starter's start date. Separate from the edit
+ * PATCH above because that refuses fulfilled requests, which is when this
+ * date does its work — see setRequestStartDate.
+ */
+router.patch("/:requestId/start-date", requireAdmin, async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.requestId);
+    if (!Number.isInteger(requestId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid requestId" });
+    }
+
+    const actorName = getActorName(req);
+    if (!actorName) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Missing actor identity" });
+    }
+
+    const raw = req.body?.startDate;
+    const startDate =
+      raw === null || raw === undefined || raw === ""
+        ? null
+        : parseCalendarDate(raw, "startDate");
+
+    res.json(await setRequestStartDate(requestId, startDate, actorName));
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.patch("/:requestId", requireAdmin, async (req, res, next) => {
   try {

@@ -126,6 +126,19 @@ model Request {
 
   reminderStage Int @default(0)
 
+  /// THE REQUESTEE'S FIRST DAY, for a request filed ahead of an onboarding.
+  /// NextHRT files a new starter's hardware weeks before they arrive, and the
+  /// reminder ladder would otherwise start chasing the stock keeper to hand
+  /// over a device to somebody who does not work here yet. While this is in
+  /// the future the ladder holds; on the day it starts counting from here
+  /// (see reminderClockStart). Every other notification is unaffected — the
+  /// point is to have the device READY by this date, not to hide the request.
+  ///
+  /// A calendar day at UTC midnight, like the loan dates. Set by HRT on create
+  /// or PATCH, or by an admin edit. Null on everything else, which is the
+  /// ordinary "no hold" state.
+  startDate DateTime?
+
   approvedBy      String?
   approvedAt      DateTime?
   adminApprovedBy String?

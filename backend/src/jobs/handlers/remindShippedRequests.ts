@@ -2,6 +2,7 @@ import {
   findShippedAwaitingReceipt,
   setReminderStage,
   reminderClockStart,
+  isHeldForStartDate,
 } from "../../services/request.js";
 import { getSetting } from "../../services/settings.js";
 import { enqueue } from "../jobQueue.js";
@@ -49,6 +50,11 @@ function daysSince(from: Date): number {
  * recipient resolution live in that handler (SHIPMENT_OVERDUE fans out to the
  * user and admins there).
  *
+ * A NEW STARTER'S REQUEST HOLDS until their first day (Request.startDate):
+ * reminderClockStart never starts earlier than it, so no stage is due before
+ * then. Counted separately in the summary so the Jobs history says why those
+ * rows were quiet rather than leaving it to look like nothing was found.
+ *
  * ONE_SHOT (maxAttempts 1) — the daily schedule is the retry.
  */
 export async function remindShippedRequestsHandler(): Promise<Record<string, unknown>> {
@@ -65,9 +71,15 @@ export async function remindShippedRequestsHandler(): Promise<Record<string, unk
 
   let remindersSent = 0;
   let escalations = 0;
+  let heldForStartDate = 0;
   const failures: string[] = [];
 
   for (const request of candidates) {
+    if (isHeldForStartDate(request)) {
+      heldForStartDate++;
+      continue;
+    }
+
     const clockStart = reminderClockStart(request);
     if (!clockStart) continue; // type-guard; scan already filters
 
@@ -109,6 +121,7 @@ export async function remindShippedRequestsHandler(): Promise<Record<string, unk
   return {
     thresholds: { d1, d2, d3 },
     scanned: candidates.length,
+    heldForStartDate,
     remindersSent,
     escalations,
     failed: failures.length,

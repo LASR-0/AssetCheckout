@@ -45,6 +45,7 @@ import {
 } from "./snipeitaccessories.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import { AppError } from "../utils/errors.js";
+import { daysBetween, formatCalendarDate, todayUtc } from "../utils/calendarDate.js";
 import type {
   CreateNewModelInput,
   CreateRequestInput,
@@ -457,6 +458,7 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
       reuseNumberPhone: input.reuseNumberPhone ?? null,
       status: "PENDING",
       autoApproved,
+      startDate: input.startDate ?? null,
     },
   });
 
@@ -1258,6 +1260,96 @@ export async function editRequest(
     request: updated,
     changes,
     message: `Request updated — ${changes.length} change${changes.length === 1 ? "" : "s"} saved.`,
+  };
+}
+
+///  +-----------------------------------------------------------------+
+///  |                        START DATE                               |
+///  +-----------------------------------------------------------------+
+//
+//  A new starter's first day moves — the offer is accepted late, the start is
+//  pushed back a week. HRT pushes the new date through its PATCH endpoint and
+//  an admin can correct it from the requests table; both land here.
+//
+//  NOT PART OF editRequest, on purpose. That refuses a COMPLETED request, and
+//  a completed request is exactly when this date matters: the reminder ladder
+//  only runs once the device has been fulfilled. It is also not a change to
+//  what was asked for, so it does not email the requester — who, for the
+//  request this exists for, may not have a working mailbox yet.
+//
+//  It IS logged. The edit log is the audit trail for "who changed this
+//  request", and a date that silences reminders is worth a line in it.
+//
+//  NO PRIVILEGE CHECK HERE. The two callers are behind different guards
+//  (requireApiToken for HRT, requireAdmin for the UI) and the caller names
+//  itself in editedBy; there is no actor shape that covers both.
+///  +-----------------------------------------------------------------+
+
+export type SetStartDateResponse = {
+  success: true;
+  request: Request;
+  changes: RequestChange[];
+  message: string;
+};
+
+export async function setRequestStartDate(
+  requestId: number,
+  startDate: Date | null,
+  editedBy: string
+): Promise<SetStartDateResponse> {
+  if (!editedBy.trim()) {
+    throw new AppError("Missing actor identity", 401);
+  }
+
+  const request = await prisma.request.findUnique({ where: { id: requestId } });
+  if (!request) {
+    throw new AppError("Request not found", 404);
+  }
+  if (request.requestKind === "CORRECTION" || request.requestKind === "HOTSPOT") {
+    throw new AppError("A start date only applies to hardware requests.", 400);
+  }
+  if (request.status === "REJECTED") {
+    throw new AppError("This request was rejected, so its start date no longer matters.", 409);
+  }
+
+  const before = request.startDate?.getTime() ?? null;
+  const after = startDate?.getTime() ?? null;
+  if (before === after) {
+    return { success: true, request, changes: [], message: "Nothing was changed." };
+  }
+
+  const label = (d: Date | null) => (d ? formatCalendarDate(d) : "Not set");
+  const changes: RequestChange[] = [
+    { field: "startDate", label: "Start date", from: label(request.startDate), to: label(startDate) },
+  ];
+
+  // Moving the date into the future restarts the ladder from nothing. Without
+  // this, a request whose first reminders had already gone out under the old
+  // date would resume at its old stage on the new one — and its first email
+  // after the new start could be the overdue escalation.
+  const restartsLadder =
+    startDate !== null && daysBetween(todayUtc(), startDate) > 0;
+
+  const [updated] = await prisma.$transaction([
+    prisma.request.update({
+      where: { id: requestId },
+      data: {
+        startDate,
+        ...(restartsLadder ? { reminderStage: 0 } : {}),
+      },
+    }),
+    prisma.requestEdit.create({
+      data: { requestId, editedBy, changes: JSON.stringify(changes) },
+    }),
+  ]);
+
+  return {
+    success: true,
+    request: updated,
+    changes,
+    message: startDate
+      ? `Start date set to ${formatCalendarDate(startDate)}.`
+      : "Start date cleared.",
   };
 }
 
@@ -2805,12 +2897,15 @@ export async function findShippedAwaitingReceipt(): Promise<Request[]> {
  * requester a device that was already three weeks into an escalation somebody
  * else caused.
  *
+ * Never earlier than the requestee's start date — see the comment inside.
+ *
  * Null only for a row with neither stamp, which the scan does not return.
  */
 export function reminderClockStart(request: {
   shippedAt: Date | null;
   collectionReadyAt: Date | null;
   fulfilledAt: Date | null;
+  startDate: Date | null;
 }): Date | null {
   // Ordered by who is on the hook, latest handover first:
   //   collectionReadyAt — the requester's, since it was handed to them
@@ -2822,9 +2917,26 @@ export function reminderClockStart(request: {
   // would charge the destination keeper for the days it spent in a van.
   // Trailing `?? null` is not decoration: `a ?? b ?? c` yields UNDEFINED when
   // every operand is absent, and the callers test the result for null.
-  return (
-    request.collectionReadyAt ?? request.shippedAt ?? request.fulfilledAt ?? null
-  );
+  const handover =
+    request.collectionReadyAt ?? request.shippedAt ?? request.fulfilledAt ?? null;
+  if (!handover) return null;
+
+  // A NEW STARTER'S DEVICE IS NOT LATE BEFORE THEY ARRIVE. Prepared weeks
+  // ahead is the whole point of filing it early, so nobody is on the hook
+  // until their first day — the clock starts on whichever is later. Before
+  // then the elapsed time is negative and no stage is due.
+  if (request.startDate && request.startDate.getTime() > handover.getTime()) {
+    return request.startDate;
+  }
+  return handover;
+}
+
+/** True while a request's reminders are held for its requestee's start date. */
+export function isHeldForStartDate(
+  request: { startDate: Date | null },
+  now: Date = new Date()
+): boolean {
+  return request.startDate !== null && request.startDate.getTime() > now.getTime();
 }
 
 /** Records that a reminder stage has been sent for a shipped request. */

@@ -1078,6 +1078,33 @@ The caller is responsible for supplying valid Snipe-IT identities (`userId`,
 phone-request options (`callText`, `needsData`, `numberOption`,
 `reuseNumberFromEmail`, `reuseNumberPhone`).
 
+#### New starters: `startDate`
+
+Onboarding requests are usually filed weeks before the employee's first day.
+Send their first day as `startDate` (`YYYY-MM-DD`, optional) and the
+**shipment/collection reminder ladder holds until that date**, then counts
+its thresholds from it rather than from when the device was prepared. Nothing
+else changes: the manager and IT sign-off emails, the "assigned", "shipped",
+"inbound" and "ready to collect" emails all go out as normal, so the device
+can be prepared in time.
+
+- Absent or `null` means no hold, which is the behaviour for every request
+  without the field.
+- Anything other than a real calendar date in `YYYY-MM-DD` form (a timestamp
+  included) is refused with `400`. Nothing is filed in that case.
+- Requests that are being held show a **Starts {date}** chip in the requests
+  table and on the Stock tab.
+
+**`PATCH /api/integrations/hrt/request/:id`** — `{ "startDate": "YYYY-MM-DD" | null }`
+
+Moves or clears the start date when it changes after filing. Works at any
+stage, fulfilled requests included. It is recorded in the request's edit
+history as `NextHRT` and does not email anyone. Moving the date into the
+future restarts the reminder ladder from its first rung. The `startDate` key
+is required. Send `null` to clear the date; an empty body is refused rather
+than treated as a clear. Admins can make the same change from the requests
+table by clicking the chip.
+
 ### Category catalogue
 
 **`GET /api/integrations/hrt/categories`**

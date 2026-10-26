@@ -1,5 +1,5 @@
 import express from "express";
-import { createRequest } from "../services/request.js";
+import { createRequest, setRequestStartDate } from "../services/request.js";
 import { requireApiToken } from "../middleware/apiToken.js";
 import {
   findSnipeUserByEmail,
@@ -10,6 +10,21 @@ import {
   getAllUserPhones,
 } from "../services/snipeitassets.js";
 import { AppError } from "../utils/errors.js";
+import { parseCalendarDate } from "../utils/calendarDate.js";
+
+/** Who start-date changes from this integration are logged as. */
+const HRT_ACTOR = "NextHRT";
+
+/**
+ * Optional start date from an HRT body: absent or null is "no hold", anything
+ * else must be a real YYYY-MM-DD. A malformed one is refused rather than
+ * dropped — silently filing without it would bring back the very reminders
+ * the field exists to hold.
+ */
+function parseOptionalStartDate(value: unknown): Date | null {
+  if (value === undefined || value === null || value === "") return null;
+  return parseCalendarDate(value, "startDate");
+}
 
 const router = express.Router();
 
@@ -29,12 +44,20 @@ router.use("/hrt", requireApiToken);
 //  (userId, userName) in the payload.
 //
 //  Maps the incoming payload onto the same createRequest service the UI uses,
-//  so HRT-origin requests behave identically once created.
+//  so HRT-origin requests behave identically once created — with one
+//  addition: `startDate` (YYYY-MM-DD, optional), the new starter's first day.
+//  While it is in the future the reminder ladder holds; see Request.startDate.
+//
+//  PATCH /api/integrations/hrt/request/:id  { startDate: "YYYY-MM-DD" | null }
+//
+//  Moves (or clears) that date when the start changes after filing. Logged
+//  in the request's edit history as NextHRT; nobody is emailed.
 ///  +-----------------------------------------------------------------+
 
 router.post("/hrt/request", async (req, res, next) => {
   try {
     const body = req.body ?? {};
+    const startDate = parseOptionalStartDate(body.startDate);
 
     const result = await createRequest({
       userId: body.userId,
@@ -50,8 +73,29 @@ router.post("/hrt/request", async (req, res, next) => {
       numberOption: body.numberOption,
       reuseNumberFromEmail: body.reuseNumberFromEmail,
       reuseNumberPhone: body.reuseNumberPhone,
+      startDate,
     });
 
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/hrt/request/:id", async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.id);
+    if (!Number.isInteger(requestId) || requestId <= 0) {
+      throw new AppError("Invalid request id", 400);
+    }
+    // The key must be PRESENT. An empty body is far more likely a client bug
+    // than a deliberate "clear it", and clearing un-holds the reminders.
+    if (!req.body || !("startDate" in req.body)) {
+      throw new AppError("startDate is required (null to clear it)", 400);
+    }
+
+    const startDate = parseOptionalStartDate(req.body.startDate);
+    const result = await setRequestStartDate(requestId, startDate, HRT_ACTOR);
     res.json(result);
   } catch (err) {
     next(err);
