@@ -1,13 +1,13 @@
 // CORRECTION is not a spec level. It exists so every provisioning branch that
 // tests for STANDARD or NON_STANDARD excludes corrections by construction.
-export type RequestType = "STANDARD" | "NON_STANDARD" | "CORRECTION" | "HOTSPOT";
+export type RequestType = "STANDARD" | "NON_STANDARD" | "CORRECTION" | "LOAN";
 export type RequestStatus = "PENDING" | "COMPLETED" | "REJECTED" | "APPROVED";
 // FIXED: number decision enum, matching the Prisma NumberOption enum
 export type NumberOption = "NEW" | "REUSE" | "NONE";
 // Accessories chapter: matches the Prisma RequestKind enum. Optional on
 // the interface — records created before the accessories expansion won't
 // carry it, and absent means ASSET.
-export type RequestKind = "ASSET" | "ACCESSORY" | "CORRECTION" | "HOTSPOT";
+export type RequestKind = "ASSET" | "ACCESSORY" | "CORRECTION" | "LOAN";
 
 /** What a correction is asking IT to fix. */
 export type CorrectionKind = "UNLOGGED" | "NO_LONGER_HELD" | "WRONG_MODEL";
@@ -81,16 +81,16 @@ export type SelfProcuredDetail = {
 };
 
 ///  +-----------------------------------------------------------------+
-///  |                      HOTSPOT LOANS                              |
+///  |                      LOANS                                      |
 ///  +-----------------------------------------------------------------+
 //
-//  Present only on HOTSPOT rows. The post-collection half of a loan is
+//  Present only on LOAN rows. The post-collection half of a loan is
 //  derived entirely from endDate and returnedAt — see deriveLoanStage in
 //  statusbadge.tsx — so a row that arrives without this reads as an ordinary
 //  COLLECTED request and offers no way to close the loan.
 ///  +-----------------------------------------------------------------+
 
-export type HotspotLoan = {
+export type Loan = {
   /** ISO. The window the requester asked for; endDate is the due-back date. */
   startDate: string;
   endDate: string;
@@ -107,7 +107,7 @@ export type HotspotLoan = {
   returnedBy?: string | null;
 
   /**
-   * Why a return could not be written to Snipe. Set means the hotspot is
+   * Why a return could not be written to Snipe. Set means the device is
    * physically BACK but Snipe still shows it out, so the row stays in the
    * returns queue and the action re-reads as "Retry return". Null once it
    * applies.
@@ -210,8 +210,8 @@ export interface Request {
   /** Present only on non-standard ACCESSORY rows IT has handed off to the
    *  requester instead of selecting an accessory. */
   selfProcured?: SelfProcuredDetail | null;
-  /** Present only on HOTSPOT rows. Drives everything after collection. */
-  hotspotLoan?: HotspotLoan | null;
+  /** Present only on LOAN rows. Drives everything after collection. */
+  loan?: Loan | null;
 
   /** The last time IT corrected this request, if they ever did. Drives the
    *  "Edited" marker in the Reason column. */

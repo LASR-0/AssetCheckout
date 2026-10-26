@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import ComboboxField from "@/components/ui/comboboxfield";
 import { getAccessoryCategories } from "@/api/accessories";
-import { getHotspotConfig, setHotspotConfig } from "@/api/settings";
+import { getLoanConfig, setLoanConfig } from "@/api/settings";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 
 ///  +-----------------------------------------------------------------+
-///  |                  HOTSPOT LOAN CONFIGURATION                     |
+///  |                  LOAN CONFIGURATION                             |
 ///  +-----------------------------------------------------------------+
 //
 //  Two settings, because a loan only needs two: where the pool is, and how
@@ -25,9 +25,9 @@ import type { AccessoryCategory } from "@/types/accessoriesType";
 //  back — the same shape as StockKeepersSelector.
 ///  +-----------------------------------------------------------------+
 
-const NONE_LABEL = "(hotspot loans disabled)";
+const NONE_LABEL = "(loans disabled)";
 
-export default function HotspotConfiguration() {
+export default function LoanConfiguration() {
   const [categories, setCategories] = useState<AccessoryCategory[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [maxLoanDays, setMaxLoanDays] = useState(30);
@@ -45,7 +45,7 @@ export default function HotspotConfiguration() {
         setError(null);
         const [cats, config] = await Promise.all([
           getAccessoryCategories(),
-          getHotspotConfig(),
+          getLoanConfig(),
         ]);
         if (cancelled) return;
         setCategories(cats);
@@ -74,7 +74,7 @@ export default function HotspotConfiguration() {
     try {
       setSaving(true);
       setError(null);
-      const saved = await setHotspotConfig({
+      const saved = await setLoanConfig({
         categoryId: next.categoryId !== undefined ? next.categoryId : categoryId,
         maxLoanDays: next.maxLoanDays !== undefined ? next.maxLoanDays : maxLoanDays,
       });

@@ -9,8 +9,8 @@ import {
   checkinAccessory,
 } from "./snipeitaccessories.js";
 import {
-  getHotspotCategoryId,
-  getHotspotMaxLoanDays,
+  getLoanCategoryId,
+  getLoanMaxDays,
 } from "./settings.js";
 import { resolveRequesteeFacts } from "./request.js";
 import {
@@ -21,10 +21,10 @@ import {
   formatCalendarDate,
 } from "../utils/calendarDate.js";
 import type { AccessorySummary } from "../types/snipeTypes.js";
-import type { HotspotLoan, Request } from "../../generated/prisma_client/client.js";
+import type { Loan, Request } from "../../generated/prisma_client/client.js";
 
 ///  +-----------------------------------------------------------------+
-///  |                     HOTSPOT LOANS                               |
+///  |                     LOANS                                       |
 ///  +-----------------------------------------------------------------+
 //
 //  A mobile hotspot borrowed for an event and given back afterwards. The
@@ -41,7 +41,7 @@ import type { HotspotLoan, Request } from "../../generated/prisma_client/client.
 //  exactly the trick createCorrectionRequest uses, and for the same reason:
 //  the machine already spells "waiting on IT" that way, so no new status was
 //  needed. IT's sign-off is inseparable from choosing WHICH hotspot to hand
-//  over, so it lives on assignHotspotToRequest rather than approveRequest.
+//  over, so it lives on assignLoanToRequest rather than approveRequest.
 //
 //  At the back the request does not end when the requester collects it. That
 //  is where a loan STARTS. receivedAt, terminal everywhere else in the
@@ -56,9 +56,9 @@ import type { HotspotLoan, Request } from "../../generated/prisma_client/client.
 //  well rather than instead.
 ///  +-----------------------------------------------------------------+
 
-function notifyHotspot(
+function notifyLoan(
   requestId: number,
-  kind: "HOTSPOT_REQUESTED" | "HOTSPOT_RETURNED"
+  kind: "LOAN_REQUESTED" | "LOAN_RETURNED"
 ): void {
   enqueue("SEND_REQUEST_NOTIFICATION", { requestId, kind }).catch((err) =>
     console.error(
@@ -75,7 +75,7 @@ export const formatLoanDate = formatCalendarDate;
  * Has the loan reached its due date? The server half of the unlock rule, and
  * the twin of isReturnable in the frontend's statusbadge.tsx.
  */
-export function isLoanDue(loan: Pick<HotspotLoan, "endDate">, now?: Date): boolean {
+export function isLoanDue(loan: Pick<Loan, "endDate">, now?: Date): boolean {
   return daysBetween(todayUtc(now), todayUtc(loan.endDate)) <= 0;
 }
 
@@ -83,7 +83,7 @@ export function isLoanDue(loan: Pick<HotspotLoan, "endDate">, now?: Date): boole
 ///  |                          CREATE                                 |
 ///  +-----------------------------------------------------------------+
 
-export type CreateHotspotInput = {
+export type CreateLoanInput = {
   userId: number;
   userName: string;
   startDate: unknown;
@@ -93,32 +93,32 @@ export type CreateHotspotInput = {
   submittedById?: number | null;
 };
 
-export type CreateHotspotResponse = {
+export type CreateLoanResponse = {
   success: true;
   request: Request;
-  loan: HotspotLoan;
+  loan: Loan;
   message: string;
 };
 
 /**
- * File a hotspot loan. Enters at APPROVED — see the header.
+ * File a loan. Enters at APPROVED — see the header.
  *
  * The window is validated against the calendar rather than the clock: a loan
  * starting "today" is legitimate right up to midnight, and rejecting it at
  * 4pm because the start instant has passed would refuse the most ordinary
  * request there is — somebody who needs a hotspot for an event this afternoon.
  */
-export async function createHotspotRequest(
-  input: CreateHotspotInput
-): Promise<CreateHotspotResponse> {
+export async function createLoanRequest(
+  input: CreateLoanInput
+): Promise<CreateLoanResponse> {
   if (typeof input.userId !== "number" || !Number.isInteger(input.userId)) {
     throw new AppError("userId is required", 400);
   }
 
-  const categoryId = await getHotspotCategoryId();
+  const categoryId = await getLoanCategoryId();
   if (categoryId === null) {
     throw new AppError(
-      "Hotspot loans aren't configured yet — an admin needs to set the hotspot category in Settings.",
+      "Loans aren't configured yet — an admin needs to set the hotspot category in Settings.",
       503
     );
   }
@@ -137,7 +137,7 @@ export async function createHotspotRequest(
   // Inclusive of both ends: picking up and returning on the same day is a
   // one-day loan, not a zero-day one.
   const days = daysBetween(startDate, endDate) + 1;
-  const maxDays = await getHotspotMaxLoanDays();
+  const maxDays = await getLoanMaxDays();
   if (days > maxDays) {
     throw new AppError(
       `A hotspot can be booked for at most ${maxDays} days — this request is for ${days}.`,
@@ -170,10 +170,10 @@ export async function createHotspotRequest(
       userLocationName,
       categoryId,
       categoryName: "Wi-Fi Hotspot",
-      requestKind: "HOTSPOT",
+      requestKind: "LOAN",
       // Not a spec level — the interlock that keeps loans out of every
       // provisioning branch. See the enum comment in schema.prisma.
-      requestType: "HOTSPOT",
+      requestType: "LOAN",
       // Straight to IT: there is no manager stage. managerId is non-nullable,
       // and 0 is the "nobody" value the column can carry without lying about
       // a person — nothing reads it on a loan, and isApprover can never match
@@ -185,19 +185,19 @@ export async function createHotspotRequest(
       // Hotspots are collected, never couriered. A loan is for an event with a
       // date on it; posting one is how it arrives after the event.
       needsShipping: false,
-      hotspotLoan: {
+      loan: {
         create: { startDate, endDate, eventName },
       },
     },
-    include: { hotspotLoan: true },
+    include: { loan: true },
   });
 
-  notifyHotspot(request.id, "HOTSPOT_REQUESTED");
+  notifyLoan(request.id, "LOAN_REQUESTED");
 
   return {
     success: true,
     request,
-    loan: request.hotspotLoan!,
+    loan: request.loan!,
     message: `Hotspot request submitted for ${days} day${days === 1 ? "" : "s"} — IT will assign one`,
   };
 }
@@ -216,11 +216,11 @@ export async function createHotspotRequest(
  * useful thing this endpoint can tell somebody, and hiding the row turns it
  * into "there are no hotspots", which is a different and wrong answer.
  */
-export async function listHotspotOptions(): Promise<AccessorySummary[]> {
-  const categoryId = await getHotspotCategoryId();
+export async function listLoanOptions(): Promise<AccessorySummary[]> {
+  const categoryId = await getLoanCategoryId();
   if (categoryId === null) {
     throw new AppError(
-      "Hotspot loans aren't configured yet — an admin needs to set the hotspot category in Settings.",
+      "Loans aren't configured yet — an admin needs to set the hotspot category in Settings.",
       503
     );
   }
@@ -239,8 +239,8 @@ export async function findClashingLoans(
   startDate: Date,
   endDate: Date,
   excludeRequestId?: number
-): Promise<(HotspotLoan & { request: Request })[]> {
-  return prisma.hotspotLoan.findMany({
+): Promise<(Loan & { request: Request })[]> {
+  return prisma.loan.findMany({
     where: {
       returnedAt: null,
       snipeAccessoryId: { not: null },
@@ -257,10 +257,10 @@ export async function findClashingLoans(
 ///  |                          ASSIGN                                 |
 ///  +-----------------------------------------------------------------+
 
-export type AssignHotspotResponse = {
+export type AssignLoanResponse = {
   success: true;
   request: Request;
-  loan: HotspotLoan;
+  loan: Loan;
   accessory: { id: number; name: string };
   message: string;
 };
@@ -275,18 +275,18 @@ export type AssignHotspotResponse = {
  * stays at this stage for a retry rather than being marked complete with
  * nothing assigned.
  */
-export async function assignHotspotToRequest(
+export async function assignLoanToRequest(
   requestId: number,
   accessoryId: number,
   actorName: string
-): Promise<AssignHotspotResponse> {
+): Promise<AssignLoanResponse> {
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    include: { hotspotLoan: true },
+    include: { loan: true },
   });
 
   if (!request) throw new AppError("Request not found", 404);
-  if (request.requestKind !== "HOTSPOT" || !request.hotspotLoan) {
+  if (request.requestKind !== "LOAN" || !request.loan) {
     throw new AppError("This isn't a hotspot request", 400);
   }
   if (request.status === "REJECTED") {
@@ -296,7 +296,7 @@ export async function assignHotspotToRequest(
     throw new AppError("A hotspot has already been assigned to this request", 400);
   }
 
-  const categoryId = await getHotspotCategoryId();
+  const categoryId = await getLoanCategoryId();
 
   // Read through to Snipe rather than the cache: this is the moment stock
   // matters, and the catalog's TTL is long enough to hand out a hotspot that
@@ -320,7 +320,7 @@ export async function assignHotspotToRequest(
     );
   }
 
-  const loan = request.hotspotLoan;
+  const loan = request.loan;
   const note =
     `AssetCheckout loan #${request.id} for ${request.userName} — ` +
     `due back ${formatCalendarDate(loan.endDate)}` +
@@ -344,7 +344,7 @@ export async function assignHotspotToRequest(
         locationMissing: request.userLocationId === null,
       },
     }),
-    prisma.hotspotLoan.update({
+    prisma.loan.update({
       where: { id: loan.id },
       data: {
         snipeAccessoryId: accessory.id,
@@ -377,10 +377,10 @@ export async function assignHotspotToRequest(
 ///  |                          RETURN                                 |
 ///  +-----------------------------------------------------------------+
 
-export type ReturnHotspotResponse = {
+export type ReturnLoanResponse = {
   success: true;
   request: Request;
-  loan: HotspotLoan;
+  loan: Loan;
   /** False when the hotspot is physically back but Snipe refused the checkin. */
   checkedIn: boolean;
   message: string;
@@ -399,22 +399,22 @@ export type ReturnHotspotResponse = {
  * `allowEarly` is the admin's override. The rule — the return unlocks on the
  * due date — is the keeper's, and the route decides who gets to break it.
  */
-export async function markHotspotReturned(
+export async function markLoanReturned(
   requestId: number,
   actorName: string,
   { allowEarly = false }: { allowEarly?: boolean } = {}
-): Promise<ReturnHotspotResponse> {
+): Promise<ReturnLoanResponse> {
   const request = await prisma.request.findUnique({
     where: { id: requestId },
-    include: { hotspotLoan: true },
+    include: { loan: true },
   });
 
   if (!request) throw new AppError("Request not found", 404);
-  if (request.requestKind !== "HOTSPOT" || !request.hotspotLoan) {
+  if (request.requestKind !== "LOAN" || !request.loan) {
     throw new AppError("This isn't a hotspot request", 400);
   }
 
-  const loan = request.hotspotLoan;
+  const loan = request.loan;
 
   if (loan.returnedAt !== null) {
     throw new AppError("This hotspot is already marked returned", 400);
@@ -473,7 +473,7 @@ export async function markHotspotReturned(
   }
 
   if (failure !== null) {
-    const blocked = await prisma.hotspotLoan.update({
+    const blocked = await prisma.loan.update({
       where: { id: loan.id },
       data: { checkinError: failure },
     });
@@ -487,7 +487,7 @@ export async function markHotspotReturned(
   }
 
   const now = new Date();
-  const returned = await prisma.hotspotLoan.update({
+  const returned = await prisma.loan.update({
     where: { id: loan.id },
     data: {
       returnedAt: now,
@@ -498,7 +498,7 @@ export async function markHotspotReturned(
     },
   });
 
-  notifyHotspot(request.id, "HOTSPOT_RETURNED");
+  notifyLoan(request.id, "LOAN_RETURNED");
 
   return {
     success: true,
@@ -513,7 +513,7 @@ export async function markHotspotReturned(
 ///  |                    THE DUE-BACK SCAN                            |
 ///  +-----------------------------------------------------------------+
 
-export type DueHotspot = HotspotLoan & {
+export type DueLoan = Loan & {
   request: Request;
   /** Days past the due date. Negative means it is not due yet. */
   daysOverdue: number;
@@ -528,16 +528,16 @@ export type DueHotspot = HotspotLoan & {
  * for a hotspot nobody has given them is the precise failure the shipment
  * reminders were once fixed for, and there is no reason to reintroduce it here.
  */
-export async function findHotspotsDueBack(
+export async function findLoansDueBack(
   earliestOffset: number,
   now: Date = new Date()
-): Promise<DueHotspot[]> {
+): Promise<DueLoan[]> {
   const today = todayUtc(now);
   // The widest rung decides how far ahead to look: a -1 first rung means loans
   // due tomorrow are already in scope.
   const horizon = new Date(today.getTime() - earliestOffset * MS_PER_DAY);
 
-  const rows = await prisma.hotspotLoan.findMany({
+  const rows = await prisma.loan.findMany({
     where: {
       returnedAt: null,
       snipeAccessoryId: { not: null },
@@ -555,11 +555,11 @@ export async function findHotspotsDueBack(
 }
 
 /** Idempotence for the ladder, exactly as setReminderStage is for shipments. */
-export async function setHotspotReminderStage(
+export async function setLoanReminderStage(
   loanId: number,
   stage: number
 ): Promise<void> {
-  await prisma.hotspotLoan.update({
+  await prisma.loan.update({
     where: { id: loanId },
     data: { reminderStage: stage },
   });

@@ -887,9 +887,9 @@ function QuickLinks() {
     },
     {
       icon: "wifi",
-      title: "Book a Hotspot",
-      desc: "Borrow a mobile hotspot for an event.",
-      to: "/hotspot",
+      title: "Book a Loan",
+      desc: "Borrow a hotspot, KVM or other device for a set period.",
+      to: "/loan",
     },
   ];
 

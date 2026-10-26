@@ -169,10 +169,10 @@ export default function Navbar() {
             </Link>
 
             <Link
-              to="/hotspot"
-              data-tour="nav-hotspot"
+              to="/loan"
+              data-tour="nav-loan"
               className={`body-md font-medium relative h-full transition-colors inline-flex items-center gap-2 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-full ${
-                isActive("/hotspot")
+                isActive("/loan")
                   ? "text-nav-tab-selected after:bg-underline"
                   : "text-nav-tab after:bg-transparent hover:text-nav-tab-selected"
               }`}
@@ -182,7 +182,7 @@ export default function Navbar() {
               >
                 wifi
               </span>
-              Hotspot
+              Loan
             </Link>
 
           </nav>
@@ -394,10 +394,10 @@ export default function Navbar() {
           </Link>
 
           <Link
-            to="/hotspot"
+            to="/loan"
             onClick={() => setMobileNavOpen(false)}
             className={`body-md font-medium pb-1 transition-colors inline-flex items-center gap-2 ${
-              isActive("/hotspot")
+              isActive("/loan")
                 ? "text-nav-tab-selected"
                 : "text-nav-tab hover:text-nav-tab-selected"
             }`}
@@ -408,7 +408,7 @@ export default function Navbar() {
             >
               wifi
             </span>
-            Hotspot
+            Loan
           </Link>
 
         </nav>

@@ -24,16 +24,16 @@ export type FulfilmentInput = {
   receivedAt?: string | null;
   /** CORRECTION rows have no fulfilment chain — see the guard below. */
   requestKind?: string | null;
-  /** HOTSPOT rows only. Present from collection onwards is what turns a
+  /** LOAN rows only. Present from collection onwards is what turns a
    *  finished handover into a running loan — see deriveLoanStage. */
-  hotspotLoan?: LoanInput | null;
+  loan?: LoanInput | null;
 };
 
 ///  +-----------------------------------------------------------------+
 ///  |                 WHERE A LOAN IS UP TO                           |
 ///  +-----------------------------------------------------------------+
 //
-//  A hotspot is borrowed, not issued. Its handover half is byte-for-byte the
+//  A device is borrowed, not issued. Its handover half is byte-for-byte the
 //  ordinary one — IT assigns, a keeper makes it ready, the requester collects
 //  it — and deriveFulfilment below is left to answer that half unchanged, so
 //  the stock keeper's queues pick loans up without knowing they exist.
@@ -47,7 +47,7 @@ export type FulfilmentInput = {
 //  thing anybody asked for. The due date is written as UTC midnight of the day
 //  the requester picked, so its UTC parts ARE that calendar date; today is
 //  read in the viewer's local parts. Comparing those two as day numbers is
-//  what stops a Brisbane keeper being told a hotspot is overdue at 10am on the
+//  what stops a Brisbane keeper being told a device is overdue at 10am on the
 //  day it is actually due, which is what any instant comparison gives you.
 ///  +-----------------------------------------------------------------+
 
@@ -102,7 +102,7 @@ export function deriveLoanStage(loan: LoanInput, now: Date = new Date()): LoanSt
  * keeper's Return action.
  *
  * ADMINS ARE NOT HELD TO IT — see the return route. An event that finishes
- * early still ends with somebody standing at the desk holding a hotspot, and
+ * early still ends with somebody standing at the desk holding a device, and
  * refusing to take it back because the spreadsheet says Thursday is worse
  * than the inconsistency.
  */
@@ -180,12 +180,12 @@ export function deriveFulfilment(request: FulfilmentInput): FulfilmentStage {
   const isReceivedOrCollected = isCompleted && !!receivedAt;
 
   // A LOAN DOES NOT END AT COLLECTION. Every boolean above stays honest for a
-  // hotspot — the handover half really is the ordinary one, which is what lets
+  // device — the handover half really is the ordinary one, which is what lets
   // the stock keeper's queues pick loans up without knowing they exist. Only
   // the badge diverges, and only from receivedAt onwards, because that is
   // where "the requester has it" stops meaning "finished" and starts meaning
   // "the clock is running".
-  const loan = request.requestKind === "HOTSPOT" ? request.hotspotLoan ?? null : null;
+  const loan = request.requestKind === "LOAN" ? request.loan ?? null : null;
 
   const badgeKey = !isCompleted
     ? request.status
@@ -272,7 +272,7 @@ export function deriveStage(request: StageInput): string {
     // will ever collect. Without this it fell through to the bare "Approved"
     // below and the one row in the system that is genuinely sitting in IT's lap
     // was the one that did not say so.
-    if (request.requestKind === "HOTSPOT" && !request.adminApprovedAt)
+    if (request.requestKind === "LOAN" && !request.adminApprovedAt)
       return "AWAITING_IT";
 
     // Handed off to the requester instead of an accessory being selected —
@@ -371,7 +371,7 @@ const labelMap: Record<string, string> = {
   AWAITING_PROCUREMENT_REVIEW: "Awaiting IT review",
   READY_TO_COLLECT: "Ready to collect",
   READY_TO_SHIP: "Ready to ship",
-  // Hotspot loans. ON_LOAN is the only "done" state that is not an ending —
+  // Loans. ON_LOAN is the only "done" state that is not an ending —
   // see deriveLoanStage.
   ON_LOAN: "On loan",
   DUE_BACK: "Due back",

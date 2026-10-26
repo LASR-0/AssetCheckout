@@ -6,7 +6,7 @@ import { deriveLoanStage, deriveFulfilment, deriveStage, isDoneStage, isReturnab
 ///  +-----------------------------------------------------------------+
 //
 //  Every other request in the system finishes the moment the requester has
-//  the thing. A hotspot loan STARTS there, and the whole feature rests on
+//  the thing. A loan STARTS there, and the whole feature rests on
 //  that one divergence, so it is pinned here from both directions: the loan
 //  stages themselves, and the fact that the shared fulfilment derivation
 //  still answers the handover half unchanged.
@@ -32,7 +32,7 @@ describe("deriveLoanStage", () => {
 
   it("is due back ON the due date, not the day after", () => {
     // The unlock moment. Getting this wrong by a day means the keeper holding
-    // the hotspot is refused by the button that exists for them.
+    // the device is refused by the button that exists for them.
     expect(deriveLoanStage({ endDate: due("2026-10-05") }, localNoon(2026, 10, 5)))
       .toBe("DUE_BACK");
   });
@@ -89,27 +89,27 @@ describe("isReturnable", () => {
 
 describe("the handover half is untouched", () => {
   // The stock keeper's queues are built on these booleans and know nothing
-  // about loans. If a hotspot stopped satisfying them it would simply never
+  // about loans. If a device stopped satisfying them it would simply never
   // appear in anybody's queue — silently, with no error.
-  const hotspot = (overrides: Record<string, unknown> = {}) => ({
+  const loanRow = (overrides: Record<string, unknown> = {}) => ({
     status: "COMPLETED",
-    requestKind: "HOTSPOT",
+    requestKind: "LOAN",
     needsShipping: false,
     shippedAt: null,
     collectionReadyAt: null,
     receivedAt: null,
-    hotspotLoan: { endDate: due("2026-10-05"), returnedAt: null },
+    loan: { endDate: due("2026-10-05"), returnedAt: null },
     ...overrides,
   });
 
   it("waits for the keeper exactly as an accessory does", () => {
-    const s = deriveFulfilment(hotspot());
+    const s = deriveFulfilment(loanRow());
     expect(s.isCollectAwaitingPrep).toBe(true);
     expect(s.badgeKey).toBe("ASSIGNED");
   });
 
   it("reads as ready to collect after the keeper's mark", () => {
-    const s = deriveFulfilment(hotspot({ collectionReadyAt: due("2026-10-01") }));
+    const s = deriveFulfilment(loanRow({ collectionReadyAt: due("2026-10-01") }));
     expect(s.isReadyToCollect).toBe(true);
     expect(s.badgeKey).toBe("READY_TO_COLLECT");
   });
@@ -117,14 +117,14 @@ describe("the handover half is untouched", () => {
   it("becomes a LOAN rather than COLLECTED once picked up", () => {
     // The divergence, stated directly. COLLECTED is terminal; ON_LOAN is not.
     const s = deriveFulfilment(
-      hotspot({ collectionReadyAt: due("2026-10-01"), receivedAt: due("2026-10-01") })
+      loanRow({ collectionReadyAt: due("2026-10-01"), receivedAt: due("2026-10-01") })
     );
     expect(s.isReceivedOrCollected).toBe(true);
     expect(s.badgeKey).not.toBe("COLLECTED");
     expect(["ON_LOAN", "DUE_BACK", "OVERDUE"]).toContain(s.badgeKey);
   });
 
-  it("leaves a non-hotspot request collected, as before", () => {
+  it("leaves a non-loan request collected, as before", () => {
     const s = deriveFulfilment({
       status: "COMPLETED",
       requestKind: "ACCESSORY",
@@ -145,8 +145,8 @@ describe("deriveStage", () => {
     expect(
       deriveStage({
         status: "APPROVED",
-        requestKind: "HOTSPOT",
-        requestType: "HOTSPOT",
+        requestKind: "LOAN",
+        requestType: "LOAN",
         adminApprovedAt: null,
       })
     ).toBe("AWAITING_IT");

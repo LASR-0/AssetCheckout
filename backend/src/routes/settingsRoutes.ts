@@ -16,10 +16,10 @@ import {
   setStockKeepersForLocation,
   MAX_STOCK_KEEPERS_PER_LOCATION,
   type StockKeeperEntry,
-  getHotspotCategoryId,
-  setHotspotCategoryId,
-  getHotspotMaxLoanDays,
-  setHotspotMaxLoanDays,
+  getLoanCategoryId,
+  setLoanCategoryId,
+  getLoanMaxDays,
+  setLoanMaxDays,
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 
@@ -363,7 +363,7 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 });
 
 ///  +-----------------------------------------------------------------+
-///  |                  HOTSPOT LOAN CONFIGURATION                     |
+///  |                  LOAN CONFIGURATION                             |
 ///  +-----------------------------------------------------------------+
 //
 //  Which Snipe accessory category holds the loan pool, and the longest window
@@ -371,11 +371,11 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 //  in the settings UI and splitting them would mean two round trips to render
 //  it.
 
-router.get("/hotspots", async (_req, res, next) => {
+router.get("/loans", async (_req, res, next) => {
   try {
     const [categoryId, maxLoanDays] = await Promise.all([
-      getHotspotCategoryId(),
-      getHotspotMaxLoanDays(),
+      getLoanCategoryId(),
+      getLoanMaxDays(),
     ]);
     res.json({ categoryId, maxLoanDays });
   } catch (err) {
@@ -383,13 +383,13 @@ router.get("/hotspots", async (_req, res, next) => {
   }
 });
 
-router.put("/hotspots", async (req, res, next) => {
+router.put("/loans", async (req, res, next) => {
   try {
     if (!requireAdmin(req, res)) return;
 
     const { categoryId, maxLoanDays } = req.body ?? {};
 
-    // Null is a real value here — it turns hotspot loans off rather than
+    // Null is a real value here — it turns loans off rather than
     // leaving them pointed at a category that no longer exists.
     if (
       categoryId !== null &&
@@ -407,15 +407,15 @@ router.put("/hotspots", async (req, res, next) => {
     }
 
     const actor = getActorEmail(req);
-    await setHotspotCategoryId(categoryId ?? null, actor);
+    await setLoanCategoryId(categoryId ?? null, actor);
     if (maxLoanDays !== undefined) {
-      await setHotspotMaxLoanDays(maxLoanDays, actor);
+      await setLoanMaxDays(maxLoanDays, actor);
     }
 
     // Echo the authoritative config back, as every other setter here does.
     const [savedCategoryId, savedMaxLoanDays] = await Promise.all([
-      getHotspotCategoryId(),
-      getHotspotMaxLoanDays(),
+      getLoanCategoryId(),
+      getLoanMaxDays(),
     ]);
     res.json({ categoryId: savedCategoryId, maxLoanDays: savedMaxLoanDays });
   } catch (err) {

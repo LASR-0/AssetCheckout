@@ -114,9 +114,9 @@ const MOBILE_LEADING_DIGIT_KEY = "mobile_leading_digit";
 const REQUESTABLE_ACCESSORY_CATEGORIES_KEY = "requestable_accessory_categories";
 const STANDARD_ACCESSORIES_KEY = "standard_accessories";
 const ACCESSORY_ASSET_CATEGORY_MAP_KEY = "accessory_asset_category_map";
-// Hotspot loans chapter
-const HOTSPOT_CATEGORY_KEY = "hotspot_category_id";
-const HOTSPOT_MAX_LOAN_DAYS_KEY = "hotspot_max_loan_days";
+// Loans chapter
+const LOAN_CATEGORY_KEY = "loan_category_id";
+const LOAN_MAX_DAYS_KEY = "loan_max_days";
 // Stock keepers chapter
 const STOCK_KEEPERS_KEY = "stock_keepers";
 const STOCK_KEEPER_FLOW_CUTOVER_KEY = "stock_keeper_flow_enabled_at";
@@ -494,50 +494,50 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     description: "Days after shipping to escalate to the user and admins (overdue)" 
   },
   {
-    key: HOTSPOT_CATEGORY_KEY,
-    envVar: "HOTSPOT_CATEGORY_ID",
+    key: LOAN_CATEGORY_KEY,
+    envVar: "LOAN_CATEGORY_ID",
     defaultValue: "18",
     description:
       "Snipe-IT ACCESSORY category id holding the loanable Wi-Fi hotspots. Every hotspot request is for something in this category, so there is no category picker on the form — IT is offered the records in here and nothing else. Seeded to the live 'Wi-Fi Hotspot' category; change it if the pool moves.",
   },
   {
-    key: HOTSPOT_MAX_LOAN_DAYS_KEY,
-    envVar: "HOTSPOT_MAX_LOAN_DAYS",
+    key: LOAN_MAX_DAYS_KEY,
+    envVar: "LOAN_MAX_DAYS",
     defaultValue: "30",
     description:
       "Longest loan window a requester may ask for, in days. A backstop against a mis-typed year turning into an indefinite checkout, not a policy — IT can still assign whatever was asked for.",
   },
   {
-    key: "jobs.hotspotReminderCron",
-    envVar: "JOBS_HOTSPOT_REMINDER_CRON",
+    key: "jobs.loanReminderCron",
+    envVar: "JOBS_LOAN_REMINDER_CRON",
     defaultValue: "0 9 * * *",
-    description: "Schedule for the hotspot due-back reminder job",
+    description: "Schedule for the loan due-back reminder job",
   },
   {
-    key: "hotspot_reminder_days_1",
-    envVar: "HOTSPOT_REMINDER_DAYS_1",
+    key: "loan_reminder_days_1",
+    envVar: "LOAN_REMINDER_DAYS_1",
     defaultValue: "-1",
     description:
       "Days RELATIVE TO the due date for the first due-back nudge to the borrower. Negative means before it: -1 is the day before. The other three keys work the same way.",
   },
   {
-    key: "hotspot_reminder_days_2",
-    envVar: "HOTSPOT_REMINDER_DAYS_2",
+    key: "loan_reminder_days_2",
+    envVar: "LOAN_REMINDER_DAYS_2",
     defaultValue: "0",
     description: "Days relative to the due date for the it's-due-today nudge to the borrower",
   },
   {
-    key: "hotspot_reminder_days_3",
-    envVar: "HOTSPOT_REMINDER_DAYS_3",
+    key: "loan_reminder_days_3",
+    envVar: "LOAN_REMINDER_DAYS_3",
     defaultValue: "3",
     description:
-      "Days after the due date to chase the borrower AND the site's stock keeper about an overdue hotspot",
+      "Days after the due date to chase the borrower AND the site's stock keeper about an overdue loan",
   },
   {
-    key: "hotspot_reminder_days_4",
-    envVar: "HOTSPOT_REMINDER_DAYS_4",
+    key: "loan_reminder_days_4",
+    envVar: "LOAN_REMINDER_DAYS_4",
     defaultValue: "7",
-    description: "Days after the due date to escalate an overdue hotspot to IT admins",
+    description: "Days after the due date to escalate an overdue loan to IT admins",
   },
   { key: "feedback_enabled",
     envVar: "FEEDBACK_ENABLED",
@@ -1392,7 +1392,7 @@ function normalizeStockKeepersEnv(raw: string): string | null {
 }
 
 ///  +-----------------------------------------------------------------+
-///  |                      HOTSPOT LOANS                              |
+///  |                      LOANS                                      |
 ///  +-----------------------------------------------------------------+
 //
 //  ONE CATEGORY, NOT A LIST. A hotspot request is for a hotspot — there is no
@@ -1405,17 +1405,17 @@ function normalizeStockKeepersEnv(raw: string): string | null {
  * The Snipe ACCESSORY category the loanable hotspots live in.
  *
  * Null when the setting has been blanked or set to something that is not a
- * positive id. Callers must treat that as "hotspot loans are not configured"
+ * positive id. Callers must treat that as "loans are not configured"
  * and say so, rather than falling back to a guess: the wrong category here
  * would offer IT a list of headphones to check out as a hotspot.
  */
-export async function getHotspotCategoryId(): Promise<number | null> {
-  const raw = await getSetting(HOTSPOT_CATEGORY_KEY);
+export async function getLoanCategoryId(): Promise<number | null> {
+  const raw = await getSetting(LOAN_CATEGORY_KEY);
   const parsed = Number((raw ?? "").trim());
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-export async function setHotspotCategoryId(
+export async function setLoanCategoryId(
   categoryId: number | null,
   actorEmail?: string
 ): Promise<void> {
@@ -1423,7 +1423,7 @@ export async function setHotspotCategoryId(
     throw new AppError("hotspot category id must be a positive integer", 400);
   }
   await setSetting(
-    HOTSPOT_CATEGORY_KEY,
+    LOAN_CATEGORY_KEY,
     categoryId === null ? "" : String(categoryId),
     actorEmail
   );
@@ -1437,20 +1437,20 @@ export async function setHotspotCategoryId(
  * Falls back to 30 rather than to "unbounded" if the setting is unreadable —
  * an unparseable limit should not quietly become no limit at all.
  */
-export async function getHotspotMaxLoanDays(): Promise<number> {
-  const raw = await getSetting(HOTSPOT_MAX_LOAN_DAYS_KEY);
+export async function getLoanMaxDays(): Promise<number> {
+  const raw = await getSetting(LOAN_MAX_DAYS_KEY);
   const parsed = Number((raw ?? "").trim());
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 30;
 }
 
-export async function setHotspotMaxLoanDays(
+export async function setLoanMaxDays(
   days: number,
   actorEmail?: string
 ): Promise<void> {
   if (!Number.isInteger(days) || days <= 0) {
-    throw new AppError("hotspot max loan days must be a positive integer", 400);
+    throw new AppError("loan max days must be a positive integer", 400);
   }
-  await setSetting(HOTSPOT_MAX_LOAN_DAYS_KEY, String(days), actorEmail);
+  await setSetting(LOAN_MAX_DAYS_KEY, String(days), actorEmail);
 }
 
 /**
@@ -1460,13 +1460,13 @@ export async function setHotspotMaxLoanDays(
  * setting that puts them out of order would otherwise fire the escalation
  * before the polite reminder.
  */
-export async function getHotspotReminderOffsets(): Promise<number[]> {
+export async function getLoanReminderOffsets(): Promise<number[]> {
   const defaults = [-1, 0, 3, 7];
   const raws = await Promise.all([
-    getSetting("hotspot_reminder_days_1"),
-    getSetting("hotspot_reminder_days_2"),
-    getSetting("hotspot_reminder_days_3"),
-    getSetting("hotspot_reminder_days_4"),
+    getSetting("loan_reminder_days_1"),
+    getSetting("loan_reminder_days_2"),
+    getSetting("loan_reminder_days_3"),
+    getSetting("loan_reminder_days_4"),
   ]);
   const parsed = raws.map((raw, i) => {
     const n = Number((raw ?? "").trim());

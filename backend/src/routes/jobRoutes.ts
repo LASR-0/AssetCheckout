@@ -41,11 +41,11 @@ const MANUALLY_TRIGGERABLE: Set<JobType> = new Set([
   "CLEANUP_STALE_REQUESTS",
   "CLEANUP_ORPHAN_SNIPE_MODELS",
   "BACKFILL_REQUEST_LOCATIONS",
-  // Safe to run by hand: the ladder is idempotent on HotspotLoan.reminderStage,
+  // Safe to run by hand: the ladder is idempotent on Loan.reminderStage,
   // so a second run inside the same day sends nothing. Worth having here
   // because "did the overdue chase actually go out" is the question somebody
-  // asks the moment a hotspot goes missing.
-  "REMIND_HOTSPOT_RETURNS"
+  // asks the moment a device goes missing.
+  "REMIND_LOAN_RETURNS"
 ]);
 
 ///  +-----------------------------------------------------------------+

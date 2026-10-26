@@ -1,18 +1,18 @@
 import { apiFetch } from "@/api/client";
-import type { HotspotLoan, Request } from "@/types/requestType";
+import type { Loan, Request } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
-///  |                  HOTSPOT LOAN ENDPOINTS                         |
+///  |                  LOAN ENDPOINTS                                 |
 ///  +-----------------------------------------------------------------+
 //
 //  Three calls, because the middle of a loan is the ordinary flow: marking it
 //  ready to collect and marking it collected go through the SAME approval
 //  endpoints every other request uses, and are deliberately not wrapped here.
-//  Adding hotspot-shaped aliases for them would invite the two paths to drift.
+//  Adding loan-shaped aliases for them would invite the two paths to drift.
 ///  +-----------------------------------------------------------------+
 
-/** A loanable hotspot as the assign dialog sees it. */
-export type HotspotOption = {
+/** A loanable device as the assign dialog sees it. */
+export type LoanOption = {
   id: number;
   name: string;
   manufacturer: string | null;
@@ -28,7 +28,7 @@ export type HotspotOption = {
  * Another loan already out over the same window. The pool is a single unit, so
  * this is not trivia — it is the reason to stop and check before assigning.
  */
-export type HotspotClash = {
+export type LoanClash = {
   requestId: number;
   userName: string;
   accessoryId: number | null;
@@ -39,7 +39,7 @@ export type HotspotClash = {
   collected: boolean;
 };
 
-export type CreateHotspotPayload = {
+export type CreateLoanPayload = {
   userId: number;
   userName: string;
   /** "YYYY-MM-DD". A full ISO timestamp is refused — the server's timezone
@@ -50,48 +50,48 @@ export type CreateHotspotPayload = {
   eventName?: string | null;
 };
 
-export async function createHotspotRequest(
-  payload: CreateHotspotPayload
-): Promise<{ success: boolean; request: Request; loan: HotspotLoan; message: string }> {
-  return apiFetch("/api/requests/hotspots", { method: "POST", body: payload });
+export async function createLoanRequest(
+  payload: CreateLoanPayload
+): Promise<{ success: boolean; request: Request; loan: Loan; message: string }> {
+  return apiFetch("/api/requests/loans", { method: "POST", body: payload });
 }
 
 /** What IT can assign, plus anything already promised over the same dates. */
-export async function getHotspotOptions(
+export async function getLoanOptions(
   requestId: number
-): Promise<{ options: HotspotOption[]; clashes: HotspotClash[] }> {
+): Promise<{ options: LoanOption[]; clashes: LoanClash[] }> {
   const data = await apiFetch<{
     success: boolean;
-    options: HotspotOption[];
-    clashes: HotspotClash[];
-  }>(`/api/approval/${requestId}/hotspot/options`);
+    options: LoanOption[];
+    clashes: LoanClash[];
+  }>(`/api/approval/${requestId}/loan/options`);
   return { options: data.options ?? [], clashes: data.clashes ?? [] };
 }
 
-/** IT's sign-off: assign this hotspot and check it out of Snipe. */
-export async function assignHotspot(
+/** IT's sign-off: assign this device and check it out of Snipe. */
+export async function assignLoan(
   requestId: number,
   accessoryId: number
-): Promise<{ success: boolean; request: Request; loan: HotspotLoan; message: string }> {
-  return apiFetch(`/api/approval/${requestId}/hotspot/assign`, {
+): Promise<{ success: boolean; request: Request; loan: Loan; message: string }> {
+  return apiFetch(`/api/approval/${requestId}/loan/assign`, {
     method: "POST",
     body: { accessoryId },
   });
 }
 
 /**
- * The hotspot is back. Resolves even when Snipe refuses the check-in —
+ * The device is back. Resolves even when Snipe refuses the check-in —
  * `checkedIn: false` with the reason in `message` is a real outcome, not an
  * error, and the caller must show it rather than claiming the loan is closed.
  */
-export async function returnHotspot(
+export async function returnLoan(
   requestId: number
 ): Promise<{
   success: boolean;
   request: Request;
-  loan: HotspotLoan;
+  loan: Loan;
   checkedIn: boolean;
   message: string;
 }> {
-  return apiFetch(`/api/approval/${requestId}/hotspot/return`, { method: "POST" });
+  return apiFetch(`/api/approval/${requestId}/loan/return`, { method: "POST" });
 }

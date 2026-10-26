@@ -16,7 +16,7 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 //  more usefully, makes an accidental month obvious at a glance.
 //
 //  BOTH ENDS ARE INCLUSIVE. Picking up and returning on the same day is a
-//  one-day loan. The server counts it the same way — see createHotspotRequest.
+//  one-day loan. The server counts it the same way — see createLoanRequest.
 //
 //  DATES ARE CALENDAR DAYS, NEVER INSTANTS. The picker hands back local
 //  midnights; toDateString below takes the local Y-M-D parts and formats them

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import RequestFormPage from "@/pages/RequestFormPage";
 import AccessoryRequestFormPage from "@/pages/AccessoryFormPage";
-import HotspotFormPage from "@/pages/HotspotFormPage";
+import LoanFormPage from "@/pages/LoanFormPage";
 import SuccessRedirect from "@/pages/SuccessRedirect";
 import RequestTablePage from "@/pages/RequestsTablePage"
 import StockPage from "@/pages/StockPage";
@@ -42,12 +42,15 @@ function App() {
           <Route path="/accessories" element={
             <ProtectedRoute requireRole={false}><AccessoryRequestFormPage /></ProtectedRoute>
           } />
-          {/* Loans. requireRole={false} like the two forms above: booking a
-              hotspot is not an approver's or an admin's job, and a requester
+          {/* Loans. requireRole={false} like the two forms above: borrowing
+              a device is not an approver's or an admin's job, and a requester
               who has never filed anything else is exactly who books one. */}
-          <Route path="/hotspot" element={
-            <ProtectedRoute requireRole={false}><HotspotFormPage /></ProtectedRoute>
+          <Route path="/loan" element={
+            <ProtectedRoute requireRole={false}><LoanFormPage /></ProtectedRoute>
           } />
+          {/* Where the page lived when it only lent hotspots — kept so old
+              bookmarks and links in people's mail still land somewhere. */}
+          <Route path="/hotspot" element={<Navigate to="/loan" replace />} />
           <Route path="/success" element={<SuccessRedirect />} />
           <Route
             path="/requests"

@@ -35,7 +35,7 @@ export const JOB_TYPE_LABELS: Record<JobType, string> = {
   REFRESH_ACCESSORIES_CACHE: "Refresh Accessories",
   PURGE_OLD_JOB_HISTORY: "Purge History",
   REMIND_SHIPPED_REQUESTS: "Shipping Reminder",
-  REMIND_HOTSPOT_RETURNS: "Hotspot Due-Back Reminder",
+  REMIND_LOAN_RETURNS: "Loan Due-Back Reminder",
   LOG_CAPEX_PURCHASE: "CAPEX Purchase Log",
   BACKFILL_REQUEST_LOCATIONS: "Backfill Request Locations",
 };

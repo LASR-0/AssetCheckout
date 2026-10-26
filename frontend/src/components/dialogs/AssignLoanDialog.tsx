@@ -7,15 +7,15 @@ import {
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import { useEffect, useState } from "react";
 import {
-  getHotspotOptions,
-  assignHotspot,
-  type HotspotOption,
-  type HotspotClash,
-} from "@/api/hotspots";
+  getLoanOptions,
+  assignLoan,
+  type LoanOption,
+  type LoanClash,
+} from "@/api/loans";
 import type { Request } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
-///  |                     ASSIGNING A HOTSPOT                         |
+///  |                     ASSIGNING A LOAN                            |
 ///  +-----------------------------------------------------------------+
 //
 //  IT's whole sign-off, in one dialog: pick the unit, check it out, done.
@@ -56,20 +56,20 @@ function formatDay(iso: string): string {
   return new Date(iso).toLocaleDateString("en-AU", dayFormat);
 }
 
-export default function AssignHotspotDialog({
+export default function AssignLoanDialog({
   request,
   open,
   onOpenChange,
   onSuccess,
 }: Props) {
-  const [options, setOptions] = useState<HotspotOption[]>([]);
-  const [clashes, setClashes] = useState<HotspotClash[]>([]);
+  const [options, setOptions] = useState<LoanOption[]>([]);
+  const [clashes, setClashes] = useState<LoanClash[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loan = request?.hotspotLoan ?? null;
+  const loan = request?.loan ?? null;
   const requesterSite = request?.userLocationName ?? null;
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function AssignHotspotDialog({
     setLoading(true);
     setError(null);
 
-    getHotspotOptions(request.id)
+    getLoanOptions(request.id)
       .then(({ options, clashes }) => {
         if (cancelled) return;
         setOptions(options);
@@ -129,7 +129,7 @@ export default function AssignHotspotDialog({
     setAssigning(true);
     setError(null);
     try {
-      await assignHotspot(request.id, selectedId);
+      await assignLoan(request.id, selectedId);
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {

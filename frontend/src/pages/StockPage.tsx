@@ -325,7 +325,7 @@ export default function StockPage() {
   }, [requests, siteId]);
 
   /**
-   * Hotspots out with a borrower and due back — the loan queue.
+   * Devices out on loan and due back — the loan queue.
    *
    * The only queue on this page whose rows are NOT sitting in the storeroom:
    * these are out in the world, and the keeper's job is to chase them and
@@ -336,13 +336,13 @@ export default function StockPage() {
    * with the row's Return button — a queue listing a loan the keeper cannot
    * yet act on is worse than not listing it.
    */
-  const hotspotsDueBack = useMemo(() => {
+  const loansDueBack = useMemo(() => {
     if (siteId === null) return [];
     return requests
       .filter((r) => {
         if ((r.userLocationId ?? null) !== siteId) return false;
-        if (r.requestKind !== "HOTSPOT") return false;
-        const loan = r.hotspotLoan;
+        if (r.requestKind !== "LOAN") return false;
+        const loan = r.loan;
         if (!loan || loan.returnedAt) return false;
         // Not yet collected means it is still in the handover queue above.
         if (!r.receivedAt) return false;
@@ -350,8 +350,8 @@ export default function StockPage() {
       })
       .sort(
         (a, b) =>
-          new Date(a.hotspotLoan!.endDate).getTime() -
-          new Date(b.hotspotLoan!.endDate).getTime()
+          new Date(a.loan!.endDate).getTime() -
+          new Date(b.loan!.endDate).getTime()
       );
   }, [requests, siteId]);
 
@@ -657,10 +657,10 @@ export default function StockPage() {
         />
         <QueueCard
           icon="wifi"
-          title="Hotspots due back"
-          count={hotspotsDueBack.length}
-          empty="No hotspots are due back."
-          rows={hotspotsDueBack}
+          title="Loans due back"
+          count={loansDueBack.length}
+          empty="No loans are due back."
+          rows={loansDueBack}
           badge="Chase"
           badgeClass="border-intent-stop/30 bg-intent-stop/10 text-intent-stop"
         />

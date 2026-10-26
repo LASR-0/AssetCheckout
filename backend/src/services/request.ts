@@ -88,8 +88,8 @@ type NotificationKind =
   | "SHIPMENT_INBOUND"
   | "REQUEST_REJECTED"
   | "REQUEST_EDITED"
-  | "HOTSPOT_REQUESTED"
-  | "HOTSPOT_RETURNED";
+  | "LOAN_REQUESTED"
+  | "LOAN_RETURNED";
 
 /**
  * `extra` is merged into the job payload for the handful of kinds that need
@@ -1305,7 +1305,7 @@ export async function setRequestStartDate(
   if (!request) {
     throw new AppError("Request not found", 404);
   }
-  if (request.requestKind === "CORRECTION" || request.requestKind === "HOTSPOT") {
+  if (request.requestKind === "CORRECTION" || request.requestKind === "LOAN") {
     throw new AppError("A start date only applies to hardware requests.", 400);
   }
   if (request.status === "REJECTED") {
@@ -1393,15 +1393,15 @@ export async function approveRequest(
     );
   }
 
-  // HOTSPOTS ARE NOT APPROVED HERE, ON THE SAME TERMS AS CORRECTIONS ABOVE.
-  // requestType is HOTSPOT, so none of the provisioning branches below can
+  // LOANS ARE NOT APPROVED HERE, ON THE SAME TERMS AS CORRECTIONS ABOVE.
+  // requestType is LOAN, so none of the provisioning branches below can
   // match anyway — this is the explicit half of that belt and braces. A loan's
-  // sign-off is inseparable from choosing WHICH hotspot to hand over, so it
+  // sign-off is inseparable from choosing WHICH device to hand over, so it
   // lives on the assign route, which takes the accessory id this one has no
   // way to carry.
-  if (request.requestKind === "HOTSPOT") {
+  if (request.requestKind === "LOAN") {
     throw new AppError(
-      "A hotspot loan is approved by assigning a hotspot to it — use the assign action.",
+      "A loan is approved by assigning a device to it — use the assign action.",
       400
     );
   }

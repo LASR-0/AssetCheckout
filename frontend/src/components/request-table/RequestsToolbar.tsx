@@ -85,7 +85,7 @@ export default function RequestsToolbar({ search, setSearch, status, setStatus, 
     { label: "Assigned", value: "ASSIGNED", icon: "assignment_ind" },
     { label: "Ready to collect", value: "READY_TO_COLLECT", icon: "package_2" },
     { label: "Shipped", value: "SHIPPED", icon: "local_shipping" },
-    // Hotspot loans, in the order a loan passes through them.
+    // Loans, in the order a loan passes through them.
     { label: "On loan", value: "ON_LOAN", icon: "wifi" },
     { label: "Due back", value: "DUE_BACK", icon: "event_upcoming" },
     { label: "Overdue", value: "OVERDUE", icon: "running_with_errors" },

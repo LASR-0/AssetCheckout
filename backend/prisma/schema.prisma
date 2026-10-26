@@ -151,7 +151,7 @@ model Request {
   correctionDetail CorrectionDetail?
   quoteDetail      QuoteDetail?
   selfProcured     SelfProcuredDetail?
-  hotspotLoan      HotspotLoan?
+  loan      Loan?
   edits            RequestEdit[]
 
   createdAt DateTime @default(now())
@@ -465,9 +465,9 @@ model SelfProcuredDetail {
 }
 
 /**
- * ===================== HOTSPOT LOANS =====================
+ * ===================== LOANS =====================
  */
-// A mobile hotspot borrowed for an event and given back afterwards.
+// A device borrowed for an event and given back afterwards.
 //
 // WHY THIS IS NOT AN ACCESSORY REQUEST. The hardware IS an accessory in Snipe,
 // and the middle of the flow is genuinely the same — IT hands it to a stock
@@ -486,7 +486,7 @@ model SelfProcuredDetail {
 // written twice, and each write a new way to strand a loan in a state nothing
 // can advance. See deriveStage in the frontend's statusbadge.tsx, which makes
 // the same argument for the request lifecycle as a whole.
-model HotspotLoan {
+model Loan {
   id Int @id @default(autoincrement())
 
   requestId Int     @unique
@@ -500,7 +500,7 @@ model HotspotLoan {
   startDate DateTime
   endDate   DateTime
 
-  /// What the hotspot is for, in the requester's words. Optional and separate
+  /// What the device is for, in the requester's words. Optional and separate
   /// from Request.reason, which carries the justification: "Roadshow, Toowoomba"
   /// is what a stock keeper needs on the row, and it is not a reason.
   eventName String?
@@ -525,7 +525,7 @@ model HotspotLoan {
   returnedAt DateTime?
   returnedBy String?
 
-  /// Why the check-in could not be applied. Set means the hotspot is BACK in
+  /// Why the check-in could not be applied. Set means the device is BACK in
   /// the keeper's hands but Snipe still shows it out, so the row deliberately
   /// stays in the returns queue for a retry. Cleared on success.
   checkinError String?
@@ -533,7 +533,7 @@ model HotspotLoan {
   /// The overdue ladder's own counter, 0..4.
   ///
   /// SEPARATE FROM Request.reminderStage ON PURPOSE. That one drives the
-  /// pre-handover chase, and findShippedAwaitingReceipt already picks a hotspot
+  /// pre-handover chase, and findShippedAwaitingReceipt already picks a device
   /// up for free between assignment and collection — it stops at receivedAt,
   /// which is exactly where a loan begins. Two counters over two windows that
   /// cannot overlap; one counter would have the two ladders resetting each
@@ -561,13 +561,13 @@ enum RequestType {
   // fulfilment branch in approveRequest, which would otherwise check hardware
   // out of Snipe, and the non-standard row treatment in the requests table.
   CORRECTION
-  // Hotspot loans are not a spec level either, and they are here for exactly
+  // Loans are not a spec level either, and they are here for exactly
   // the reason CORRECTION is above: a loan must never fall into a provisioning
   // branch. Every one of those tests requestType for STANDARD or NON_STANDARD,
   // so a fourth value excludes loans BY CONSTRUCTION rather than by a guard
   // somebody has to remember to write. The kind lives on requestKind; this is
   // the safety interlock.
-  HOTSPOT
+  LOAN
 }
 
 enum RequestStatus {
@@ -611,10 +611,10 @@ enum JobType {
   /// requester genuinely has no Snipe location — on every tick, forever.
   /// Idempotent, so running it twice is harmless.
   BACKFILL_REQUEST_LOCATIONS
-  /// Chase hotspot loans that are due back or already overdue. Scheduled
-  /// daily; escalates through HotspotLoan.reminderStage the same way
+  /// Chase loans that are due back or already overdue. Scheduled
+  /// daily; escalates through Loan.reminderStage the same way
   /// REMIND_SHIPPED_REQUESTS escalates through Request.reminderStage.
-  REMIND_HOTSPOT_RETURNS
+  REMIND_LOAN_RETURNS
 }
 
 enum JobStatus {
@@ -651,11 +651,11 @@ enum RequestKind {
   // What the correction is ABOUT (an asset or an accessory) lives on
   // CorrectionDetail.subjectKind, not here.
   CORRECTION
-  // A mobile hotspot borrowed for a fixed window and given back. The thing
+  // A device borrowed for a fixed window and given back. The thing
   // itself is an accessory in Snipe, but the flow is not the accessory flow:
   // it has no manager stage, no standard/non-standard split, and a whole
-  // second half after the requester collects it. See HotspotLoan.
-  HOTSPOT
+  // second half after the requester collects it. See Loan.
+  LOAN
 }
 
 enum CorrectionKind {

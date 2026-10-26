@@ -7,7 +7,7 @@ import {
   ResponsiveDialogFooter,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import Calendar from "@/components/ui/calendar";
-import { toDateString } from "@/components/hotspot-form/LoanWindowSection";
+import { toDateString } from "@/components/loan-form/LoanWindowSection";
 import { setRequestStartDate } from "@/api/requests";
 import { formatStartLong, startDateToLocal } from "@/lib/startDate";
 import type { Request } from "@/types/requestType";

@@ -17,7 +17,7 @@ import MobileFilterCard from "@/components/settings/MobileFilterCard";
 import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
 import AccessoryAssetMap from "@/components/settings/AccessoryAssetMap";
 import StockKeepersSelector from "@/components/settings/StockKeepersSelector";
-import HotspotConfiguration from "@/components/settings/HotspotConfiguration";
+import LoanConfiguration from "@/components/settings/LoanConfiguration";
 
 export default function SettingsPage() {
   const { role } = useAuth();
@@ -138,18 +138,18 @@ export default function SettingsPage() {
         </SettingsSection>
       )}
 
-      {/* Hotspot Loans -- admin-only. Sits after Stock Keepers because the
-          keepers are who hands a hotspot over and takes it back. */}
+      {/* Loans -- admin-only. Sits after Stock Keepers because the
+          keepers are who hands a loaned device over and takes it back. */}
       {isAdmin && (
-        <SettingsSection icon="wifi" title="Hotspot Loans">
+        <SettingsSection icon="devices" title="Loans">
           <p className="text-sm text-info-light mb-4">
-            Mobile hotspots are borrowed for a fixed window rather than issued.
+            Devices like Wi-Fi hotspots and KVMs are borrowed for a fixed window rather than issued.
             A request goes straight to IT — there is no manager stage — and IT
             assigns a unit from the category below. The stock keeper hands it
             over, the requester collects it, and the keeper closes the loan off
             when it comes back, which checks it in to Snipe-IT.
           </p>
-          <HotspotConfiguration />
+          <LoanConfiguration />
         </SettingsSection>
       )}
 

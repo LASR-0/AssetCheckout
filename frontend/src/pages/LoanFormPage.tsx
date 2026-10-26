@@ -5,14 +5,14 @@ import UserDetailsInput from "@/components/request-form/UserDetailsInput";
 import LoanWindowSection, {
   toDateString,
   countDays,
-} from "@/components/hotspot-form/LoanWindowSection";
+} from "@/components/loan-form/LoanWindowSection";
 import { fetchUsers } from "@/api/users";
-import { createHotspotRequest } from "@/api/hotspots";
+import { createLoanRequest } from "@/api/loans";
 import type { User } from "@/components/request-form/UserSelect";
 import { useAuth } from "@/hooks/useAuth";
 
 ///  +-----------------------------------------------------------------+
-///  |                  HOTSPOT REQUEST FORM PAGE                      |
+///  |                  LOAN REQUEST FORM PAGE                         |
 ///  +-----------------------------------------------------------------+
 //
 //  The shortest form in the app, and deliberately: who, when, what for. That
@@ -25,20 +25,20 @@ import { useAuth } from "@/hooks/useAuth";
 //
 //  NO CATEGORY PICKER EITHER. A hotspot request is for a hotspot; there is no
 //  branch of it that is for something else. The category is configuration
-//  (hotspot_category_id), not a question.
+//  (loan_category_id), not a question.
 //
 //  NO SPEC LEVEL. Standard-versus-non-standard is a question about what to
 //  BUY, and nothing is being bought — a loan hands over something already on
 //  the shelf and takes it back afterwards.
 ///  +-----------------------------------------------------------------+
 
-// Mirrors hotspot_max_loan_days. The form shows the limit and the server
+// Mirrors loan_max_days. The form shows the limit and the server
 // enforces it; if an admin changes the setting the worst case is a submission
 // refused with the real number in the message, which is why this does not
 // need to be fetched.
 const MAX_LOAN_DAYS = 30;
 
-export default function HotspotFormPage() {
+export default function LoanFormPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState("");
   const [userName, setUserName] = useState("");
@@ -103,7 +103,7 @@ export default function HotspotFormPage() {
       // A single-day loan is a range with no `to` — the picker only fills it
       // on the second click. Treating that as from==to is what makes one click
       // mean "just today" rather than an incomplete form.
-      const data = await createHotspotRequest({
+      const data = await createLoanRequest({
         userId: Number(userId),
         userName,
         startDate: toDateString(range.from),

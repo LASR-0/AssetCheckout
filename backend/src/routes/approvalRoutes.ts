@@ -13,11 +13,11 @@ import {
   addAccessoryStockForRequest,
 } from "../services/request.js";
 import {
-  listHotspotOptions,
+  listLoanOptions,
   findClashingLoans,
-  assignHotspotToRequest,
-  markHotspotReturned,
-} from "../services/hotspot.js";
+  assignLoanToRequest,
+  markLoanReturned,
+} from "../services/loan.js";
 import {
   createQuoteForRequest,
   acceptQuoteForRequest,
@@ -796,13 +796,13 @@ router.post("/:requestId/receive", async (req, res, next) => {
 });
 
 ///  +-----------------------------------------------------------------+
-///  |                      HOTSPOT LOAN ROUTES                        |
+///  |                      LOAN ROUTES                                |
 ///  +-----------------------------------------------------------------+
 //
 //  Three routes, and only three, because the middle of a loan is the ordinary
-//  flow: /ready-for-collection and /receive serve hotspots unchanged, and
+//  flow: /ready-for-collection and /receive serve loaned devices unchanged, and
 //  deliberately were not touched. What is here is the two ends — IT choosing a
-//  hotspot, and the keeper getting it back.
+//  device, and the keeper getting it back.
 ///  +-----------------------------------------------------------------+
 
 /**
@@ -813,9 +813,9 @@ router.post("/:requestId/receive", async (req, res, next) => {
  * `requestKind !== "ACCESSORY"` guard is there because it once answered
  * `{matches: []}` for every term an admin could type on a request whose
  * category it could never match — a silent wrong answer. Loosening it to let
- * hotspots through would reopen exactly that hole for the next kind.
+ * loaned devices through would reopen exactly that hole for the next kind.
  */
-router.get("/:requestId/hotspot/options", async (req, res, next) => {
+router.get("/:requestId/loan/options", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
     const actorName = getActorName(req);
@@ -832,15 +832,15 @@ router.get("/:requestId/hotspot/options", async (req, res, next) => {
 
     const request = await prisma.request.findUnique({
       where: { id: requestId },
-      select: { requestKind: true, hotspotLoan: { select: { startDate: true, endDate: true } } },
+      select: { requestKind: true, loan: { select: { startDate: true, endDate: true } } },
     });
     if (!request) {
       return res.status(404).json({ success: false, message: "Request not found" });
     }
-    if (request.requestKind !== "HOTSPOT" || !request.hotspotLoan) {
+    if (request.requestKind !== "LOAN" || !request.loan) {
       return res.status(400).json({
         success: false,
-        message: "This isn't a hotspot request, so there is no hotspot to assign.",
+        message: "This isn't a loan request, so there is nothing to assign.",
       });
     }
 
@@ -848,10 +848,10 @@ router.get("/:requestId/hotspot/options", async (req, res, next) => {
     // second call: the pool is a single unit, so "is it already promised to
     // somebody over these dates" is not extra detail, it is the decision.
     const [options, clashes] = await Promise.all([
-      listHotspotOptions(),
+      listLoanOptions(),
       findClashingLoans(
-        request.hotspotLoan.startDate,
-        request.hotspotLoan.endDate,
+        request.loan.startDate,
+        request.loan.endDate,
         requestId
       ),
     ]);
@@ -874,8 +874,8 @@ router.get("/:requestId/hotspot/options", async (req, res, next) => {
   }
 });
 
-/** IT's sign-off: pick the hotspot, check it out, complete the request. */
-router.post("/:requestId/hotspot/assign", async (req, res, next) => {
+/** IT's sign-off: pick the device, check it out, complete the request. */
+router.post("/:requestId/loan/assign", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
     const actorName = getActorName(req);
@@ -897,7 +897,7 @@ router.post("/:requestId/hotspot/assign", async (req, res, next) => {
         .json({ success: false, message: "accessoryId must be a positive number" });
     }
 
-    const result = await assignHotspotToRequest(requestId, accessoryId, actorName);
+    const result = await assignLoanToRequest(requestId, accessoryId, actorName);
     res.json(result);
   } catch (err) {
     next(err);
@@ -905,9 +905,9 @@ router.post("/:requestId/hotspot/assign", async (req, res, next) => {
 });
 
 /**
- * The hotspot is back. Gated on the request's OWN location, exactly as
+ * The device is back. Gated on the request's OWN location, exactly as
  * /ready-for-collection is and for the same reason: a keeper at Brisbane has
- * no business closing a loan whose hotspot is sitting in Bundamba.
+ * no business closing a loan whose device is sitting in Bundamba.
  *
  * ADMINS MAY RETURN EARLY, keepers may not. The unlock-on-the-due-date rule is
  * what stops a keeper closing a loan the borrower is still using; it is not a
@@ -915,7 +915,7 @@ router.post("/:requestId/hotspot/assign", async (req, res, next) => {
  * event finished on Tuesday. An admin is who gets to make that call, so the
  * override is theirs and it is recorded in the same returnedBy column.
  */
-router.post("/:requestId/hotspot/return", async (req, res, next) => {
+router.post("/:requestId/loan/return", async (req, res, next) => {
   try {
     const requestId = Number(req.params.requestId);
     const actorName = getActorName(req);
@@ -928,7 +928,7 @@ router.post("/:requestId/hotspot/return", async (req, res, next) => {
     }
 
     // Loaded for its location before the permission check, since the check is
-    // about WHERE the hotspot is — same ordering as /ready-for-collection.
+    // about WHERE the device is — same ordering as /ready-for-collection.
     const target = await prisma.request.findUnique({
       where: { id: requestId },
       select: { userLocationId: true },
@@ -948,7 +948,7 @@ router.post("/:requestId/hotspot/return", async (req, res, next) => {
       });
     }
 
-    const result = await markHotspotReturned(requestId, actorName, {
+    const result = await markLoanReturned(requestId, actorName, {
       allowEarly: actor.isAdmin,
     });
     res.json(result);

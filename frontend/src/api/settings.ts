@@ -155,18 +155,18 @@ export async function setStockKeepersForLocation(
 }
 
 ///  +-----------------------------------------------------------------+
-///  |                  HOTSPOT LOAN CONFIGURATION                     |
+///  |                  LOAN CONFIGURATION                             |
 ///  +-----------------------------------------------------------------+
 
-export type HotspotConfig = {
+export type LoanConfig = {
   /** The Snipe ACCESSORY category the loan pool lives in. Null turns loans off. */
   categoryId: number | null;
   /** Longest window a requester may book, in days. */
   maxLoanDays: number;
 };
 
-export async function getHotspotConfig(): Promise<HotspotConfig> {
-  const data = await apiFetch<HotspotConfig>("/api/settings/hotspots");
+export async function getLoanConfig(): Promise<LoanConfig> {
+  const data = await apiFetch<LoanConfig>("/api/settings/loans");
   return {
     categoryId: data.categoryId ?? null,
     maxLoanDays: data.maxLoanDays ?? 30,
@@ -174,10 +174,10 @@ export async function getHotspotConfig(): Promise<HotspotConfig> {
 }
 
 /** Returns the authoritative config to adopt, as the other setters here do. */
-export async function setHotspotConfig(
-  config: Partial<HotspotConfig>
-): Promise<HotspotConfig> {
-  const data = await apiFetch<HotspotConfig>("/api/settings/hotspots", {
+export async function setLoanConfig(
+  config: Partial<LoanConfig>
+): Promise<LoanConfig> {
+  const data = await apiFetch<LoanConfig>("/api/settings/loans", {
     method: "PUT",
     body: {
       categoryId: config.categoryId ?? null,

@@ -9,13 +9,13 @@ process.env.SNIPEIT_API_URL ??= "https://snipe.invalid";
 process.env.SNIPEIT_BOT_TOKEN ??= "test-token";
 
 const {
-  createHotspotRequest,
-  markHotspotReturned,
-  findHotspotsDueBack,
+  createLoanRequest,
+  markLoanReturned,
+  findLoansDueBack,
   findClashingLoans,
   isLoanDue,
   formatLoanDate,
-} = await import("./hotspot.js");
+} = await import("./loan.js");
 
 ///  +-----------------------------------------------------------------+
 ///  |          A LOAN IS THE ONE REQUEST THAT COMES BACK              |
@@ -54,7 +54,7 @@ function dateOffset(days: number): Date {
 const created: number[] = [];
 
 async function file(overrides: Record<string, unknown> = {}) {
-  const result = await createHotspotRequest({
+  const result = await createLoanRequest({
     userId: 901,
     userName: "Sam Taylor",
     startDate: dayOffset(0),
@@ -79,7 +79,7 @@ async function collected(loanId: number, requestId: number, endDate: Date) {
       receivedAt: new Date(),
     },
   });
-  await prisma.hotspotLoan.update({
+  await prisma.loan.update({
     where: { id: loanId },
     data: {
       snipeAccessoryId: 53,
@@ -91,13 +91,13 @@ async function collected(loanId: number, requestId: number, endDate: Date) {
 }
 
 beforeEach(async () => {
-  await prisma.hotspotLoan.deleteMany({ where: { request: { userId: 901 } } });
+  await prisma.loan.deleteMany({ where: { request: { userId: 901 } } });
   await prisma.request.deleteMany({ where: { userId: 901 } });
   created.length = 0;
 });
 
 afterAll(async () => {
-  await prisma.hotspotLoan.deleteMany({ where: { request: { userId: 901 } } });
+  await prisma.loan.deleteMany({ where: { request: { userId: 901 } } });
   await prisma.request.deleteMany({ where: { userId: 901 } });
 });
 
@@ -115,14 +115,14 @@ describe("filing a loan", () => {
     });
   });
 
-  it("files as HOTSPOT on BOTH kind and type", async () => {
+  it("files as LOAN on BOTH kind and type", async () => {
     // requestType is the interlock, not decoration: every provisioning branch
     // in request.ts tests it for STANDARD or NON_STANDARD, and those branches
     // check real hardware out of Snipe. If this ever reverts to NON_STANDARD
     // a loan becomes eligible for them.
     const { request } = await file();
-    expect(request.requestKind).toBe("HOTSPOT");
-    expect(request.requestType).toBe("HOTSPOT");
+    expect(request.requestKind).toBe("LOAN");
+    expect(request.requestType).toBe("LOAN");
   });
 
   it("is collect-only", async () => {
@@ -194,7 +194,7 @@ describe("returning", () => {
     const { request, loan } = await file({ endDate: dayOffset(5) });
     await collected(loan.id, request.id, dateOffset(5));
 
-    await expect(markHotspotReturned(request.id, "Keeper")).rejects.toThrow(
+    await expect(markLoanReturned(request.id, "Keeper")).rejects.toThrow(
       /isn't due back until/i
     );
   });
@@ -203,7 +203,7 @@ describe("returning", () => {
     // Nothing to give back. Without this the keeper could close a loan whose
     // hotspot is still sitting on their own shelf, un-handed-over.
     const { request, loan } = await file();
-    await prisma.hotspotLoan.update({
+    await prisma.loan.update({
       where: { id: loan.id },
       data: { snipeAccessoryId: 53, endDate: dateOffset(-1) },
     });
@@ -212,7 +212,7 @@ describe("returning", () => {
       data: { status: "COMPLETED", receivedAt: null },
     });
 
-    await expect(markHotspotReturned(request.id, "Keeper")).rejects.toThrow(
+    await expect(markLoanReturned(request.id, "Keeper")).rejects.toThrow(
       /hasn't been collected/i
     );
   });
@@ -224,7 +224,7 @@ describe("returning", () => {
       data: { status: "COMPLETED", receivedAt: new Date() },
     });
 
-    await expect(markHotspotReturned(request.id, "Keeper")).rejects.toThrow(
+    await expect(markLoanReturned(request.id, "Keeper")).rejects.toThrow(
       /nothing to return/i
     );
   });
@@ -239,7 +239,7 @@ describe("returning", () => {
     // Snipe is unreachable here, so this gets as far as the network and comes
     // back blocked rather than throwing "not due yet" — which is the point:
     // the DATE guard did not stop it.
-    const result = await markHotspotReturned(request.id, "Admin", { allowEarly: true });
+    const result = await markLoanReturned(request.id, "Admin", { allowEarly: true });
     expect(result.checkedIn).toBe(false);
     expect(result.message).not.toMatch(/isn't due back/i);
   });
@@ -252,26 +252,26 @@ describe("returning", () => {
     const { request, loan } = await file({ endDate: dayOffset(0) });
     await collected(loan.id, request.id, dateOffset(0));
 
-    const result = await markHotspotReturned(request.id, "Keeper");
+    const result = await markLoanReturned(request.id, "Keeper");
 
     expect(result.checkedIn).toBe(false);
     expect(result.loan.returnedAt).toBeNull();
     expect(result.loan.checkinError).toBeTruthy();
 
     // And it is still outstanding as far as every other reader is concerned.
-    const stored = await prisma.hotspotLoan.findUnique({ where: { id: loan.id } });
+    const stored = await prisma.loan.findUnique({ where: { id: loan.id } });
     expect(stored?.returnedAt).toBeNull();
   });
 
   it("refuses a second return once one is recorded", async () => {
     const { request, loan } = await file({ endDate: dayOffset(0) });
     await collected(loan.id, request.id, dateOffset(0));
-    await prisma.hotspotLoan.update({
+    await prisma.loan.update({
       where: { id: loan.id },
       data: { returnedAt: new Date(), returnedBy: "Keeper" },
     });
 
-    await expect(markHotspotReturned(request.id, "Keeper")).rejects.toThrow(
+    await expect(markLoanReturned(request.id, "Keeper")).rejects.toThrow(
       /already marked returned/i
     );
   });
@@ -282,7 +282,7 @@ describe("the due-back scan", () => {
     const { request, loan } = await file({ endDate: dayOffset(0) });
     await collected(loan.id, request.id, dateOffset(-3));
 
-    const due = await findHotspotsDueBack(-1);
+    const due = await findLoansDueBack(-1);
     const mine = due.find((d) => d.requestId === request.id);
 
     expect(mine).toBeTruthy();
@@ -295,7 +295,7 @@ describe("the due-back scan", () => {
     const { request, loan } = await file({ endDate: dayOffset(1) });
     await collected(loan.id, request.id, dateOffset(1));
 
-    const due = await findHotspotsDueBack(-1);
+    const due = await findLoansDueBack(-1);
     expect(due.some((d) => d.requestId === request.id)).toBe(true);
   });
 
@@ -311,19 +311,19 @@ describe("the due-back scan", () => {
       data: { receivedAt: null },
     });
 
-    const due = await findHotspotsDueBack(-1);
+    const due = await findLoansDueBack(-1);
     expect(due.some((d) => d.requestId === request.id)).toBe(false);
   });
 
   it("ignores a loan already returned", async () => {
     const { request, loan } = await file({ endDate: dayOffset(0) });
     await collected(loan.id, request.id, dateOffset(-5));
-    await prisma.hotspotLoan.update({
+    await prisma.loan.update({
       where: { id: loan.id },
       data: { returnedAt: new Date() },
     });
 
-    const due = await findHotspotsDueBack(-1);
+    const due = await findLoansDueBack(-1);
     expect(due.some((d) => d.requestId === request.id)).toBe(false);
   });
 });
@@ -334,7 +334,7 @@ describe("clash detection", () => {
     // second request.
     const { request, loan } = await file({ startDate: dayOffset(1), endDate: dayOffset(6) });
     await collected(loan.id, request.id, dateOffset(6));
-    await prisma.hotspotLoan.update({
+    await prisma.loan.update({
       where: { id: loan.id },
       data: { startDate: dateOffset(1) },
     });
@@ -346,7 +346,7 @@ describe("clash detection", () => {
   it("does not flag a window that starts after the other ends", async () => {
     const { request, loan } = await file({ startDate: dayOffset(1), endDate: dayOffset(3) });
     await collected(loan.id, request.id, dateOffset(3));
-    await prisma.hotspotLoan.update({
+    await prisma.loan.update({
       where: { id: loan.id },
       data: { startDate: dateOffset(1) },
     });

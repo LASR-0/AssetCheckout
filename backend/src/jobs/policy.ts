@@ -21,7 +21,7 @@ export const ONE_SHOT_JOBS: Set<JobType> = new Set([
   "CLEANUP_ORPHAN_SNIPE_MODELS",
   "PURGE_OLD_JOB_HISTORY",
   "REMIND_SHIPPED_REQUESTS",
-  "REMIND_HOTSPOT_RETURNS",
+  "REMIND_LOAN_RETURNS",
   // Idempotent and re-runnable by hand; an auto-retry inside one run would
   // just re-hammer Snipe with the lookups that already failed.
   "BACKFILL_REQUEST_LOCATIONS",
