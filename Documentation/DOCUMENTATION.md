@@ -591,6 +591,34 @@ never break number resolution.
   devices. See
   [Shipment reminders](#shipment-reminders-and-escalation).
 
+### Loans
+
+Loans lend a device for a fixed window and take it back afterwards: a Wi-Fi
+hotspot for a roadshow, or a KVM for remote support of an iPad. A loan has no
+manager stage. It goes straight to IT, who assign a unit, and the site's stock
+keeper hands it over and takes it back. Configure loans in **Settings → Loans**.
+
+- **Loanable devices** (`loan_devices`, default empty) — the specific Snipe-IT
+  **accessory records** that can be borrowed. Each entry has the name the Loan
+  form shows ("Wi-Fi Hotspot", "KVM"), optional help text, and whether the form
+  asks for an event name. To add one, pick its accessory category and then the
+  record; new records are checked against Snipe-IT when you save. **An empty
+  list turns loans off**, and new loan requests are refused until a device is
+  added. Removing a device doesn't affect loans already out.
+- **Longest booking** (`loan_max_days`, default `30`).
+- **Due-back reminders** (`loan_reminder_days_1..4`, defaults `-1 / 0 / 3 / 7`,
+  in days relative to the due date) and their schedule
+  (`jobs.loanReminderCron`).
+
+The requester picks a device, and IT's assign dialog pre-selects that record
+but can swap it for any other device on the list. A record holds a quantity,
+so the dialog warns about a clash only when **every** unit of that record is
+already booked over the requested dates.
+
+These settings were named `hotspot_*` before loans covered more than hotspots.
+The `rename_hotspot_to_loan` migration renames them; the old single
+`hotspot_category_id` setting is replaced by the device list and removed.
+
 ### Feature toggles
 
 - **`feedback_enabled`** (default `true`) — whether the anonymous
@@ -769,6 +797,11 @@ its highest due stage rather than replaying superseded reminders. The job only
 *enqueues* notification jobs; sending and recipient resolution live in the
 notification handler. Marking the device received ends the sequence — received
 requests drop out of the scan.
+
+**New starters.** A request filed by HRT with a future `startDate` is held:
+no stage is due before that date, and the thresholds count from the start date
+rather than from when the device was prepared. See
+[New starters: `startDate`](#new-starters-startdate).
 
 ---
 

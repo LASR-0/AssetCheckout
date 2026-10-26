@@ -1,4 +1,8 @@
 const ICON_RULES: { icon: string; keywords: string[] }[] = [
+  // Ahead of the phone rule, so a "Mobile Hotspot" is not drawn as a phone.
+  { icon: "wifi", keywords: ["hotspot", "wi-fi", "wifi", "modem"] },
+  // Keyboard, video, mouse — the keyboard is the recognisable third.
+  { icon: "keyboard", keywords: ["kvm"] },
   { icon: "headphones", keywords: ["headphone", "headset", "earphone", "earbud"] },
   { icon: "smartphone", keywords: ["phone", "mobile", "cell", "iphone"] },
   { icon: "tablet", keywords: ["tablet", "ipad"] },

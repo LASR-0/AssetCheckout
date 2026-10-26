@@ -158,9 +158,27 @@ export async function setStockKeepersForLocation(
 ///  |                  LOAN CONFIGURATION                             |
 ///  +-----------------------------------------------------------------+
 
+/**
+ * One Snipe accessory record that may be borrowed. `id` is stable across
+ * renames — omit it on a new entry and the server mints one. `categoryId` is
+ * filled in by the server from Snipe; whatever the client sends is ignored
+ * for a record it has not seen before.
+ */
+export type LoanDevice = {
+  id?: string;
+  kind: "ACCESSORY";
+  snipeId: number;
+  categoryId?: number | null;
+  /** What the form and emails call it — "Wi-Fi Hotspot", "KVM". */
+  displayName: string;
+  description: string | null;
+  /** Whether the request form asks for an event name for this device. */
+  showEventName: boolean;
+};
+
 export type LoanConfig = {
-  /** The Snipe ACCESSORY category the loan pool lives in. Null turns loans off. */
-  categoryId: number | null;
+  /** The loanable records, in the order the form shows them. Empty turns loans off. */
+  devices: LoanDevice[];
   /** Longest window a requester may book, in days. */
   maxLoanDays: number;
 };
@@ -168,24 +186,25 @@ export type LoanConfig = {
 export async function getLoanConfig(): Promise<LoanConfig> {
   const data = await apiFetch<LoanConfig>("/api/settings/loans");
   return {
-    categoryId: data.categoryId ?? null,
+    devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
   };
 }
 
-/** Returns the authoritative config to adopt, as the other setters here do. */
+/** Returns the authoritative config to adopt, as the other setters here do.
+ *  An absent key is left alone server-side. */
 export async function setLoanConfig(
   config: Partial<LoanConfig>
 ): Promise<LoanConfig> {
   const data = await apiFetch<LoanConfig>("/api/settings/loans", {
     method: "PUT",
     body: {
-      categoryId: config.categoryId ?? null,
+      ...(config.devices !== undefined ? { devices: config.devices } : {}),
       ...(config.maxLoanDays !== undefined ? { maxLoanDays: config.maxLoanDays } : {}),
     },
   });
   return {
-    categoryId: data.categoryId ?? null,
+    devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
   };
 }

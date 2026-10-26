@@ -656,7 +656,7 @@ export default function StockPage() {
           badgeClass="border-primary/30 bg-primary/10 text-primary"
         />
         <QueueCard
-          icon="wifi"
+          icon="devices"
           title="Loans due back"
           count={loansDueBack.length}
           empty="No loans are due back."

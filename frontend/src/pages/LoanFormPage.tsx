@@ -6,8 +6,9 @@ import LoanWindowSection, {
   toDateString,
   countDays,
 } from "@/components/loan-form/LoanWindowSection";
+import LoanDevicePicker from "@/components/loan-form/LoanDevicePicker";
 import { fetchUsers } from "@/api/users";
-import { createLoanRequest } from "@/api/loans";
+import { createLoanRequest, getLoanDevices, type LoanDeviceChoice } from "@/api/loans";
 import type { User } from "@/components/request-form/UserSelect";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -15,21 +16,25 @@ import { useAuth } from "@/hooks/useAuth";
 ///  |                  LOAN REQUEST FORM PAGE                         |
 ///  +-----------------------------------------------------------------+
 //
-//  The shortest form in the app, and deliberately: who, when, what for. That
-//  is the whole thing.
+//  The shortest form in the app, and deliberately: what, who, when, what for.
+//  That is the whole thing.
+//
+//  ONE QUESTION THE HOTSPOT FORM NEVER ASKED: WHICH DEVICE. Loans now cover
+//  more than hotspots (KVMs, for remote support of iPads, were the reason), so
+//  the requester picks from the devices IT has made loanable. The list is the
+//  whitelist in Settings → Loans, not a Snipe category — see LoanDevice.
 //
 //  NO APPROVER FIELD. A loan has no manager stage — it goes straight to IT —
 //  so there is nothing to ask. This is the single biggest difference from the
 //  asset and accessory forms and the reason this is a page rather than a mode
 //  on one of them.
 //
-//  NO CATEGORY PICKER EITHER. A hotspot request is for a hotspot; there is no
-//  branch of it that is for something else. The category is configuration
-//  (loan_category_id), not a question.
-//
 //  NO SPEC LEVEL. Standard-versus-non-standard is a question about what to
 //  BUY, and nothing is being bought — a loan hands over something already on
 //  the shelf and takes it back afterwards.
+//
+//  THE EVENT NAME IS PER DEVICE. It is what a keeper needs on a hotspot row
+//  ("Toowoomba roadshow"); on a KVM row it is a field nobody can answer.
 ///  +-----------------------------------------------------------------+
 
 // Mirrors loan_max_days. The form shows the limit and the server
@@ -46,12 +51,18 @@ export default function LoanFormPage() {
   const [reason, setReason] = useState("");
   const [eventName, setEventName] = useState("");
 
+  const [devices, setDevices] = useState<LoanDeviceChoice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [devicesError, setDevicesError] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const { email: authEmail } = useAuth();
   const selectedRequester = users.find((u) => u.id === userId) ?? null;
+  const device = devices.find((d) => d.id === deviceId) ?? null;
 
   useEffect(() => {
     fetchUsers().then((data) => {
@@ -69,9 +80,29 @@ export default function LoanFormPage() {
     });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    getLoanDevices()
+      .then((list) => {
+        if (cancelled) return;
+        setDevices(list);
+        // With only one thing to lend there is no question to ask.
+        if (list.length === 1) setDeviceId(list[0].id);
+      })
+      .catch((err) => {
+        if (!cancelled) setDevicesError(err.message ?? "Couldn't load the devices.");
+      })
+      .finally(() => {
+        if (!cancelled) setDevicesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Default the requester to the signed-in user, as the accessory form does.
   // Booking on somebody else's behalf stays possible — for an event, whoever
-  // is organising it books as often as the person carrying the hotspot does.
+  // is organising it books as often as the person carrying the device does.
   useEffect(() => {
     if (!authEmail || users.length === 0 || userId) return;
     const me = users.find((u) => u.email?.toLowerCase() === authEmail.toLowerCase());
@@ -82,20 +113,22 @@ export default function LoanFormPage() {
   }, [authEmail, users, userId]);
 
   const days = countDays(range);
+  const notConfigured = !devicesLoading && !devicesError && devices.length === 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!userId) return setError("Please select who the hotspot is for.");
+    if (!device) return setError("Please pick what you'd like to borrow.");
+    if (!userId) return setError(`Please select who the ${device.displayName} is for.`);
     if (!range?.from) return setError("Please pick the first day you need it.");
     if (days > MAX_LOAN_DAYS) {
       return setError(
-        `A hotspot can be booked for at most ${MAX_LOAN_DAYS} days — this is ${days}.`
+        `A loan can be booked for at most ${MAX_LOAN_DAYS} days — this is ${days}.`
       );
     }
     if (!reason.trim()) {
-      return setError("Please say what you need the hotspot for.");
+      return setError(`Please say what you need the ${device.displayName} for.`);
     }
 
     setIsSubmitting(true);
@@ -106,10 +139,11 @@ export default function LoanFormPage() {
       const data = await createLoanRequest({
         userId: Number(userId),
         userName,
+        deviceOptionId: device.id,
         startDate: toDateString(range.from),
         endDate: toDateString(range.to ?? range.from),
         reason: reason.trim(),
-        eventName: eventName.trim() || null,
+        eventName: device.showEventName ? eventName.trim() || null : null,
       });
 
       navigate("/success", { state: { request: data.request } });
@@ -127,24 +161,33 @@ export default function LoanFormPage() {
         <div className="max-w-2xl mx-auto">
           <div className="mb-10">
             <div className="flex flex-row">
-              <span className="material-symbols-outlined mx-3 !text-4xl"> wifi </span>
+              <span className="material-symbols-outlined mx-3 !text-4xl"> devices </span>
               <h1 className="text-4xl font-bold text-nav-selected flex tracking-tight mb-2">
-                Book a Hotspot
+                Borrow a device
               </h1>
             </div>
             <p className="text-info-light ml-5">
-              Borrow a mobile Wi-Fi hotspot for an event or a site visit. Pick
-              the days you need it and we'll have one ready to collect.
+              Borrow a hotspot, a KVM or another device IT lends out. Pick what
+              you need and the days you need it, and we'll have it ready to
+              collect.
             </p>
           </div>
 
           <div className="bg-surface-container-lowest rounded-xl p-8 shadow-md">
             <form onSubmit={handleSubmit} className="space-y-10">
+              <LoanDevicePicker
+                devices={devices}
+                value={deviceId}
+                onChange={setDeviceId}
+                loading={devicesLoading}
+                error={devicesError}
+              />
+
               <UserDetailsInput
                 users={users}
                 value={selectedRequester}
-                label="1. Who is it for?"
-                placeholder="Who will be carrying the hotspot?"
+                label="2. Who is it for?"
+                placeholder={`Who will be using the ${device?.displayName ?? "device"}?`}
                 onSelected={(id, name) => {
                   setUserId(id);
                   setUserName(name);
@@ -155,38 +198,44 @@ export default function LoanFormPage() {
                 value={range}
                 onChange={setRange}
                 maxDays={MAX_LOAN_DAYS}
+                label="3. When do you need it?"
               />
 
               <div>
                 <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-4">
-                  3. What's it for?
+                  4. What's it for?
                 </label>
 
-                <input
-                  type="text"
-                  value={eventName}
-                  onChange={(e) => setEventName(e.target.value)}
-                  placeholder="Event or site name (optional)"
-                  className="w-full rounded-xl border border-outline bg-surface-container-low px-4 py-3 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none mb-3"
-                />
+                {device?.showEventName && (
+                  <input
+                    type="text"
+                    value={eventName}
+                    onChange={(e) => setEventName(e.target.value)}
+                    placeholder="Event or site name (optional)"
+                    className="w-full rounded-xl border border-outline bg-surface-container-low px-4 py-3 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none mb-3"
+                  />
+                )}
 
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={3}
-                  placeholder="Why do you need it? e.g. no site wifi at the Toowoomba roadshow"
+                  placeholder={
+                    device?.showEventName
+                      ? "Why do you need it? e.g. no site wifi at the Toowoomba roadshow"
+                      : "Why do you need it?"
+                  }
                   className="w-full rounded-xl border border-outline bg-surface-container-low px-4 py-3 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none resize-y"
                 />
 
                 <p className="mt-2 ml-1 text-xs text-info-light">
-                  There's no manager approval on a hotspot — this goes straight
-                  to IT.
+                  There's no manager approval on a loan — this goes straight to IT.
                 </p>
               </div>
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || notConfigured}
                 className="w-full py-4 text-white font-bold rounded-3xl shadow-lg hover:shadow-xl hover:cursor-pointer hover:brightness-110 transition-all twilight-gradient disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <span className="flex items-center justify-center">
@@ -197,7 +246,9 @@ export default function LoanFormPage() {
                     </>
                   ) : (
                     <>
-                      <span className="mb-0.5 mr-2">Request Hotspot</span>
+                      <span className="mb-0.5 mr-2">
+                        {device ? `Request ${device.displayName}` : "Request loan"}
+                      </span>
                       <span
                         className="material-symbols-outlined leading-none mb-0.5"
                         style={{ fontVariationSettings: `'FILL' 1` }}

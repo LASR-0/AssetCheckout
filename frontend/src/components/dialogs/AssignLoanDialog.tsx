@@ -20,21 +20,24 @@ import type { Request } from "@/types/requestType";
 //
 //  IT's whole sign-off, in one dialog: pick the unit, check it out, done.
 //
-//  A LIST, NOT A SEARCH. The pool is one Snipe category with a handful of
-//  records in it. A search box there asks the admin to guess a name before
-//  showing them the only answer there is.
+//  A LIST, NOT A SEARCH. The pool is the loan whitelist — a handful of
+//  records. A search box there asks the admin to guess a name before showing
+//  them the only answers there are.
 //
-//  OUT-OF-STOCK ROWS ARE SHOWN, disabled, with their location. "The hotspot
-//  is out" is the single most useful thing this dialog can say; filtering the
-//  row out turns it into "there are no hotspots", which is a different and
-//  wrong answer, and leaves the admin wondering whether the category is
-//  misconfigured.
+//  THE REQUESTED DEVICE COMES FIRST AND IS PRESELECTED when it has a unit
+//  free. The requester picked a KVM; handing them a hotspot is possible (IT
+//  may know better) but it should take a deliberate click, not a default.
 //
-//  CLASHES ARE SHOWN ABOVE THE LIST, not swallowed. The pool is a single
-//  unit, so a second booking over the same week is not an edge case — it is
-//  the second request. This cannot refuse the assignment (IT may well know
-//  the first borrower is bringing it back early) but it must not let somebody
-//  double-book without seeing it.
+//  OUT-OF-STOCK ROWS ARE SHOWN, disabled, with their location. "It is out" is
+//  the single most useful thing this dialog can say; filtering the row out
+//  turns it into "there is nothing to lend", which is a different and wrong
+//  answer, and leaves the admin wondering whether loans are misconfigured.
+//
+//  CLASHES ARE SHOWN ABOVE THE LIST, not swallowed — but only for records
+//  with every unit promised over the window (see listLoanOptions). This
+//  cannot refuse the assignment (IT may well know the first borrower is
+//  bringing it back early) but it must not let somebody double-book without
+//  seeing it.
 ///  +-----------------------------------------------------------------+
 
 type Props = {
@@ -84,18 +87,19 @@ export default function AssignLoanDialog({
         if (cancelled) return;
         setOptions(options);
         setClashes(clashes);
-        // Preselect the only sensible default: the first in-stock unit at the
-        // requester's own site, else the first in-stock one anywhere. Saves a
-        // click in the overwhelmingly common single-hotspot case without ever
-        // preselecting something that cannot actually be checked out.
+        // Preselect what was asked for, if it can be checked out. Otherwise
+        // the first in-stock unit at the requester's own site, else the first
+        // in-stock one anywhere — never something that cannot actually be
+        // checked out.
         const available = options.filter((o) => o.remaining > 0);
+        const requested = available.find((o) => o.requested);
         const local = available.find(
           (o) => o.locationId === (request.userLocationId ?? null)
         );
-        setSelectedId((local ?? available[0])?.id ?? null);
+        setSelectedId((requested ?? local ?? available[0])?.id ?? null);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message ?? "Couldn't load the hotspots.");
+        if (!cancelled) setError(err.message ?? "Couldn't load the loanable devices.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -133,7 +137,7 @@ export default function AssignLoanDialog({
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message ?? "Couldn't assign that hotspot.");
+      setError(err.message ?? "Couldn't assign that device.");
     } finally {
       setAssigning(false);
     }
@@ -144,10 +148,10 @@ export default function AssignLoanDialog({
       <ResponsiveDialogContent className="p-0 bg-modal-surface border border-modal-border/20 rounded-xl shadow-md md:min-w-lg">
         <ResponsiveDialogHeader className="px-8 pt-8 pb-4 text-center border-b border-modal-border-light/10">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-modal-surface-accent rounded-full mb-4 mx-auto">
-            <span className="material-symbols-outlined text-modal-text-accent">wifi</span>
+            <span className="material-symbols-outlined text-modal-text-accent">devices</span>
           </div>
           <ResponsiveDialogTitle className="font-headline font-extrabold text-2xl tracking-tight text-modal-text-primary">
-            Assign a hotspot
+            Assign {request?.categoryName ?? "a device"}
           </ResponsiveDialogTitle>
           <p className="text-info-light text-sm mt-1 max-w-md mx-auto leading-relaxed">
             {loan ? (
@@ -180,7 +184,7 @@ export default function AssignLoanDialog({
               <ul className="mt-2 space-y-1 text-modal-text-secondary">
                 {clashes.map((c) => (
                   <li key={c.requestId}>
-                    <strong className="font-semibold">{c.accessoryName ?? "A hotspot"}</strong>{" "}
+                    <strong className="font-semibold">{c.accessoryName ?? "A device"}</strong>{" "}
                     is with {c.userName} until {formatDay(c.endDate)}
                     {c.collected ? "" : " (assigned, not collected yet)"}.
                   </li>
@@ -192,13 +196,14 @@ export default function AssignLoanDialog({
           {loading && (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-info-light">
               <span className="animate-spin h-4 w-4 border-2 border-outline border-t-transparent rounded-full" />
-              Loading hotspots…
+              Loading devices…
             </div>
           )}
 
           {!loading && options.length === 0 && !error && (
             <p className="py-8 text-center text-sm text-info-light">
-              No hotspots are recorded in the hotspot category in Snipe-IT.
+              None of the loanable devices exist in Snipe-IT any more. An admin
+              can update the list in Settings → Loans.
             </p>
           )}
 
@@ -222,7 +227,17 @@ export default function AssignLoanDialog({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="font-semibold text-modal-text-primary truncate">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-modal-text-primary truncate">
+                          {option.displayName}
+                        </span>
+                        {option.requested && (
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary">
+                            Requested
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-modal-text-secondary mt-0.5 truncate">
                         {option.name}
                       </div>
                       <div className="text-xs text-info-light mt-0.5 truncate">
@@ -234,6 +249,12 @@ export default function AssignLoanDialog({
                         <span className="material-symbols-outlined !text-[14px]">place</span>
                         {option.locationName ?? "No location recorded"}
                       </div>
+                      {option.bookedOverWindow > 0 && (
+                        <div className="text-xs text-status-pending mt-1 flex items-center gap-1">
+                          <span className="material-symbols-outlined !text-[14px]">event_busy</span>
+                          {option.bookedOverWindow} already booked over these dates
+                        </div>
+                      )}
                     </div>
                     <span
                       className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-full border ${
@@ -249,7 +270,7 @@ export default function AssignLoanDialog({
               );
             })}
 
-          {/* Hotspots are collected, never posted — so a unit at another site
+          {/* Loans are collected, never posted — so a unit at another site
               is a real problem for the requester, not a shipping decision the
               app can make for them. Said plainly rather than refused: IT may
               be about to drive it over, and only they know that. */}
@@ -259,7 +280,7 @@ export default function AssignLoanDialog({
                 <span className="material-symbols-outlined !text-[18px]">move_location</span>
                 Different site
               </div>
-              This hotspot is at{" "}
+              This one is at{" "}
               <strong className="font-semibold">{selected?.locationName}</strong> but{" "}
               {request?.userName} is at{" "}
               <strong className="font-semibold">{requesterSite ?? "an unrecorded site"}</strong>.

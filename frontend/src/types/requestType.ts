@@ -97,6 +97,11 @@ export type Loan = {
   /** What it is for, in the requester's words. Often absent. */
   eventName?: string | null;
 
+  /** What the requester picked: the whitelist entry, and its Snipe record.
+   *  IT may assign a different record — see snipeAccessoryId. */
+  deviceOptionId?: string | null;
+  requestedAccessoryId?: number | null;
+
   /** The Snipe accessory IT assigned, and what it was called. Null until then. */
   snipeAccessoryId?: number | null;
   accessoryName?: string | null;

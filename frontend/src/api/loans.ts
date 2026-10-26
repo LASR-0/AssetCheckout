@@ -11,10 +11,35 @@ import type { Loan, Request } from "@/types/requestType";
 //  Adding loan-shaped aliases for them would invite the two paths to drift.
 ///  +-----------------------------------------------------------------+
 
-/** A loanable device as the assign dialog sees it. */
+/** A whitelisted device as the request form offers it. */
+export type LoanDeviceChoice = {
+  id: string;
+  displayName: string;
+  description: string | null;
+  showEventName: boolean;
+  /** Free right now; null when Snipe could not be asked. Advisory only — a
+   *  booking for next week is fine even if every unit is out today. */
+  remaining: number | null;
+  qty: number | null;
+};
+
+export async function getLoanDevices(): Promise<LoanDeviceChoice[]> {
+  const data = await apiFetch<{ success: boolean; devices: LoanDeviceChoice[] }>(
+    "/api/requests/loans/devices"
+  );
+  return data.devices ?? [];
+}
+
+/** A whitelisted Snipe record as the assign dialog sees it. */
 export type LoanOption = {
   id: number;
   name: string;
+  /** The whitelist's name for it — what the requester picked from. */
+  displayName: string;
+  /** The record the requester asked for. */
+  requested: boolean;
+  /** Other loans of this record already out over the same window. */
+  bookedOverWindow: number;
   manufacturer: string | null;
   modelNumber: string | null;
   qty: number;
@@ -25,8 +50,8 @@ export type LoanOption = {
 };
 
 /**
- * Another loan already out over the same window. The pool is a single unit, so
- * this is not trivia — it is the reason to stop and check before assigning.
+ * A loan on a record that is fully booked over the same window — every unit is
+ * promised. Not trivia: it is the reason to stop and check before assigning.
  */
 export type LoanClash = {
   requestId: number;
@@ -42,6 +67,8 @@ export type LoanClash = {
 export type CreateLoanPayload = {
   userId: number;
   userName: string;
+  /** The LoanDeviceChoice picked on the form. */
+  deviceOptionId: string;
   /** "YYYY-MM-DD". A full ISO timestamp is refused — the server's timezone
    *  must not be what decides which calendar day the loan falls on. */
   startDate: string;
