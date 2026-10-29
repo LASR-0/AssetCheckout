@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import InfoHint from "@/components/ui/infohint";
+import SiteColourPicker from "./SiteColourPicker";
 import UserSelect, { type User } from "@/components/request-form/UserSelect";
 import { getStockKeepers, setStockKeepersForLocation } from "@/api/settings";
 import type { SnipeNamedRecord } from "@/types/snipeTypes";
@@ -284,9 +285,7 @@ function LocationRow({
       {/* Header — location name (left) + Add trigger (right) */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-surface/50 border-b border-outline/15">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="material-symbols-outlined !text-base text-info-light">
-            warehouse
-          </span>
+          <SiteColourPicker locationId={location.id} locationName={location.name} />
           <span className="text-sm font-semibold text-info-light truncate">
             {location.name}
           </span>

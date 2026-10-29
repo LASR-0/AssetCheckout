@@ -1,1170 +1,176 @@
-import { Link } from "react-router-dom";
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  accessoryCategoriesForMeQuery,
-  assetCategoriesQuery,
-  holdingsQuery,
-  requestsQuery,
-} from "@/api/queries";
-import { iconForCategory } from "@/lib/categoryIcon";
-import { useAuth } from "@/hooks/useAuth";
-import { StatusBadge, Badge } from "@/components/ui/statusbadge";
-import { deriveStage, isDoneStage } from "@/lib/stage";
-import type { AssetCategory } from "@/types/categoriesType";
-import type { AccessoryCategory } from "@/types/accessoriesType";
-import type { Request } from "@/types/requestType"
-import MyHoldingsDialog, { type Row as HoldingRow } from "@/components/dialogs/MyHoldingsDialog";
-import type {
-  UserHoldings,
-  AssetHolding,
-  AccessoryHolding,
-} from "@/types/holdingsType";
-import {
-  groupByCategoryId,
-  summariseAssetHoldings,
-  summariseAccessoryHoldings,
-} from "@/lib/holdings";
+import { Page } from "@/components/shell/Page";
+import { useToast } from "@/components/ui/toast-context";
 import { useTourReady } from "@/components/tour/TourProvider";
+import EnterSelfProcuredDetailsDialog from "@/components/dialogs/EnterSelfProcuredDetailsDialog";
+import HomeHead from "@/components/home/HomeHead";
+import NeedsYou from "@/components/home/NeedsYou";
+import InFlight from "@/components/home/InFlight";
+import Finished from "@/components/home/Finished";
+import WhatYouHave from "@/components/home/WhatYouHave";
+import AskForSomething from "@/components/home/AskForSomething";
+import RequestInspector from "@/components/home/RequestInspector";
+import ReportProblem, { type FlowStart } from "@/components/home/ReportProblem";
+import { heldAccessories, heldAssets } from "@/components/home/held";
+import { useHome, type Row } from "@/components/home/useHome";
+import { apiFetch } from "@/api/client";
+import { queryClient } from "@/api/queryClient";
+import { feedbackEnabledQuery, invalidateWorkflow, requestsQuery } from "@/api/queries";
+import { markRequestSeen } from "@/api/requests";
+import { notifySeenCleared } from "@/hooks/useActionCounts";
+import { needsMyAction } from "@/lib/permissions";
+import type { Request } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
-///  |                     HOME PAGE (internal tool)                   |
-///  +-----------------------------------------------------------------+
-//
-//  Redesign: the old marketing-style landing (Hero/Features/Lifecycle/CTA)
-//  is replaced with an internal-tool home — greeting + status snapshot,
-//  start-a-request tiles, recent requests, and quick links.
-//
-//  The footer now lives in its own component (components/Footer.tsx) and
-//  is rendered app-wide from App.tsx, so this page no longer owns the
-//  min-h-screen flex column — App.tsx does. The root here is flex-grow
-//  so the page background fills the space between nav and footer.
-//
-//  TABLE-FEEL PASS: the three content cards (Start a request, Accessories,
-//  Your recent requests) now wear the same chrome as the settings tables
-//  (see components/ui/collapsible-section.tsx) — a tinted header
-//  bar in surface-container-low/30 with a hairline divider, then the body.
-//  CARD gained overflow-hidden so the tint clips to the rounded corners.
-
-const CARD =
-  "bg-surface-container-lowest border border-landing-border rounded-xl overflow-hidden";
-const RAISED = "bg-landing-raised border border-landing-border rounded-lg";
-
-///  +-----------------------------------------------------------------+
-///  |                 SHARED: TINTED SECTION HEADER                   |
+///  |                            HOME                                 |
 ///  +-----------------------------------------------------------------+
 //
-//  Mirrors CollapsibleSection's trigger row: tinted bar, hairline
-//  divider, optional right-aligned actions slot. Not collapsible — the
-//  home page sections are always open — so no trigger/chevron.
+//  The front door, and for most staff the only page besides a form. It
+//  answers three questions, in this order: what needs me, where are my
+//  requests up to, and what do I have. Asking for something comes last,
+//  because by the time somebody wants to, they know where it is.
 //
-//  Type scale is a step down from the old text-xl headings so the cards
-//  read as table chrome rather than marketing sections; bump `text-base`
-//  back to `text-xl` if you'd rather keep the larger heading.
-
-function SectionHeader({
-  title,
-  subtitle,
-  actions,
-}: {
-  title: string;
-  subtitle?: React.ReactNode;
-  actions?: React.ReactNode;
-}) {
-  return (
-    // Stacks on mobile so the title gets the full width instead of competing
-    // with the actions link for a narrow row; side by side from sm up.
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-5 py-3 bg-surface-container-low/30 border-b border-outline/50">
-      <div className="flex flex-col min-w-0 w-full sm:w-auto">
-        <h2 className="font-headline font-bold text-base text-on-background">
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="text-info-light text-[13px] leading-snug">{subtitle}</p>
-        )}
-      </div>
-      {actions && <div className="shrink-0 sm:ml-auto">{actions}</div>}
-    </div>
-  );
-}
-
-// Stable empties, so a default does not change identity every render.
-const NO_ASSET_CATEGORIES: AssetCategory[] = [];
-const NO_ACCESSORY_CATEGORIES: AccessoryCategory[] = [];
-
-///  +-----------------------------------------------------------------+
-///  |                  DATA: THE USER'S REQUESTS                      |
-///  +-----------------------------------------------------------------+
+//  TWO COLUMNS from 1160 design px: the person's requests on the left, what
+//  they hold beside them. Below that one column, in reading order.
 //
-//  Scope: requests where the signed-in person is the TARGET USER. The list
-//  is the shared, cached requests query (Requests and Stock read the same
-//  one), filtered here by userName — the same comparison RecentRequests
-//  already uses.
-
-function useMyRequests() {
-  const { name, isLoading: authLoading } = useAuth();
-  const { data, isPending, isError } = useQuery({ ...requestsQuery, enabled: !authLoading && !!name });
-  const requests = useMemo(() => (data ?? []).filter((r) => r.userName === name), [data, name]);
-  useEffect(() => {
-    if (isError) console.error("Failed to load home page requests");
-  }, [isError]);
-  // Signed out (dev) never fetches, so it is not loading either.
-  const loading = authLoading || (!!name && isPending);
-  return { requests, loading };
-}
-
-///  +-----------------------------------------------------------------+
-///  |                  DATA: WHAT THE USER HOLDS                      |
-///  +-----------------------------------------------------------------+
-//
-//  Fetched once here and passed to both tile sections, since one endpoint
-//  returns both halves and rendering them twice would double the round trips.
-//
-//  DELIBERATELY QUIET. A failure logs and leaves the maps empty, so the tiles
-//  render exactly as they did before this feature existed. No error state on
-//  the home page — matching AccessoryQuickStart, which already renders nothing
-//  when it can't resolve anything.
-//
-//  Accessory results WILL be sparse in practice: Snipe's accessory data is
-//  incomplete because accessories get handed out and never logged. That is the
-//  problem this phase addresses, not a fault here.
-
-function useMyHoldings() {
-  const { name, isLoading: authLoading } = useAuth();
-  const { data, isSuccess, isError } = useQuery({ ...holdingsQuery, enabled: !authLoading && !!name });
-  const holdings: UserHoldings = useMemo(
-    () => ({ assets: data?.assets ?? [], accessories: data?.accessories ?? [] }),
-    [data]
-  );
-  // "Did the fetch actually succeed?" — NOT the same question as "is the list
-  // empty?". The tiles above can treat both the same way (they just render as
-  // they did before holdings existed), but the "what you already have" section
-  // cannot: telling someone they hold nothing when the request failed is a
-  // confident lie, and the whole point of that section is to be trusted.
-  const resolved = isSuccess;
-  useEffect(() => {
-    if (isError) console.error("Failed to load holdings for home page");
-  }, [isError]);
-
-  const assetsByCategory = useMemo(
-    () => groupByCategoryId(holdings.assets),
-    [holdings.assets]
-  );
-  const accessoriesByCategory = useMemo(
-    () => groupByCategoryId(holdings.accessories),
-    [holdings.accessories]
-  );
-
-  return { holdings, resolved, assetsByCategory, accessoriesByCategory };
-}
-
-export default function LandingPage() {
-  const { requests, loading } = useMyRequests();
-  const { holdings, resolved, assetsByCategory, accessoriesByCategory } =
-    useMyHoldings();
-
-  // The tour resolves its steps against the DOM once, when it starts. Half of
-  // what it points at — the holdings grid, a status badge — does not exist
-  // until these two land, so starting before then would silently drop those
-  // steps and produce a tour that looks fine and teaches half as much.
-  useTourReady(!loading && resolved);
-
-  return (
-    <div className="bg-landing-bg text-on-background flex-grow">
-      {/* The gutter halves on a phone. The cards below already carry modest
-          padding of their own (px-5 and less), so unlike Settings there is
-          nothing inside them worth trimming — the 24px each side of the page
-          itself was the only real cost, and on a 375px screen it was 13% of
-          the viewport spent on empty margin. */}
-      <main className="w-full max-w-[1160px] mx-auto px-3 pb-16 sm:px-6 md:px-8">
-        <HomeHead requests={requests} loading={loading} />
-        <QuickStart holdingsByCategory={assetsByCategory} />
-        <AccessoryQuickStart holdingsByCategory={accessoriesByCategory} />
-        <MyStuff holdings={holdings} resolved={resolved} />
-        <RecentRequests requests={requests} loading={loading} />
-        <QuickLinks />
-      </main>
-    </div>
-  );
-}
-
-///  +-----------------------------------------------------------------+
-///  |                GREETING + STATUS SNAPSHOT                       |
+//  Acting from here is limited to the requester's own next step (collect
+//  it, confirm it arrived, enter what they bought). Everything else opens in
+//  the request log, where the full set of actions lives.
 ///  +-----------------------------------------------------------------+
 
-function timeOfDayGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
+const AREA = "min-w-0 pb-4 phone:pb-5";
 
-function formattedDate(): string {
-  const now = new Date();
-  const weekday = now.toLocaleDateString("en-AU", { weekday: "long" });
-  const day = now.getDate();
-  const month = now.toLocaleDateString("en-AU", { month: "long" });
-  return `${weekday}, ${day} ${month}`;
-}
+export default function Home() {
+  const home = useHome();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const { data: feedbackOn = false } = useQuery(feedbackEnabledQuery);
 
-/**
- * Destination for a status-snapshot tile: the requests table filtered to the
- * same status the tile counted, with the person's name seeded into the search
- * so they land on their own rows rather than the whole org.
- *
- * Returns undefined for an empty count, which leaves the tile unlinked.
- *
- * All three values are stage filters resolved client-side by the table against
- * deriveStage — the same function that counts the tiles here, so a tile and its
- * destination can't disagree. Note the name is seeded into the free-text
- * filter, which matches any field — so it also catches rows where this person
- * is the MANAGER rather than the requester, and the table can show more rows
- * than the tile counted.
- */
-function requestsLink(
-  status: "IN_PROGRESS" | "DONE" | "REJECTED",
-  count: number,
-  name: string | null
-): string | undefined {
-  if (count <= 0) return undefined;
-  const scope = name ? `&q=${encodeURIComponent(name)}` : "";
-  return `/requests?status=${status}${scope}`;
-}
+  const [inspecting, setInspecting] = useState<number | null>(null);
+  const [flow, setFlow] = useState<FlowStart | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [purchasing, setPurchasing] = useState<Request | null>(null);
 
-function HomeHead({
-  requests,
-  loading,
-}: {
-  requests: Request[];
-  loading: boolean;
-}) {
-  // useAuth already provides the display name — works in dev mode too
-  // (name comes from the DevAuthToggle).
-  const { name } = useAuth();
-  const firstName = name ? name.split(" ")[0] : null;
+  const assets = heldAssets(home.holdings.data);
+  const accessories = heldAccessories(home.holdings.data);
 
-  // Counted on the derived STAGE, not the raw status. RequestStatus.COMPLETED
-  // is stamped when IT checks the thing out of Snipe — with the ship/collect
-  // chain still ahead of it — so counting it as "Completed" told people their
-  // request was done while the device was still sitting in IT. Only the
-  // terminal stages (collected/received, or an applied correction) count as
-  // done; assigned, ready-to-collect and shipped are still in flight.
-  const stages = requests.map(deriveStage);
-  const completed = stages.filter(isDoneStage).length;
-  const rejected = stages.filter((s) => s === "REJECTED").length;
-  const inProgress = stages.length - completed - rejected;
+  // The tour points at the holdings and a status chip, which only exist once
+  // these land. Settled either way, so a failure can't block it for good.
+  useTourReady(!home.loadingRequests && !home.holdings.isPending);
 
-  return (
-    <section
-      data-tour="home-greeting"
-      className="scroll-mt-24 pt-14 md:pt-20 pb-10 flex flex-col md:flex-row md:items-end gap-8 md:gap-12"
-    >
-      <div className="flex flex-col gap-2 flex-grow">
-        <p className="font-mono text-[13px] uppercase tracking-wider text-info-light">
-          {formattedDate()}
-        </p>
-        <h1 className="font-headline font-extrabold text-3xl md:text-[42px] tracking-tight">
-          {timeOfDayGreeting()}
-          {firstName ? `, ${firstName}.` : "."}
-        </h1>
-        <p className="text-info-light text-lg max-w-[52ch]">
-          Need a device for yourself or someone on your team? Start a request
-          below — we'll route it to the right approver and keep you posted.
-        </p>
-      </div>
+  // Looked up by id each render, so the panel follows the cache after an action.
+  const inspected =
+    [...home.open, ...home.finished].find((x) => x.r.id === inspecting) ?? null;
 
-      {/* Status snapshot — mobile: full-width 3-col grid so the cards
-          share the space equally (centred, equal side padding);
-          desktop: unchanged flex row. */}
-      <div
-        className="grid grid-cols-3 gap-3 w-full md:w-auto md:flex md:shrink-0 scroll-mt-24"
-        aria-label="Your request summary"
-        data-tour="home-stats"
-      >
-        {/* Each tile links to the requests table pre-filtered to the rows it
-            counted: its status, scoped to this person by name. Only linked
-            when the count is above zero — a zero leading to an empty table is
-            worse than not being clickable. */}
-        <Stat
-          num={inProgress}
-          label="In progress"
-          loading={loading}
-          pending={inProgress > 0}
-          to={requestsLink("IN_PROGRESS", inProgress, name)}
-        />
-        <Stat
-          num={completed}
-          label="Completed"
-          loading={loading}
-          complete={completed > 0}
-          to={requestsLink("DONE", completed, name)}
-        />
-        <Stat
-          num={rejected}
-          label="Rejected"
-          loading={loading}
-          attention={rejected > 0}
-          to={requestsLink("REJECTED", rejected, name)}
-        />
-      </div>
-    </section>
-  );
-}
-
-function Stat({
-  num,
-  label,
-  loading,
-  attention = false,
-  complete = false,
-  pending = false,
-  to,
-}: {
-  num: number;
-  label: string;
-  loading: boolean;
-  attention?: boolean;
-  complete?: boolean;
-  pending?: boolean;
-  /** When set, the tile becomes a link to this route. */
-  to?: string;
-}) {
-  const className = `${CARD} flex flex-col items-center justify-center gap-1 px-3 md:px-5 py-4 min-w-0 md:min-w-[110px]
-        ${attention ? "!border-intent-stop/50" : ""}
-        ${complete ? "!border-intent-done/50" : ""}
-        ${pending ? "!border-intent-progress/50" : ""}`;
-
-  // Linked tiles get the same hover lift as the request tiles below, so the
-  // affordance reads the same way across the page. Only rendered as a link
-  // when there's somewhere to go — a tile showing 0 leads to an empty table,
-  // which is worse than not being clickable.
-  if (to) {
-    return (
-      <Link
-        to={to}
-        className={`${className} hover:border-primary hover:-translate-y-px transition-all`}
-      >
-        <StatBody
-          num={num}
-          label={label}
-          loading={loading}
-          attention={attention}
-          complete={complete}
-          pending={pending}
-        />
-      </Link>
+  function open(row: Row) {
+    setInspecting(row.r.id);
+    // Opening a request is reading it: its "new" marker clears, and the nav
+    // badge drops at once if it was counting this one.
+    const r = row.r;
+    if (r.seenByMe) return;
+    const counted = needsMyAction(r, home.viewer.role, home.viewer.userId, home.viewer.name);
+    queryClient.setQueryData(requestsQuery.queryKey, (prev) =>
+      prev?.map((x) => (x.id === r.id ? { ...x, seenByMe: true } : x))
     );
+    void markRequestSeen(r.id);
+    if (counted) notifySeenCleared();
   }
 
-  return (
-    <div className={className}>
-      <StatBody
-        num={num}
-        label={label}
-        loading={loading}
-        attention={attention}
-        complete={complete}
-        pending={pending}
-      />
-    </div>
-  );
-}
+  async function act(row: Row) {
+    const { r, route } = row;
+    if (route.step === "purchase") {
+      setPurchasing(r);
+      return;
+    }
+    setBusyId(r.id);
+    try {
+      const res = await apiFetch<{ promptFeedback?: boolean }>(`/api/approval/${r.id}/receive`, { method: "POST" });
+      await invalidateWorkflow();
+      const verb = route.step === "lreceive" ? "received" : "collected";
+      const ask = !!res?.promptFeedback && feedbackOn;
+      toast(`#${r.id} marked ${verb}.${ask ? " How did it go?" : ""}`, {
+        action: ask ? { label: "Leave feedback", onClick: () => navigate("/feedback") } : undefined,
+      });
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Couldn't save that. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
-/** The number + label, shared by the linked and plain variants of Stat so the
- *  two can never drift apart visually. */
-function StatBody({
-  num,
-  label,
-  loading,
-  attention,
-  complete,
-  pending,
-}: {
-  num: number;
-  label: string;
-  loading: boolean;
-  attention: boolean;
-  complete: boolean;
-  pending: boolean;
-}) {
-  return (
-    <>
-      <span
-        className={`font-headline font-extrabold text-2xl
-          ${attention ? "text-intent-stop" : "" }
-          ${complete ? "text-intent-done" : ""}
-          ${pending ? "text-intent-progress" : ""}
-          `}
-      >
-        {loading ? "–" : num}
-      </span>
-      <span className="text-xs text-info-light text-center whitespace-nowrap">
-        {label}
-      </span>
-    </>
-  );
-}
+  const intro = home.loadingRequests
+    ? "Loading your requests…"
+    : home.approvals > 0
+      ? `${home.approvals === 1 ? "1 request is" : `${home.approvals} requests are`} waiting for your approval.`
+      : home.needs.length > 0
+        ? `${home.needs.length === 1 ? "One thing needs" : `${home.needs.length} things need`} you today.`
+        : home.total > 0
+          ? "Nothing needs you right now."
+          : "Welcome to Checkout. This is where you ask IT for equipment and follow it until it reaches you.";
 
-///  +-----------------------------------------------------------------+
-///  |                PRIMARY ACTION: START A REQUEST                  |
-///  +-----------------------------------------------------------------+
-//
-//  Dynamic: tiles come from the server-configured asset categories,
-//  same source as AssetTypeSelector on the form. Homepage-grade states:
-//  quiet loading spinner, and a soft fallback (plain link to the form)
-//  if the catalogue can't be fetched — the form has its own full error UI.
-//
-//  Chrome: tinted SectionHeader + padded body. The tiles themselves are
-//  untouched.
-
-///  +-----------------------------------------------------------------+
-///  |                  HOLDINGS ON A QUICK START TILE                 |
-///  +-----------------------------------------------------------------+
-//
-//  THE CORNER COUNT IS GONE. A number in a pill at a tile's top-right is, by
-//  every convention people have met elsewhere, an unread badge — so "2" on the
-//  Laptop tile read as two pending actions rather than two laptops held, and
-//  the real meaning lived only in a tooltip nobody hovers over something they
-//  think they already understand.
-//
-//  The NAME badge stays. It says what it means in words, and beside "Request →"
-//  that is useful context: you already have one of these. What misled was a
-//  bare number standing alone, not the idea of showing holdings here. The
-//  full picture now lives in "What you already have" further down the page.
-
-/**
- * The held model name(s) as a badge. No icon — the tile's own icon already
- * says what kind of thing this is, and a second glyph here competes with it.
- *
- * Also used for the serial on the "what you already have" tiles, so the two
- * treatments can't drift apart.
- *
- * min-w-0 + truncate because it shares its row with "Request →" and model
- * names run long ("ThinkPad T16 Gen 1"); the full text stays on hover.
- */
-function HoldingsBadge({
-  summary,
-  title,
-}: {
-  summary: string | null;
-  /** Hover text. Defaults to the holdings phrasing the request tiles use. */
-  title?: string;
-}) {
-  if (!summary) return null;
-  return (
-    <span
-      // max-w-full is what makes truncate actually work. min-w-0 alone only
-      // helps when a flex row squeezes the badge; stacked on mobile the badge
-      // is shrink-to-fit, so without a cap it grew past the tile instead of
-      // ellipsing.
-      className="max-w-full min-w-0 truncate rounded-full border border-outline bg-surface-container-low/40 px-2 py-0.5 text-[10px] font-semibold text-info-light"
-      title={title ?? `You already hold: ${summary}`}
-    >
-      {summary}
-    </span>
-  );
-}
-
-/**
- * The shared tile body: icon and category name centred, the "Request →"
- * affordance beneath, and — when the user holds something here — a tinted band
- * across the foot of the tile. Used by both tile sets so the two can't drift.
- *
- * WHY A BAND. The thing being fixed is that holdings didn't read as holdings.
- * A count in the corner read as an unread badge; a grey pill beside "Request →"
- * read as metadata. A band is a different surface from the rest of the tile,
- * so a held tile is distinguishable while scanning the grid rather than only
- * once you're reading one — and it says "You have" in words, so there is no
- * icon or number left to interpret.
- *
- * It sits BELOW the action and behind a hairline on purpose: what you already
- * have and what you're about to request are two different statements, and the
- * old layout put them on one line where they read as one.
- *
- * Full-bleed via negative margins that cancel the tile's own padding, so the
- * band meets the tile edges. That needs overflow-hidden on the tile, or its
- * square corners overhang the rounded ones.
- *
- * flex-1 on the identity block is load-bearing, where it used to be inert.
- * Grid rows stretch every tile to the tallest in the row, and flex-1 is what
- * absorbs that extra space so the band stays pinned to the foot.
- *
- * It also means the band's slot has to exist on EVERY tile, held or not — see
- * the note on the band below. Without that, flex-1 hands the band's height to
- * the identity block on unheld tiles and their icons sit lower than their
- * neighbours'.
- */
-function TileBody({
-  icon,
-  name,
-  nameClass,
-  iconClass,
-  heldCount,
-  heldTitle,
-}: {
-  icon: string;
-  name: string;
-  nameClass: string;
-  iconClass: string;
-  /** How many the user holds in this category. 0 renders no band at all, so
-   *  a category you own nothing in looks exactly as it did before. */
-  heldCount: number;
-  /**
-   * Hover text for the band: what they actually hold, by name
-   * ("ThinkPad T16 Gen 1 +1"). The band states a count because a count can't
-   * truncate; the names are what someone hovering actually wants, and they're
-   * too long to sit on the tile itself.
-   */
-  heldTitle: string | null;
-}) {
-  return (
-    <>
-      {/* Request → leads rather than trails. It's the tile's purpose, and at
-          the foot it competed with the holdings band directly beneath it for
-          the same corner of the eye. */}
-      <div className="flex w-full items-center">
-        <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-          Request →
-        </span>
-      </div>
-
-      <div className="flex flex-1 flex-col items-center my-6 justify-center gap-2 text-center">
-        <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
-        {/* On the name rather than a larger parent gap, so the extra breathing
-            room lands below the category text only and not also between the
-            icon and the name. */}
-        <span className={`${nameClass} `}>{name}</span>
-      </div>
-
-      {/* ALWAYS RENDERED, hidden when there's nothing to say.
-          Not `heldCount > 0 &&` — that made the icons sit at different heights
-          across a row. The identity block above is flex-1, so on a tile with no
-          band it grows by exactly the band's height, and justify-center then
-          centres the icon in that taller box, dropping it lower than its
-          neighbour's. Reserving the space keeps every identity block the same
-          height, so the icons line up whatever anyone happens to hold.
-          `invisible` rather than a hand-built spacer: the placeholder is the
-          real band, so its height can't drift from the thing it stands in for.
-          visibility:hidden also takes it out of the accessibility tree, so
-          nothing announces "You have 0". */}
-      <div
-        className={`-mx-5 -mb-2 mt-1 border-t px-5 py-2 ${
-          heldCount > 0
-            ? "border-outline/50 bg-status-success/10"
-            : "invisible border-transparent"
-        }`}
-        // The models by name. Falls back to nothing rather than a generic
-        // phrase — an empty title shows no tooltip, which beats one that
-        // repeats the band.
-        title={heldCount > 0 ? heldTitle ?? undefined : undefined}
-      >
-        <span className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-status-success">
-          <span className="material-symbols-outlined !text-[14px]">
-            check_circle
-          </span>
-          You have {heldCount}
-        </span>
-      </div>
-    </>
-  );
-}
-
-function QuickStart({
-  holdingsByCategory,
-}: {
-  /** What the user already holds, keyed by Snipe asset category id. Empty
-   *  when holdings couldn't be resolved — the tiles then look as they always
-   *  did. */
-  holdingsByCategory: Map<number, AssetHolding[]>;
-}) {
-  const { data: categories = NO_ASSET_CATEGORIES, isPending: loading, isError: error } = useQuery(assetCategoriesQuery);
-  const [holdingsOpen, setHoldingsOpen] = useState(false);
+  const hasNeedsArea = home.needs.length > 0 || home.approvals > 0;
 
   return (
-    <section data-tour="home-request-assets" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
-      <SectionHeader
-        title="Start a request"
-        subtitle="Pick what you need to get going."
-        actions={
-          <button
-            type="button"
-            onClick={() => setHoldingsOpen(true)}
-            data-tour="home-see-all-devices"
-            className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
-          >
-            See all my devices →
-          </button>
-        }
-      />
+    <Page max={1240} className="flex flex-col gap-4 px-3 pt-5 pb-45 phone:gap-5 phone:px-8 phone:pt-7 phone:pb-35">
+      <HomeHead name={home.auth.name} loading={home.loadingRequests} counts={home.counts} intro={intro} />
 
-      <MyHoldingsDialog
-        open={holdingsOpen}
-        onOpenChange={setHoldingsOpen}
-        subject="ASSET"
-      />
-
-      <div className="p-5 md:p-6">
-        {loading && (
-          <div className="flex items-center py-8 font-semibold text-info-light text-sm">
-            <span className="animate-spin h-5 w-5 border-2 border-info-light border-t-transparent rounded-full mr-3" />
-            Loading asset types...
+      <div className="grid grid-cols-1 [grid-template-areas:'needs'_'flight'_'have'_'ask'] min-[58rem]:grid-cols-[minmax(0,1fr)_25rem] min-[58rem]:grid-rows-[auto_auto_auto_1fr] min-[58rem]:gap-x-6 min-[58rem]:[grid-template-areas:'needs_have'_'flight_have'_'ask_have'_'._have']">
+        {hasNeedsArea && (
+          <div className={`${AREA} [grid-area:needs]`}>
+            <NeedsYou needs={home.needs} approvals={home.approvals} busyId={busyId} onOpen={open} onAct={act} />
           </div>
         )}
 
-        {!loading && (error || categories.length === 0) && (
-          <p className="py-6 text-sm text-info-light">
-            Couldn't load the asset catalogue right now — you can still{" "}
-            <Link
-              to="/assets"
-              className="font-semibold underline hover:text-on-background transition-colors"
-            >
-              start a request from the form
-            </Link>
-            .
-          </p>
-        )}
+        <div className={`${AREA} flex flex-col gap-4 [grid-area:flight] phone:gap-5`}>
+          <InFlight
+            rows={home.open}
+            anyRequests={home.total > 0}
+            loading={home.loadingRequests}
+            viewer={home.viewer}
+            onOpen={open}
+          />
+          <Finished rows={home.finished} name={home.auth.name} onOpen={open} />
+        </div>
 
-        {!loading && !error && categories.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {categories.map((cat) => {
-              const held = holdingsByCategory.get(cat.id) ?? [];
-              return (
-                // FIXED: deep-link with the category id — the form validates it
-                // against its own fetched list before preselecting.
-                <Link
-                  key={cat.id}
-                  to={`/assets?categoryId=${cat.id}`}
-                  // overflow-hidden clips the full-bleed holdings band to the
-                  // rounded corners. Tiles stay level with each other — grid
-                  // rows stretch to the tallest — so the band reads as a
-                  // difference in surface, not a difference in height.
-                  className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-primary hover:-translate-y-px transition-all`}
-                >
-                  <TileBody
-                    icon={iconForCategory(cat.name)}
-                    name={cat.name}
-                    iconClass="!text-[26px]"
-                    nameClass="font-bold text-[13px]"
-                    // One row per physical asset, so this is a true count.
-                    heldCount={held.length}
-                    heldTitle={summariseAssetHoldings(held)}
-                  />
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
+        <div className={`${AREA} [grid-area:have]`}>
+          <WhatYouHave
+            holdings={home.holdings}
+            onReport={(item) => setFlow({ step: "choose", item })}
+            onReportMissing={() => setFlow({ step: "missing" })}
+          />
+        </div>
 
-///  +-----------------------------------------------------------------+
-///  |                    YOUR RECENT REQUESTS                         |
-///  +-----------------------------------------------------------------+
-//
-//  Status column renders the shared StatusBadge (same component as the
-//  requests table) with the derived fulfilment stage, so colours, icons,
-//  labels, and post-completion states (Assigned / Shipped / Ready to
-//  collect / Collected / Received) are identical site-wide.
-//
-//  The rows now sit inside a settings-style table shell: rounded-lg +
-//  border-outline container on bg-surface, a tinted header row in
-//  surface-container-low/20, and border-outline/10 hairlines between rows.
-//  "View all" moved into the card header's actions slot.
-
-function shortDate(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return `${d.getDate()} ${d.toLocaleDateString("en-AU", { month: "short" })}`;
-}
-
-// The "For" column is dropped below sm — on a phone it's the least useful of
-// the four (this list is already the signed-in user's own requests, so it
-// reads "Yourself" nearly every time) and its absence buys real width for the
-// asset name. The cell itself is hidden to match, so the columns stay aligned.
-const RECENT_GRID =
-  "grid grid-cols-[1.6fr_0.8fr_1fr] sm:grid-cols-[1.6fr_0.8fr_0.8fr_1fr] gap-2";
-
-function RecentRequests({
-  requests,
-  loading,
-}: {
-  requests: Request[];
-  loading: boolean;
-}) {
-  const { name } = useAuth();
-
-  const recent = [...requests]
-    .sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    .slice(0, 4);
-
-  return (
-    <section className={`${CARD} shadow-sm mb-8 scroll-mt-24`} id="requests" data-tour="home-recent-requests">
-      <SectionHeader
-        title="Your recent requests"
-        subtitle="The last few things you've asked for."
-        actions={
-          // Seeds the table's free-text search with the person's name, the
-          // same mechanism the status tiles above use — so "View all" lands on
-          // their own rows rather than the whole org's log. Falls back to the
-          // unscoped table when auth hasn't resolved a name.
-          <Link
-            to={name ? `/requests?q=${encodeURIComponent(name)}` : "/requests"}
-            className="text-sm font-semibold text-info-light hover:text-on-background transition-colors"
-          >
-            View all →
-          </Link>
-        }
-      />
-
-      <div className="p-3 md:p-4">
-        <div className="rounded-lg border border-outline bg-landing-card/70 overflow-hidden">
-          <div
-            className={`${RECENT_GRID} px-3 py-2 bg-surface-container-low/20 font-mono text-[11px] uppercase tracking-wider text-info-light`}
-          >
-            <span>Asset</span>
-            <span>Requested</span>
-            <span className="hidden sm:block">For</span>
-            <span>Status</span>
-          </div>
-
-          {loading && (
-            <p className="px-3 py-6 text-sm text-info-light border-t border-outline/10">
-              Loading…
-            </p>
-          )}
-
-          {!loading && recent.length === 0 && (
-            <p className="px-3 py-6 text-sm text-info-light border-t border-outline/10">
-              Nothing yet — start your first request above.
-            </p>
-          )}
-
-          {!loading &&
-            recent.map((r, index) => (
-              // Deep-links to just this row. NOT `?q=${r.id}` — the table's
-              // free-text filter deliberately skips `id` and every `*Id` key
-              // (see isNoiseKey in RequestsTable), so a numeric search would
-              // match on prices and quantities instead. ?requestId is an exact
-              // match resolved separately, with its own clear affordance in the
-              // toolbar.
-              <Link
-                key={r.id}
-                to={`/requests?requestId=${r.id}`}
-                className={`${RECENT_GRID} items-center px-3 py-3 border-t border-outline text-sm hover:bg-surface-container-low/40 transition-colors`}
-              >
-                <span className="flex items-center gap-2.5 font-semibold">
-                  <span className="material-symbols-outlined !text-[18px] text-on-surface-variant">
-                    {iconForCategory(r.categoryName)}
-                  </span>
-                  {r.modelRequest?.modelName ?? r.categoryName}
-                </span>
-                <span className="text-on-surface-variant">
-                  {shortDate(r.createdAt)}
-                </span>
-                <span className="hidden sm:block text-on-surface-variant">
-                  {r.userName === name ? "Yourself" : r.userName}
-                </span>
-                <span
-                  // The first row's badge only — the tour explains what a
-                  // status means, and one example is the explanation.
-                  data-tour={index === 0 ? "home-status-badge" : undefined}
-                >
-                  <StatusBadge status={deriveStage(r)} />
-                </span>
-              </Link>
-            ))}
+        <div className={`${AREA} [grid-area:ask]`}>
+          <AskForSomething
+            assetCategories={home.assetCategories}
+            accessoryCategories={home.accessoryCategories}
+            assets={assets}
+            accessories={accessories}
+            onSeeAll={(subject) => setFlow({ step: "list", subject })}
+          />
         </div>
       </div>
-    </section>
-  );
-}
 
-///  +-----------------------------------------------------------------+
-///  |                        QUICK LINKS                              |
-///  +-----------------------------------------------------------------+
-
-function QuickLinks() {
-  // TODO: confirm real routes for jobs / settings / helpdesk.
-  const links = [
-    {
-      icon: "table_rows",
-      title: "Request log",
-      desc: "Every non-standard request across the org.",
-      to: "/requests",
-    },
-    {
-      icon: "list",
-      title: "Request Assets",
-      desc: "Request an Asset here.",
-      to: "/assets",
-    },
-    {
-      icon: "troubleshoot",
-      title: "Troubleshooting",
-      desc: "Fix common device problems before raising a ticket.",
-      to: "/troubleshooting",
-      tour: "home-troubleshooting",
-    },
-    {
-      icon: "settings",
-      title: "Settings",
-      desc: "Categories, price tiers & approvers.",
-      to: "/settings",
-    },
-    {
-      icon: "feedback",
-      title: "Feedback",
-      desc: "Let us know if this service is an improvement.",
-      to: "/feedback",
-      tour: "home-feedback",
-    },
-        {
-      icon: "keyboard",
-      title: "Request Accessories",
-      desc: "Request Asset Accessories here.",
-      to: "/accessories",
-    },
-    {
-      icon: "devices",
-      title: "Book a Loan",
-      desc: "Borrow a hotspot, KVM or other device for a set period.",
-      to: "/loan",
-    },
-  ];
-
-  return (
-    <section id="links" data-tour="home-quick-links" className="scroll-mt-24">
-      <div className="mb-4">
-        <h2 className="font-headline font-bold text-xl">Go somewhere</h2>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {links.map((l) => (
-          <Link
-            key={l.title}
-            to={l.to}
-            data-tour={l.tour}
-            className={`${RAISED} group flex items-center gap-4 px-5 py-4 hover:border-primary transition-all`}
-          >
-            <span className="w-10 h-10 rounded-lg grid place-items-center shrink-0 bg-modal-surface-accent text-modal-text-accent">
-              <span className="material-symbols-outlined !text-[20px]">
-                {l.icon}
-              </span>
-            </span>
-            <span className="flex flex-col min-w-0">
-              <strong className="font-bold text-[15px]">{l.title}</strong>
-              <small className="text-[13px] text-info-light">{l.desc}</small>
-            </span>
-            <span className="ml-auto text-info-light group-hover:text-on-background transition-colors">
-              →
-            </span>
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-///  +-----------------------------------------------------------------+
-///  |            ACCESSORIES FOR YOUR DEVICES (device-derived)        |
-///  +-----------------------------------------------------------------+
-//
-//  Only the accessory categories the signed-in user's own devices unlock
-//  (L3 ∩ L1). Deliberately quiet: renders nothing until loaded, and nothing
-//  at all when the user has no eligible accessories (or the fetch fails) —
-//  the home page shouldn't carry an empty accessory card.
-//
-//  Chrome matches QuickStart: tinted SectionHeader + padded tile body.
-
-// Must stay in step with the route registered in App.tsx.
-const ACCESSORY_FORM_ROUTE = "/accessories";
-
-function AccessoryQuickStart({
-  holdingsByCategory,
-}: {
-  /** Accessory holdings keyed by Snipe accessory category id. */
-  holdingsByCategory: Map<number, AccessoryHolding[]>;
-}) {
-  const { data: categories = NO_ACCESSORY_CATEGORIES, isPending } = useQuery(accessoryCategoriesForMeQuery);
-  const loaded = !isPending;
-  const [holdingsOpen, setHoldingsOpen] = useState(false);
-
-  if (!loaded || categories.length === 0) return null;
-
-  return (
-    <section data-tour="home-request-accessories" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
-      <SectionHeader
-        title="Accessories for your devices"
-        subtitle={
-          // The shared Badge rather than a hand-rolled span: it already does
-          // max-w-full + min-w-0 + truncate with the full text on hover, which
-          // is exactly what this needed on a narrow screen.
-          <span className="mt-1 flex min-w-0">
-            <Badge
-              icon="info"
-              label="Based on the equipment assigned to you."
-              bg="bg-status-pending/10"
-              text="text-status-pending"
-              size="compact"
-            />
-          </span>
-        }
-        actions={
-          <button
-            type="button"
-            onClick={() => setHoldingsOpen(true)}
-            data-tour="home-see-all-accessories"
-            className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
-          >
-            See all my accessories →
-          </button>
-        }
+      <RequestInspector
+        row={inspected}
+        viewer={home.viewer}
+        busy={inspected != null && busyId === inspected.r.id}
+        onClose={() => setInspecting(null)}
+        onAct={act}
       />
 
-      <MyHoldingsDialog
-        open={holdingsOpen}
-        onOpenChange={setHoldingsOpen}
-        subject="ACCESSORY"
+      <ReportProblem start={flow} onClose={() => setFlow(null)} assets={assets} accessories={accessories} />
+
+      <EnterSelfProcuredDetailsDialog
+        request={purchasing}
+        open={purchasing !== null}
+        onOpenChange={(next) => {
+          if (!next) setPurchasing(null);
+        }}
+        onSuccess={() => void invalidateWorkflow()}
       />
-
-      <div className="p-5 md:p-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {categories.map((cat) => {
-            const held = holdingsByCategory.get(cat.id) ?? [];
-            return (
-              <Link
-                key={cat.id}
-                to={`${ACCESSORY_FORM_ROUTE}?categoryId=${cat.id}`}
-                className={`${RAISED} group flex flex-col gap-2 overflow-hidden px-5 pt-5 pb-2 hover:border-primary hover:-translate-y-px transition-all`}
-              >
-                <TileBody
-                  icon={iconForCategory(cat.name)}
-                  name={cat.name}
-                  iconClass="!text-[28px]"
-                  // Matches the asset tiles. The two sets sit one above the
-                  // other on the same page, so a different type size read as
-                  // an accident rather than a distinction.
-                  nameClass="font-bold text-[13px]"
-                  // Accessory records Snipe returns for this user here — NOT a
-                  // quantity. summariseAccessoryHoldings keeps that distinction
-                  // in the tooltip: "+N" for more records, never "xN".
-                  heldCount={held.length}
-                  heldTitle={summariseAccessoryHoldings(held)}
-                />
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-///  +-----------------------------------------------------------------+
-///  |                  WHAT YOU ALREADY HAVE                          |
-///  +-----------------------------------------------------------------+
-//
-//  The count badge and name badge on the request tiles were doing two jobs at
-//  once and failing the second. A number in a pill at the top-right corner of
-//  a tile is, by every convention people have learned elsewhere, an unread
-//  count — so "2" on the Laptop tile read as two pending actions rather than
-//  two laptops held. The meaning was only ever in the tooltip, and nobody
-//  hovers a thing they think they already understand.
-//
-//  This section states it outright instead. One tile per actual item, naming
-//  the thing rather than its category, so there is no number left to
-//  misinterpret. The badges above stay: as a hint alongside "Request →" they
-//  are useful ("you already have one of these"), and it's the ambiguity of a
-//  bare count standing alone that was the problem.
-//
-//  Clicking a tile is the correction path — it opens the report dialog with
-//  that item already chosen. Someone who spots a wrong record is looking at
-//  the wrong record when they spot it, so asking them to find it again in a
-//  list is a step that exists only because the list came first.
-//
-//  Rendered only once holdings have actually resolved. An empty list and a
-//  failed fetch look identical from here, and "nothing is assigned to you" is
-//  too confident a claim to make on a request that never came back.
-
-/** One held item, flattened across both kinds so the grid can mix them. */
-type HeldItem = {
-  key: string;
-  subject: "ASSET" | "ACCESSORY";
-  icon: string;
-  title: string;
-  manufacturer: string | null;
-  serial: string | null;
-  /** Shaped exactly as MyHoldingsDialog builds its own rows, so the copy
-   *  downstream reads identically whether you arrived here or via the list. */
-  row: HoldingRow;
-};
-
-function toHeldItems(holdings: UserHoldings): HeldItem[] {
-  const assets: HeldItem[] = (holdings.assets ?? []).map((a: AssetHolding) => ({
-    key: `asset-${a.id}`,
-    subject: "ASSET",
-    icon: iconForCategory(a.categoryName ?? a.model ?? ""),
-    title: a.model?.trim() || "Unnamed model",
-    manufacturer: a.manufacturer,
-    serial: a.serial,
-    row: {
-      snipeRecordId: a.id,
-      title: a.model?.trim() || "Unnamed model",
-      categoryId: a.categoryId,
-      categoryName: a.categoryName,
-      detail: a.serial ? `Serial ${a.serial}` : null,
-    },
-  }));
-
-  const accessories: HeldItem[] = (holdings.accessories ?? []).map(
-    (c: AccessoryHolding) => ({
-      key: `accessory-${c.id}`,
-      subject: "ACCESSORY",
-      icon: iconForCategory(c.categoryName ?? c.name),
-      title: c.name?.trim() || "Unnamed accessory",
-      manufacturer: c.manufacturer,
-      // Accessories are stocked by quantity with no per-unit serial, so there
-      // is nothing to show and the tile simply omits the line.
-      serial: null,
-      row: {
-        snipeRecordId: c.id,
-        title: c.name?.trim() || "Unnamed accessory",
-        categoryId: c.categoryId,
-        categoryName: c.categoryName,
-        detail: c.manufacturer,
-      },
-    })
-  );
-
-  return [...assets, ...accessories];
-}
-
-function MyStuff({
-  holdings,
-  resolved,
-}: {
-  holdings: UserHoldings;
-  /** False until the holdings fetch has actually succeeded — see the note
-   *  above on why an empty list isn't good enough. */
-  resolved: boolean;
-}) {
-  // One dialog for the whole grid. `subject` follows whatever was clicked,
-  // because the dialog is strictly one kind at a time.
-  const [openFor, setOpenFor] = useState<HeldItem | null>(null);
-  const [browse, setBrowse] = useState<"ASSET" | "ACCESSORY" | null>(null);
-
-  const items = useMemo(() => toHeldItems(holdings), [holdings]);
-
-  if (!resolved) return null;
-
-  return (
-    <section data-tour="home-my-stuff" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
-      <SectionHeader
-        title="What you already have"
-        subtitle="Assigned to you in our records. Something look wrong? Select it and tell us."
-        actions={
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setBrowse("ASSET")}
-              className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
-            >
-              Assets →
-            </button>
-            <button
-              type="button"
-              onClick={() => setBrowse("ACCESSORY")}
-              className="text-xs sm:text-sm font-semibold text-info-light hover:text-on-background transition-colors hover:cursor-pointer whitespace-nowrap"
-            >
-              Accessories →
-            </button>
-          </div>
-        }
-      />
-
-      {/* Keyed on the item so a fresh dialog mounts per tile — otherwise the
-          previous item's answers would still be sitting in its state. */}
-      {openFor && (
-        <MyHoldingsDialog
-          key={openFor.key}
-          open
-          onOpenChange={(next) => !next && setOpenFor(null)}
-          subject={openFor.subject}
-          initialSelection={openFor.row}
-        />
-      )}
-
-      {browse && (
-        <MyHoldingsDialog
-          key={`browse-${browse}`}
-          open
-          onOpenChange={(next) => !next && setBrowse(null)}
-          subject={browse}
-        />
-      )}
-
-      <div className="p-5 md:p-6">
-        {items.length === 0 ? (
-          // Not a dead end: holding nothing is itself often the wrong record,
-          // and this is the one place that says so.
-          <div data-tour="home-my-stuff-empty" className="py-6 text-sm text-info-light">
-            <p>Nothing is assigned to you in our records.</p>
-            <button
-              type="button"
-              onClick={() => setBrowse("ASSET")}
-              data-tour="home-report-unlogged"
-              className="mt-2 font-semibold text-on-background underline hover:cursor-pointer"
-            >
-              Have something that isn't listed? Tell us →
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {items.map((item, index) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setOpenFor(item)}
-                title={`Report a problem with ${item.title}`}
-                // The first tile only: the tour needs one node to point at,
-                // and every tile behaves identically.
-                data-tour={index === 0 ? "home-my-stuff-item" : undefined}
-                className={`${RAISED} group flex flex-col gap-2 px-5 pt-5 pb-3 text-left hover:border-primary hover:-translate-y-px transition-all hover:cursor-pointer`}
-              >
-                <div className="flex flex-1 flex-col items-center my-4 justify-center gap-2 text-center">
-                  <span className="material-symbols-outlined !text-[26px]">
-                    {item.icon}
-                  </span>
-                  {/* The model name is the identity here, so it gets the weight
-                      the category name carries on the request tiles. */}
-                  <span className="max-w-full truncate font-bold text-[13px]">
-                    {item.title}
-                  </span>
-                  {item.manufacturer && (
-                    <span className="max-w-full truncate text-[11px] text-info-light">
-                      {item.manufacturer}
-                    </span>
-                  )}
-                  {/* Same badge treatment as the model-name badges on the
-                      request tiles above, so the two read as one system. */}
-                  <HoldingsBadge
-                    summary={item.serial}
-                    title={`Serial ${item.serial}`}
-                  />
-                </div>
-
-                <span className="ml-auto shrink-0 text-sm font-semibold text-info-light group-hover:text-on-background transition-colors">
-                  Not right? →
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
+    </Page>
   );
 }

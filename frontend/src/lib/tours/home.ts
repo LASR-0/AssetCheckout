@@ -4,7 +4,7 @@ import type { TourDefinition } from "./types";
 ///  |                       THE HOME TOUR                             |
 ///  +-----------------------------------------------------------------+
 //
-//  Ten steps, and the only tour that mentions the tour button — teaching it
+//  Twelve steps, and the only tour that mentions the tour button — teaching it
 //  once is enough, and repeating it on every page would make each of the
 //  others one step longer for nothing.
 //
@@ -54,7 +54,7 @@ export const homeTour: TourDefinition = {
       ],
       title: "The full list",
       description:
-        "Opens everything assigned to you in one place, devices and accessories, with the serial numbers we hold.",
+        "Opens the full list of what's assigned to you, with the serial numbers we hold.",
       side: "bottom",
       align: "end",
     },
@@ -142,16 +142,16 @@ export const homeTour: TourDefinition = {
       anchors: ['[data-tour="home-recent-requests"]'],
       title: "Keeping track",
       description:
-        "The last few things you've asked for. Select any one to open it in the full request log.",
+        "Everything you've asked for that's still on its way, and who has it right now. Select one to see its whole route.",
       side: "top",
       required: true,
     },
     {
       id: "statuses",
       anchors: ['[data-tour="home-status-badge"]', '[data-tour="home-stats"]'],
-      title: "Where a request has got to",
+      title: "How it ended",
       description:
-        "The badge tells you the stage — waiting on an approver, with IT, on its way, or ready to collect. You'll be emailed as it moves.",
+        "Finished requests keep their outcome — collected, returned, or turned down and why. You'll be emailed as each one moves.",
       side: "left",
       copyByAnchor: {
         '[data-tour="home-stats"]': {
@@ -160,14 +160,6 @@ export const homeTour: TourDefinition = {
             "These count what's in flight, what's landed and what was turned down. Select one to see just those.",
         },
       },
-    },
-    {
-      id: "feedback",
-      anchors: ['[data-tour="home-feedback"]', '[data-tour="home-quick-links"]'],
-      title: "Tell us how it's going",
-      description:
-        "Anonymous, and genuinely read — it's how this gets better. There's also a link in the footer of every page.",
-      side: "top",
     },
     {
       id: "tour-button",

@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import { invalidate } from "@/api/queryClient";
+import { invalidate, queryClient } from "@/api/queryClient";
 import type {
   StandardModelsConfig,
   StockKeeperEntry,
@@ -212,4 +212,28 @@ export async function setLoanConfig(
     devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
   };
+}
+
+///  +-----------------------------------------------------------------+
+///  |                         SITE COLOURS                            |
+///  +-----------------------------------------------------------------+
+//
+//  locationId → "#rrggbb", set by admins. Readable by everyone: every page
+//  that names a site draws its dot.
+
+export type SiteColours = Record<string, string>;
+
+export async function getSiteColours(): Promise<SiteColours> {
+  const data = await apiFetch<{ colours: SiteColours }>("/api/settings/site-colours");
+  return data.colours ?? {};
+}
+
+/** Set one site's colour, or clear it with null. Admin only. */
+export async function setSiteColour(locationId: number, colour: string | null): Promise<SiteColours> {
+  const data = await apiFetch<{ colours: SiteColours }>("/api/settings/site-colours", {
+    method: "PUT",
+    body: { locationId, colour },
+  });
+  queryClient.setQueryData(["reference", "site-colours"], data.colours);
+  return data.colours;
 }

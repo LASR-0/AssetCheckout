@@ -31,22 +31,37 @@ const ACCENT_BG: Record<Accent, string> = {
   id4: "bg-id4",
 };
 
-export function Dot({ accent, className }: { accent: Accent; className?: string }) {
+type DotProps = {
+  accent?: Accent;
+  /** A colour from data rather than the theme (a site's admin-set colour).
+   *  Wins over `accent`; with neither, the dot is neutral. */
+  colour?: string | null;
+  className?: string;
+};
+
+export function Dot({ accent, colour, className }: DotProps) {
   return (
     <span
       aria-hidden
-      className={cn("size-1.75 shrink-0 rounded-full", ACCENT_BG[accent], className)}
+      style={colour ? { background: colour } : undefined}
+      className={cn(
+        "size-1.75 shrink-0 rounded-full",
+        colour ? null : accent ? ACCENT_BG[accent] : "bg-strong",
+        className
+      )}
     />
   );
 }
 
 type IdentityPillProps = ComponentProps<"span"> & {
   accent?: Accent;
+  /** See Dot: a colour from data, e.g. a site's. */
+  colour?: string | null;
   /** Shown instead of a dot, e.g. location_on for a site. */
   icon?: string;
 };
 
-export function IdentityPill({ accent, icon, className, children, ...props }: IdentityPillProps) {
+export function IdentityPill({ accent, colour, icon, className, children, ...props }: IdentityPillProps) {
   return (
     <span
       className={cn(
@@ -55,7 +70,7 @@ export function IdentityPill({ accent, icon, className, children, ...props }: Id
       )}
       {...props}
     >
-      {accent && <Dot accent={accent} />}
+      {(accent || colour !== undefined) && <Dot accent={accent} colour={colour} />}
       {icon && <Icon name={icon} size={14} weight={300} />}
       {children}
     </span>

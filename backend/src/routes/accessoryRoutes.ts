@@ -12,6 +12,7 @@ import {
   setStandardAccessoriesForCategory,
   getAccessoryOptions,
   getRequestableAccessoryCategoryIdsForAssetCategories,
+  getAssetAccessoryCategoryMap,
   type AccessoryOptionConfig,
 } from "../services/settings.js";
 import { getActorName, getActorEmail, isAdminEmail } from "../config/auth.js";
@@ -358,12 +359,21 @@ router.get("/categories/for-me", async (req, res, next) => {
     }
 
     const assetCategoryIds = await getUserAssetCategoryIds(user.id);
-    const allowedIds =
-      await getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds);
+    const [allowedIds, map] = await Promise.all([
+      getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds),
+      getAssetAccessoryCategoryMap(),
+    ]);
 
     const allowedSet = new Set(allowedIds);
     const allCategories = await getAllAccessoryCategories();
-    const categories = allCategories.filter((c) => allowedSet.has(c.id));
+    // unlockedBy: which of THIS person's asset categories open each one up,
+    // so Home can say what an accessory is for ("For your laptop").
+    const categories = allCategories
+      .filter((c) => allowedSet.has(c.id))
+      .map((c) => ({
+        ...c,
+        unlockedBy: assetCategoryIds.filter((a) => map[String(a)]?.includes(c.id)),
+      }));
 
     res.json({ success: true, categories });
   } catch (err) {

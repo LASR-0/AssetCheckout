@@ -120,6 +120,8 @@ const LOAN_MAX_DAYS_KEY = "loan_max_days";
 // Stock keepers chapter
 const STOCK_KEEPERS_KEY = "stock_keepers";
 const STOCK_KEEPER_FLOW_CUTOVER_KEY = "stock_keeper_flow_enabled_at";
+// Site colours
+const SITE_COLOURS_KEY = "site_colours";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  DEFAULTS REGISTRY + SEEDING                    |
@@ -627,6 +629,14 @@ const SETTING_DEFAULTS: SettingDefault[] = [
     defaultValue: "",
     description:
       "JSON object mapping Snipe-IT LOCATION IDs → up to 3 stock keepers, each { userId, name, email }. Stock keepers mark requests ready to collect at their site. Empty string means no site has an assigned keeper, which leaves admins covering every location.",
+  },
+
+  // ---- Site colours ----
+  {
+    key: SITE_COLOURS_KEY,
+    defaultValue: "",
+    description:
+      "JSON object mapping Snipe-IT LOCATION IDs → a #RRGGBB colour, drawn as that site's dot wherever a request names its site. Set by admins in Settings; a site without one gets a neutral dot.",
   },
 ];
 
@@ -1778,4 +1788,55 @@ export function isLegacyShipment(
   if (request.shippedAt === null) return false;
   if (request.collectionReadyAt !== null) return false;
   return request.shippedAt < cutover;
+}
+
+///  +-----------------------------------------------------------------+
+///  |                         SITE COLOURS                            |
+///  +-----------------------------------------------------------------+
+//
+//  A colour per Snipe location, so a site reads the same everywhere a
+//  request names it. Admin-set rather than part of the theme: sites are
+//  whatever this organisation's Snipe-IT holds, so no palette can know them
+//  in advance. Readable by everyone, since every page that names a site
+//  draws its dot.
+///  +-----------------------------------------------------------------+
+
+export type SiteColours = Record<string, string>;
+
+const HEX_COLOUR = /^#[0-9a-f]{6}$/i;
+
+/** locationId → "#rrggbb". `{}` when unset; malformed entries are dropped. */
+export async function getSiteColours(): Promise<SiteColours> {
+  const raw = await getSetting(SITE_COLOURS_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    const cleaned: SiteColours = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (/^\d+$/.test(key) && typeof value === "string" && HEX_COLOUR.test(value)) {
+        cleaned[key] = value.toLowerCase();
+      }
+    }
+    return cleaned;
+  } catch {
+    return {};
+  }
+}
+
+/** Set one site's colour, or clear it with null. Throws 400 on a bad colour. */
+export async function setSiteColour(
+  locationId: number,
+  colour: string | null,
+  actorEmail: string
+): Promise<SiteColours> {
+  if (colour !== null && !HEX_COLOUR.test(colour)) {
+    throw new AppError("colour must be a #RRGGBB hex value", 400);
+  }
+  const colours = await getSiteColours();
+  const key = String(locationId);
+  if (colour === null) delete colours[key];
+  else colours[key] = colour.toLowerCase();
+  await setSetting(SITE_COLOURS_KEY, JSON.stringify(colours), actorEmail);
+  return colours;
 }

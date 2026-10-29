@@ -64,10 +64,13 @@ type RouteRailProps = {
   route: Route;
   /** Hide the current station's label (when the row says it elsewhere). */
   hideLabel?: boolean;
+  /** A fixed width per station (e.g. "0.875rem" on Home's phone cards)
+   *  instead of sharing the available width. */
+  stationWidth?: string;
   className?: string;
 };
 
-export function RouteRail({ route, hideLabel, className }: RouteRailProps) {
+export function RouteRail({ route, hideLabel, stationWidth, className }: RouteRailProps) {
   const n = route.stations.length;
   const cur = Math.min(route.current, n - 1);
   const showLabel = !hideLabel && !route.finished;
@@ -76,7 +79,10 @@ export function RouteRail({ route, hideLabel, className }: RouteRailProps) {
       role="img"
       aria-label={describe(route)}
       className={cn("grid min-w-0 items-center gap-y-1.5", className)}
-      style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))`, gridTemplateRows: "0.75rem auto" }}
+      style={{
+        gridTemplateColumns: `repeat(${n}, ${stationWidth ?? "minmax(0, 1fr)"})`,
+        gridTemplateRows: showLabel ? "0.75rem auto" : "0.75rem",
+      }}
     >
       {route.stations.map((s, i) => {
         const phase = phaseOf(s, route);

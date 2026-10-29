@@ -19,6 +19,8 @@ import {
   getLoanDevices,
   getLoanMaxDays,
   setLoanMaxDays,
+  getSiteColours,
+  setSiteColour,
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 import { saveLoanDevices } from "../services/loan.js";
@@ -357,6 +359,42 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 
     const config = await getStockKeepers();
     res.json({ config, maxPerLocation: MAX_STOCK_KEEPERS_PER_LOCATION });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                        SITE COLOURS                             |
+///  +-----------------------------------------------------------------+
+//
+//  Read by everyone (every page that names a site draws its dot); written
+//  by admins only.
+///  +-----------------------------------------------------------------+
+
+router.get("/site-colours", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ colours: await getSiteColours() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/site-colours", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { locationId, colour } = req.body ?? {};
+    if (typeof locationId !== "number" || !Number.isFinite(locationId) || locationId <= 0) {
+      return res.status(400).json({ error: "locationId must be a positive number" });
+    }
+    if (colour !== null && typeof colour !== "string") {
+      return res.status(400).json({ error: "colour must be a #RRGGBB string or null" });
+    }
+
+    // Throws 400 on a malformed colour — surfaced by the error middleware.
+    const colours = await setSiteColour(locationId, colour, getActorEmail(req));
+    res.json({ colours });
   } catch (err) {
     next(err);
   }

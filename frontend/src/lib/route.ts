@@ -417,6 +417,29 @@ export type Holder = {
   icon: string;
 };
 
+/** Which role holds a step. */
+export function stepHolder(key: StepKey): HolderRole {
+  return STEPS[key].holder;
+}
+
+/**
+ * Who a step is waiting on, as a short name: under a future station in the
+ * chain ("IT", "Perth stock keeper", "You").
+ */
+export function stationHolder(r: Request, key: StepKey, viewer: Viewer): string {
+  const site = r.userLocationName?.trim();
+  switch (STEPS[key].holder) {
+    case "manager":
+      return isApprover(r, viewer.userId, viewer.name) ? "You" : r.manager ?? "Manager";
+    case "it":
+      return "IT";
+    case "keeper":
+      return site ? `${site} stock keeper` : "Stock keeper";
+    case "requestee":
+      return isRequestee(r, viewer.userId, viewer.name) ? "You" : r.userName;
+  }
+}
+
 /** Who holds the request now, worded for this viewer. Null once it's over. */
 export function holderOf(r: Request, route: Route, viewer: Viewer): Holder | null {
   if (!route.step) return null;

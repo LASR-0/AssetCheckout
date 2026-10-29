@@ -11,9 +11,11 @@
 //  of Greenwich and is exactly the off-by-one lib/stage.ts guards against.
 ///  +-----------------------------------------------------------------+
 
-const SHORT = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" });
-const SHORT_UTC = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", timeZone: "UTC" });
-const LONG = new Intl.DateTimeFormat("en-AU", { weekday: "long", day: "numeric", month: "long" });
+// Three letters, always. Intl's en-AU abbreviations are "June", "July" and
+// "Sept", which the designs (and a narrow column) don't want.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAY = new Intl.DateTimeFormat("en-AU", { weekday: "long" });
+const DAY_MONTH = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "long" });
 
 function parse(iso: string | null | undefined): Date | null {
   if (!iso) return null;
@@ -24,16 +26,16 @@ function parse(iso: string | null | undefined): Date | null {
 /** An event, in the viewer's timezone: "26 Oct". Empty for no date. */
 export function shortDate(iso: string | null | undefined): string {
   const d = parse(iso);
-  return d ? SHORT.format(d) : "";
+  return d ? `${d.getDate()} ${MONTHS[d.getMonth()]}` : "";
 }
 
 /** A picked calendar day (due date, start date): "3 Nov". */
 export function dayDate(iso: string | null | undefined): string {
   const d = parse(iso);
-  return d ? SHORT_UTC.format(d) : "";
+  return d ? `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}` : "";
 }
 
-/** "Monday, 26 October". */
+/** "Monday, 26 October". Composed, because en-AU drops the comma. */
 export function longDate(date: Date): string {
-  return LONG.format(date);
+  return `${WEEKDAY.format(date)}, ${DAY_MONTH.format(date)}`;
 }

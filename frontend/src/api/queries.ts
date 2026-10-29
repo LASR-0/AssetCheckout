@@ -18,6 +18,7 @@ import {
 import { getLoanDevices } from "@/api/loans";
 import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
 import { getTroubleshootingConfig, getTroubleshootingSubjects } from "@/api/troubleshooting";
+import { getLoanConfig, getSiteColours } from "@/api/settings";
 import type { Request } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
@@ -211,6 +212,21 @@ export const companiesQuery = queryOptions({
 export const statusesQuery = queryOptions({
   queryKey: ["reference", "statuses"],
   queryFn: ({ signal }) => getStatuses(signal),
+  staleTime: REFERENCE,
+});
+
+/** Admin-set dot colour per site (Snipe location id → "#rrggbb"). */
+export const siteColoursQuery = queryOptions({
+  queryKey: ["reference", "site-colours"],
+  queryFn: () => getSiteColours(),
+  staleTime: REFERENCE,
+  gcTime: PERSISTED_GC,
+});
+
+/** Loanable devices and the longest loan, as Settings configures them. */
+export const loanConfigQuery = queryOptions({
+  queryKey: ["loans", "config"],
+  queryFn: () => getLoanConfig(),
   staleTime: REFERENCE,
 });
 

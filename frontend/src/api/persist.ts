@@ -4,6 +4,7 @@ import type { Query } from "@tanstack/react-query";
 import {
   assetCategoriesQuery,
   locationsQuery,
+  siteColoursQuery,
   troubleshootingConfigQuery,
   troubleshootingSubjectsQuery,
   PERSISTED_GC,
@@ -27,7 +28,7 @@ import {
 ///  +-----------------------------------------------------------------+
 
 const PERSISTED = new Set(
-  [assetCategoriesQuery, locationsQuery, troubleshootingConfigQuery, troubleshootingSubjectsQuery].map((q) =>
+  [assetCategoriesQuery, locationsQuery, siteColoursQuery, troubleshootingConfigQuery, troubleshootingSubjectsQuery].map((q) =>
     JSON.stringify(q.queryKey)
   )
 );
