@@ -9,7 +9,7 @@ import ShipDialog from "@/components/dialogs/ShipDialog";
 import { getRequests, markRequestSeen } from "@/api/requests";
 import { getPriceAverages, getTiers } from "@/api/analytics";
 import type { Request } from "@/types/requestType";
-import { deriveStage, isDoneStage } from "@/components/ui/statusbadge";
+import { deriveStage, isDoneStage } from "@/lib/stage";
 import {
   getColumnVisibility,
   isApprover,
@@ -32,7 +32,7 @@ import SetStartDateDialog from "@/components/dialogs/SetStartDateDialog";
 import ConfirmActionDialog from "@/components/dialogs/ConfirmActionDialog";
 import AssignLoanDialog from "@/components/dialogs/AssignLoanDialog";
 import { returnLoan } from "@/api/loans";
-import { isReturnable } from "@/components/ui/statusbadge";
+import { isReturnable } from "@/lib/stage";
 import EnterSelfProcuredDetailsDialog from "@/components/dialogs/EnterSelfProcuredDetailsDialog";
 import ReviewSelfProcuredDialog from "@/components/dialogs/ReviewSelfProcuredDialog";
 import { skipQuote } from "@/api/quotes";

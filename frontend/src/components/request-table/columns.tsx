@@ -13,12 +13,8 @@ import {
 } from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { ReasonCell } from "@/components/request-table/FormatReason";
-import {
-  StatusBadge,
-  deriveFulfilment,
-  deriveStage,
-  isReturnable,
-} from "@/components/ui/statusbadge";
+import { StatusBadge } from "@/components/ui/statusbadge";
+import { deriveFulfilment, deriveStage, isReturnable } from "@/lib/stage";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Role, StockKeeperLocation } from "@/types/authType";
 

@@ -1,12 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseReason } from "@/lib/reason";
 
-type ParsedReason = {
-  rejected?: string;
-  request?: string;
-  plain?: string;
-};
 
 /**
  * Longest run of non-space characters we allow through. The reason column is
@@ -31,16 +27,6 @@ function truncateLongTokens(text: string): string {
     token.length > MAX_TOKEN ? token.slice(0, MAX_TOKEN - 1) + "\u2026" : token
   );
 }
-
-export const parseReason = (text?: string): ParsedReason | null => {
-  if (!text?.trim()) return null;
-
-  const rejected = text.match(/REJECTED\s*:?\s*([\s\S]*?)(?=REQUEST|$)/)?.[1]?.trim();
-  const request = text.match(/REQUEST\s*:?\s*([\s\S]*)$/)?.[1]?.trim();
-
-  if (!rejected && !request) return { plain: text.trim() };
-  return { rejected, request };
-};
 
 export const ReasonCell = ({ text }: { text?: string }) => {
   const parsed = parseReason(text);

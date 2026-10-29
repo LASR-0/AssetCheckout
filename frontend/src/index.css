@@ -1,5 +1,10 @@
 @import "tailwindcss";
-@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource-variable/urbanist";
+@import "@fontsource-variable/martian-mono";
+@import "./styles/tokens.css";
 
 
 @layer base {
@@ -303,9 +308,6 @@
 
 
 @theme {
-
-  --font-sans: "Figtree Variable", system-ui, sans-serif;
-  /* --font-mono: "JetBrains Mono Variable", monospace; */
 
   --color-twilight-purple: rgb(var(--primary));
   --color-midnight-purple: rgb(var(--twilight-purple));

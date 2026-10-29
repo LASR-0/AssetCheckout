@@ -10,7 +10,7 @@ import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
 import { getLocations } from "@/api/snipe";
 import RequestsPagination from "@/components/request-table/RequestPagination";
 import { getRequests } from "@/api/requests";
-import { deriveFulfilment, isReturnable } from "@/components/ui/statusbadge";
+import { deriveFulfilment, isReturnable } from "@/lib/stage";
 import { canActAsStockKeeper } from "@/lib/permissions";
 import CountBadge from "@/components/ui/countbadge";
 import { iconForCategory } from "@/lib/categoryIcon";

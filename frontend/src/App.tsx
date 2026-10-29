@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import RequestFormPage from "@/pages/RequestFormPage";
 import AccessoryRequestFormPage from "@/pages/AccessoryFormPage";
@@ -19,6 +19,11 @@ import { TROUBLESHOOTING_ROUTES } from "./lib/troubleshootingRoutes";
 import Footer from "./components/footer/Footer";
 import { syncOrgPreset } from "./hooks/usePreset";
 import TourProvider from "./components/tour/TourProvider";
+import { ToastProvider } from "./components/ui/toast";
+
+// Dev-only component gallery for the redesign. The DEV check is a build-time
+// constant, so in production both this import and its route are dropped.
+const UiGallery = import.meta.env.DEV ? lazy(() => import("./pages/dev/UiGallery")) : null;
 
 function App() {
   // Once, at boot. The palette the org defaults to has to reach everybody, and
@@ -32,6 +37,7 @@ function App() {
     // Above the navbar and the routes both, because the tour button and the
     // page have to agree on which tour applies here — see TourProvider.
     <TourProvider>
+      <ToastProvider>
       <Navbar />
       <div className="pt-16">
         <Routes>
@@ -95,10 +101,14 @@ function App() {
             <ProtectedRoute requireRole={false}><TroubleshootingArticlePage /></ProtectedRoute>
           } />
           <Route path="/no-access" element={<NoAccessPage />} />
+          {UiGallery && (
+            <Route path="/dev/ui" element={<Suspense fallback={null}><UiGallery /></Suspense>} />
+          )}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
       <Footer />
+      </ToastProvider>
     </TourProvider>
   );
 }

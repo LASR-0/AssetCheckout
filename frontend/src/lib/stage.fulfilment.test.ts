@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveFulfilment } from "./statusbadge";
+import { deriveFulfilment } from "./stage";
 
 ///  +-----------------------------------------------------------------+
 ///  |        THE TWO FULFILMENT PATHS NOW CONVERGE                    |

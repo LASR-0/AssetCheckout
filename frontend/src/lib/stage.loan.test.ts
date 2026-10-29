@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveLoanStage, deriveFulfilment, deriveStage, isDoneStage, isReturnable } from "./statusbadge";
+import { deriveLoanStage, deriveFulfilment, deriveStage, isDoneStage, isReturnable } from "./stage";
 
 ///  +-----------------------------------------------------------------+
 ///  |            A LOAN DOES NOT END WHEN IT IS COLLECTED             |

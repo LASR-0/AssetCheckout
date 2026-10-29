@@ -2,25 +2,9 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
-import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
-
-///  +-----------------------------------------------------------------+
-///  |            SHADCN'S TOKENS DO NOT EXIST IN THIS APP              |
-///  +-----------------------------------------------------------------+
-//
-//  --popover, --accent, --muted-foreground, --border, --input and --ring all
-//  live in App.css, which main.tsx never imports; only index.css is loaded. So
-//  `bg-popover`, `text-popover-foreground` and `focus:bg-accent` generated NO
-//  CSS at all, and the menu rendered as a transparent panel with no border and
-//  no highlight — you read the page straight through the open dropdown, and the
-//  hovered row looked identical to the rest.
-//
-//  Every SelectContent in the app happened to pass its own panel classes (see
-//  SELECT_CONTENT in BlockRow and ScheduledJobRow), which is why this was only
-//  visible on a bare <SelectContent>. Spelling the defaults in the app's own
-//  tokens means the component is correct on its own; tailwind-merge still lets
-//  those call sites override it. Same swap BlockRow documents for the menus.
-///  +-----------------------------------------------------------------+
+import { Icon } from "@/components/ui/icon"
+import { fieldVariants } from "@/components/ui/variants"
+import { FLOATING_SURFACE, MENU_ROW } from "@/components/ui/surface"
 
 function Select({
   ...props
@@ -35,7 +19,7 @@ function SelectGroup({
   return (
     <SelectPrimitive.Group
       data-slot="select-group"
-      className={cn("scroll-my-1 p-1", className)}
+      className={cn("scroll-my-1", className)}
       {...props}
     />
   )
@@ -47,35 +31,29 @@ function SelectValue({
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
+/** Drawn as a field, so it lines up with inputs of the same size. */
 function SelectTrigger({
   className,
-  size = "default",
+  size = "md",
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
-  size?: "sm" | "default"
+  size?: "md" | "lg"
 }) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
-      data-size={size}
       className={cn(
-        // No focus ring. The stock shadcn classes were `focus-visible:ring-3
-        // focus-visible:ring-ring/50`, but --ring isn't defined in index.css
-        // (it lives in App.css, which main.tsx doesn't import), so the colour
-        // half compiled to nothing and the width half fell back to Tailwind's
-        // `var(--tw-ring-color, currentcolor)` — a ring in whatever text colour
-        // happened to be in scope. Same for the aria-invalid ring below.
-        // Removed rather than set to ring-0: a zero-width ring with a dead
-        // colour class next to it just hides the problem.
-        "flex w-fit items-center justify-between gap-1.5 rounded-lg border border-outline bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-error data-placeholder:text-info-light data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        fieldVariants({ size }),
+        "flex cursor-pointer items-center justify-between gap-2 text-left whitespace-nowrap select-none data-placeholder:text-placeholder data-[state=open]:border-brand data-[state=open]:shadow-[0_0_0_3px_var(--brand-sub)] *:data-[slot=select-value]:truncate",
+        size === "md" ? "h-9 pr-2" : "h-11 pr-2.5",
         className
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="pointer-events-none size-4 text-info-light" />
+        <Icon name="expand_more" size={18} className="text-mut" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -85,7 +63,7 @@ function SelectContent({
   className,
   children,
   position = "popper",
-  align = "center",
+  align = "start",
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
@@ -93,14 +71,9 @@ function SelectContent({
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
-        data-align-trigger={position === "item-aligned"}
         className={cn(
-          // Ring dropped here too — the panel's edge comes from the border the
-          // consumer passes (SELECT_CONTENT in ScheduledJobRow) plus the
-          // shadow, so the hairline ring was only ever doubling it up.
-          "relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border border-outline bg-surface-container-lowest text-on-surface shadow-md duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          position === "popper" &&
-            "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          FLOATING_SURFACE,
+          "relative max-h-(--radix-select-content-available-height) min-w-36 overflow-hidden",
           className
         )}
         position={position}
@@ -112,7 +85,7 @@ function SelectContent({
         <SelectPrimitive.Viewport
           data-position={position}
           className={cn(
-            "max-h-56 overflow-y-auto p-1",
+            "max-h-70 p-1",
             "data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)"
           )}
         >
@@ -131,7 +104,10 @@ function SelectLabel({
   return (
     <SelectPrimitive.Label
       data-slot="select-label"
-      className={cn("px-1.5 py-1 text-xs text-info-light", className)}
+      className={cn(
+        "px-2.5 pt-2 pb-1 font-title fs-10 font-medium tracking-label text-mut uppercase",
+        className
+      )}
       {...props}
     />
   )
@@ -145,15 +121,12 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
-      className={cn(
-        "relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-surface-container-low focus:text-on-background data-[highlighted]:bg-surface-container-low data-[highlighted]:text-on-background data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
-        className
-      )}
+      className={cn(MENU_ROW, "pr-8 data-[state=checked]:font-medium", className)}
       {...props}
     >
-      <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
+      <span className="pointer-events-none absolute right-2 flex items-center justify-center text-brand">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="pointer-events-none" />
+          <Icon name="check" size={16} />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
@@ -168,7 +141,7 @@ function SelectSeparator({
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn("pointer-events-none -mx-1 my-1 h-px bg-outline", className)}
+      className={cn("pointer-events-none -mx-1 my-1 h-px bg-line2", className)}
       {...props}
     />
   )
@@ -181,14 +154,10 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up-button"
-      className={cn(
-        "z-10 flex cursor-default items-center justify-center bg-surface-container-lowest py-1 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn("flex cursor-default items-center justify-center py-1 text-mut", className)}
       {...props}
     >
-      <ChevronUpIcon
-      />
+      <Icon name="expand_less" size={16} />
     </SelectPrimitive.ScrollUpButton>
   )
 }
@@ -200,14 +169,10 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down-button"
-      className={cn(
-        "z-10 flex cursor-default items-center justify-center bg-surface-container-lowest py-1 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn("flex cursor-default items-center justify-center py-1 text-mut", className)}
       {...props}
     >
-      <ChevronDownIcon
-      />
+      <Icon name="expand_more" size={16} />
     </SelectPrimitive.ScrollDownButton>
   )
 }

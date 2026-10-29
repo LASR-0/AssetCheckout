@@ -38,25 +38,12 @@ import {
 //  context; `size="normal"` matches the dialog form input.
 ///  +-----------------------------------------------------------------+
 
-// No ring classes on either half. The field used to carry `!ring-purple-900`,
-// which did nothing on its own — it set --tw-ring-color while ComboboxChips
-// supplied the width via `focus-within:ring-3`. Together they were the purple
-// focus ring. The width is gone from the primitive now, so the content
-// classes' `!outline-0 !ring-0` overrides have nothing left to suppress.
-const INPUT_CLASS_NORMAL =
-  "text-on-surface-variant bg-surface-container-low/30 p-2 h-12 border-1 !border-outline w-full";
-const INPUT_CLASS_COMPACT =
-  "text-on-surface-variant bg-surface-container-low/30 border border-outline px-2 py-1.5 text-sm w-full";
+// "normal" is the requester/dialog form scale (44 design px), "compact" the
+// operator scale (36) used inside settings rows and popovers.
+const FIELD_SIZE = { normal: "lg", compact: "md" } as const;
 
-const CONTENT_CLASS_NORMAL =
-  "bg-surface !border-1 !border-outline !text-info-light mt-3 hover:cursor-pointer";
-const CONTENT_CLASS_COMPACT =
-  "bg-surface !border-1 !border-outline mt-2 hover:cursor-pointer";
-
-const ITEM_CLASS_NORMAL =
-  "hover:cursor-pointer hover:text-shadcn-text hover:bg-shadcn-background";
-const ITEM_CLASS_COMPACT =
-  "hover:cursor-pointer hover:text-shadcn-text hover:bg-shadcn-background text-sm";
+/** Keys the combobox handles itself; they must not reach a surrounding form. */
+const OWN_KEYS = new Set(["Enter", "ArrowDown", "ArrowUp", "Home", "End"]);
 
 type Size = "normal" | "compact";
 
@@ -104,9 +91,6 @@ export default function ComboboxField({
   disabledValues,
   keyHint,
 }: Props) {
-  const inputClass = size === "compact" ? INPUT_CLASS_COMPACT : INPUT_CLASS_NORMAL;
-  const contentClass = size === "compact" ? CONTENT_CLASS_COMPACT : CONTENT_CLASS_NORMAL;
-  const itemClass = size === "compact" ? ITEM_CLASS_COMPACT : ITEM_CLASS_NORMAL;
 
   // Bake the synthetic top into the items list so the combobox can find it
   // via its internal search. Distinct render branch in the list iterator
@@ -122,25 +106,25 @@ export default function ComboboxField({
     >
       <ComboboxInput
         disabled={disabled}
-        className={inputClass}
+        size={FIELD_SIZE[size]}
+        className="w-full"
         placeholder={placeholder}
         onKeyDown={(e) => {
-          if (e.key === "Enter", "ArrowDown", "ArrowUp", "Home", "End") e.stopPropagation();
+          if (OWN_KEYS.has(e.key)) e.stopPropagation();
         }}
       />
-      <ComboboxContent className={contentClass} style={{ pointerEvents: "auto" }}>
+      <ComboboxContent style={{ pointerEvents: "auto" }}>
         <ComboboxEmpty>No results</ComboboxEmpty>
         <ComboboxList>
           {(name: string) => {
             if (syntheticTop && name === syntheticTop.label) {
               return (
                 <ComboboxItem
-                  className={itemClass}
                   key={`__synthetic__${name}`}
                   value={name}
                   onClick={() => syntheticTop.onSelect()}
                 >
-                  <span className="italic text-info-light">{name}</span>
+                  <span className="text-mut italic">{name}</span>
                 </ComboboxItem>
               );
             }
@@ -148,7 +132,6 @@ export default function ComboboxField({
             const isDisabled = disabledValues?.has(name) ?? false;
             return (
               <ComboboxItem
-                className={itemClass}
                 key={name}
                 value={name}
                 disabled={isDisabled}

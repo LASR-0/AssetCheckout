@@ -10,12 +10,13 @@ function RadioGroup({
   return (
     <RadioGroupPrimitive.Root
       data-slot="radio-group"
-      className={cn("grid w-full gap-2", className)}
+      className={cn("grid w-full gap-1.5", className)}
       {...props}
     />
   )
 }
 
+// 18 design px ring, 8px dot, brand when checked.
 function RadioGroupItem({
   className,
   ...props
@@ -24,21 +25,15 @@ function RadioGroupItem({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        "group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border outline-none transition-colors after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 focus-visible:ring-twilight-purple/40 disabled:cursor-not-allowed disabled:opacity-50 hover:cursor-pointer",
-        // Unselected: muted ring.
-        "border-input",
-        // Selected: bold primary-purple ring.
-        "data-checked:border-2 data-checked:border-twilight-purple",
+        "grid size-4.5 shrink-0 cursor-pointer place-items-center rounded-full border-[1.5px] border-strong bg-sheet transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand data-[state=checked]:border-brand disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       {...props}
     >
       <RadioGroupPrimitive.Indicator
         data-slot="radio-group-indicator"
-        className="flex size-4 items-center justify-center"
-      >
-        <span className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-twilight-purple" />
-      </RadioGroupPrimitive.Indicator>
+        className="size-2 rounded-full bg-brand"
+      />
     </RadioGroupPrimitive.Item>
   )
 }
