@@ -7,7 +7,7 @@ import {
   ResponsiveDialogFooter,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import Calendar from "@/components/ui/calendar";
-import { toDateString } from "@/components/loan-form/LoanWindowSection";
+import { toDateString } from "@/lib/format";
 import { setRequestStartDate } from "@/api/requests";
 import { formatStartLong, startDateToLocal } from "@/lib/startDate";
 import type { Request } from "@/types/requestType";
@@ -94,6 +94,7 @@ export default function SetStartDateDialog({ request, open, onOpenChange, onSave
         <div className="px-8 pt-6 flex flex-col items-center gap-3">
           <div className="rounded-xl border border-outline bg-surface-container-low">
             <Calendar
+              className="p-3"
               mode="single"
               selected={selected}
               onSelect={setSelected}

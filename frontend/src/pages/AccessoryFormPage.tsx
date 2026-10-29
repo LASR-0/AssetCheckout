@@ -1,414 +1,345 @@
-import { useState, useEffect } from "react";
-import { invalidateWorkflow } from "@/api/queries";
-import { queryClient } from "@/api/queryClient";
-import { usersQuery } from "@/api/queries";
-import AccessoryTypeSelector from "@/components/accessory-form/AccessoryTypeSelector";
-import AccessoryOptionsSection from "@/components/accessory-form/AccessoryOptionSection";
-import ApprovalInput from "@/components/request-form/ApprovalInput";
-import SpecLevelToggle from "@/components/request-form/SpecLevelToggle";
-import UserDetailsInput from "@/components/request-form/UserDetailsInput";
-import { getAccessoryCategoriesForUser, type AccessoryOptionChoice } from "@/api/accessories";
-import { apiFetch } from "@/api/client";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Icon } from "@/components/ui/icon";
+import { apiFetch } from "@/api/client";
+import {
+  accessoryCategoriesForUserQuery,
+  accessoryOptionsQuery,
+  allAssetCategoriesQuery,
+  holdingsQuery,
+  invalidateWorkflow,
+} from "@/api/queries";
+import type { AccessoryOptionChoice } from "@/api/accessories";
+import { iconForCategory } from "@/lib/categoryIcon";
+import { previewRoute } from "@/lib/formRoute";
 import type { User } from "@/components/request-form/UserSelect";
 import type { AccessoryCategory } from "@/types/accessoriesType";
-import { useAuth } from "@/hooks/useAuth";
+import { FormLayout, type FormError } from "@/components/forms/FormLayout";
+import { goToSection } from "@/components/forms/helpers";
+import { FieldError, FormSection, Question } from "@/components/forms/FormSection";
+import { ChoiceCard, OptionRows } from "@/components/forms/Choices";
+import { WhoFor, type ForMode } from "@/components/forms/WhoFor";
+import { ApprovalSection, SpecSection, type Spec } from "@/components/forms/sections";
+import { nounFor } from "@/components/forms/helpers";
+import { useDirectory } from "@/components/forms/useDirectory";
+import { submitErrorText } from "@/components/forms/submit";
 
 ///  +-----------------------------------------------------------------+
-///  |                 ACCESSORY REQUEST FORM PAGE                     |
+///  |                   REQUEST AN ACCESSORY                          |
 ///  +-----------------------------------------------------------------+
 //
-//  Clone of RequestFormPage for accessories. Device-driven: the requester
-//  is picked FIRST (section 1), and the accessory types shown in section 2
-//  are derived from the asset categories that user holds in Snipe (L3 ∩ L1)
-//  rather than the flat site-wide whitelist. Changing the requester refetches
-//  the available categories and clears the current pick.
+//  Device-driven, so WHO comes first: the accessory types offered are the
+//  ones that person's devices unlock (L3 ∩ L1, worked out by the server).
+//  Changing who it's for clears the type and option, since another person's
+//  devices unlock a different set.
 //
-//  Section 3 swaps the phone/number logic for the admin-configured option
-//  choice, and the whole phone/number model is absent from the payload.
+//  THE OPTION DECIDES THE SPEC. A named option is in the catalogue, so it is
+//  standard by definition; "Something else" is non-standard by definition.
+//  Only a category with no options configured leaves the choice free.
+//  A category with exactly one option picks it without asking.
 //
-//  Spec level follows the one-way implication pattern from the asset form's
-//  call&text → data: requestType stores the user's OWN choice; "Something
-//  else" locks the EFFECTIVE type to NON_STANDARD, and unpicking it restores
-//  the user's choice.
-//
-//  POST goes through apiFetch (identity headers) — the accessory create path
-//  is actor-gated, unlike the legacy asset POST.
+//  Non-standard accessories come out of the requester's department budget
+//  and the manager approves a quote, which is said up front here.
 ///  +-----------------------------------------------------------------+
 
-type FormState = {
-  userId: string;
-  userName: string;
-  categoryId: number;
-  categoryName: string;
-  requestType: "STANDARD" | "NON_STANDARD"; // user's own choice
-  reason: string;
-  preferredModel: string;
-  accessoryOptionId: string | null; // chosen option's stable id — what is submitted
-  accessoryOption: string | null;   // its label, for display and as a snapshot
-  somethingElse: boolean;         // escape hatch → locks NON_STANDARD
-  manager: string;
-  managerId: string;
-};
+const SOMETHING_ELSE = "__something_else__";
+const NO_CATEGORIES: AccessoryCategory[] = [];
+const NO_OPTIONS: AccessoryOptionChoice[] = [];
 
-const INITIAL_STATE: FormState = {
-  userId: "",
-  userName: "",
-  categoryId: 0,
-  categoryName: "",
-  requestType: "STANDARD",
-  reason: "",
-  preferredModel: "",
-  accessoryOptionId: null,
-  accessoryOption: null,
-  somethingElse: false,
-  manager: "",
-  managerId: "",
-};
+/** "For your laptop" / "For their laptops", from the categories that unlock it. */
+function fitsText(c: AccessoryCategory, names: Map<number, string>, forMe: boolean): string | null {
+  const nouns = [...new Set((c.unlockedBy ?? []).map((id) => nounFor(names.get(id))).filter(Boolean))];
+  if (nouns.length === 0) return null;
+  const list = nouns.length === 1 ? nouns[0] : `${nouns.slice(0, -1).join(", ")} or ${nouns.at(-1)}`;
+  return `For ${forMe ? "your" : "their"} ${list}`;
+}
 
 export default function AccessoryRequestFormPage() {
-  const [formState, setFormState] = useState<FormState>(INITIAL_STATE);
-  const [options, setOptions] = useState<AccessoryOptionChoice[]>([]);
-  const [formKey, setFormKey] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-
-  // Accessory categories derived from the selected user's devices (L3 ∩ L1).
-  const [accessoryCategories, setAccessoryCategories] = useState<AccessoryCategory[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
-
   const navigate = useNavigate();
-  const selectedRequester = users.find((u) => u.id === formState.userId) ?? null;
-  const selectedManager = users.find((u) => u.id === formState.managerId) ?? null;
-  const { email: authEmail } = useAuth();
-
-  // Home-page tiles can link here with ?categoryId= — validated and applied
-  // by AccessoryTypeSelector once the derived category list has loaded.
   const [searchParams] = useSearchParams();
   const preselectId = Number(searchParams.get("categoryId")) || null;
+  const { users, me } = useDirectory();
 
-  // The option choice decides the spec level; the toggle only shows it.
-  //
-  //   "Something else"  → NON_STANDARD. Nothing in the catalogue matches.
-  //   a named option    → STANDARD. It is in the catalogue by definition, so
-  //                       "non-standard" would be a contradiction.
-  //   neither picked    → the user's own choice stands.
-  //
-  // The two are mutually exclusive by construction (AccessoryOptionSection
-  // emits either (id, label, false) or (null, null, true)), so the order here
-  // is for readability rather than precedence.
-  //
-  // This is DERIVED rather than written into formState on selection: the
-  // user's own requestType is preserved untouched underneath, so clearing the
-  // option restores whatever they had chosen instead of silently rewriting it.
-  const hasNamedOption = !!formState.accessoryOptionId;
-  const effectiveRequestType = formState.somethingElse
-    ? "NON_STANDARD"
-    : hasNamedOption
-    ? "STANDARD"
-    : formState.requestType;
+  const [forMode, setForMode] = useState<ForMode>("me");
+  const [other, setOther] = useState<User | null>(null);
+  // Keyed by whom (and by category) so a change upstream drops the choice
+  // below it, without an effect to reset it.
+  const [pick, setPick] = useState<{ forId: string; cat: AccessoryCategory } | null>(null);
+  const [opt, setOpt] = useState<{ catId: number; value: string } | null>(null);
+  const [spec, setSpec] = useState<Spec>("STANDARD");
+  const [reason, setReason] = useState("");
+  const [model, setModel] = useState("");
+  const [approver, setApprover] = useState<User | null>(null);
+  const [tried, setTried] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  const requestee = forMode === "me" ? me : other;
+  const forMe = forMode === "me";
+  const autoApproved = !!me && !!requestee && requestee.managerId != null && requestee.managerId === Number(me.id);
 
-    if (!formState.userId) {
-      setError("Please select a requester.");
+  const available = useQuery({
+    ...accessoryCategoriesForUserQuery(requestee?.id ?? ""),
+    enabled: !!requestee,
+  });
+  const avail = requestee ? available.data ?? NO_CATEGORIES : NO_CATEGORIES;
+  const { data: assetCats } = useQuery(allAssetCategoriesQuery);
+  const assetNames = new Map((assetCats ?? []).map((c) => [c.id, c.name]));
+  const { data: myHoldings } = useQuery({ ...holdingsQuery, enabled: forMe });
+
+  const category =
+    (pick && requestee && pick.forId === requestee.id ? pick.cat : null) ??
+    (preselectId ? avail.find((c) => c.id === preselectId) ?? null : null);
+
+  const options = useQuery({ ...accessoryOptionsQuery(category?.id ?? 0), enabled: !!category });
+  const opts = category ? options.data ?? NO_OPTIONS : NO_OPTIONS;
+  const hasOpts = opts.length > 0;
+  const chosen =
+    (opt && category && opt.catId === category.id ? opt.value : null) ?? (opts.length === 1 ? opts[0].id : null);
+  const somethingElse = chosen === SOMETHING_ELSE;
+  const named = hasOpts && !!chosen && !somethingElse ? opts.find((o) => o.id === chosen) ?? null : null;
+  const effective: Spec = somethingElse ? "NON_STANDARD" : named ? "STANDARD" : spec;
+  const non = effective === "NON_STANDARD";
+
+  // ---- what's missing -------------------------------------------------
+  const errors: FormError[] = [];
+  if (!requestee) errors.push({ section: "who", message: "Please select a requester." });
+  else if (available.isSuccess && avail.length === 0)
+    errors.push({ section: "type", message: "No accessories are available based on this user's devices." });
+  else if (!category) errors.push({ section: "type", message: "Please pick an accessory type." });
+  if (category && hasOpts && !chosen) errors.push({ section: "opt", message: "Please pick an option." });
+  if (category && non && !reason.trim())
+    errors.push({
+      section: "spec",
+      message: somethingElse
+        ? "Please describe what you need in the reason."
+        : "Please provide a reason for the non-standard request.",
+    });
+  if (!approver) errors.push({ section: "appr", message: "Please select an approver." });
+  const errorFor = (section: string) => (tried ? errors.find((e) => e.section === section)?.message : undefined);
+
+  const showSpec = !!category && (!hasOpts || !!chosen);
+  const steps = [
+    { id: "who", label: "Who it's for", value: requestee?.name, done: !!requestee },
+    { id: "type", label: "Accessory type", value: category?.name, done: !!category },
+    ...(hasOpts
+      ? [{ id: "opt", label: "Option", value: somethingElse ? "Something else" : named?.label, done: !!chosen }]
+      : []),
+    {
+      id: "spec",
+      label: "Specification",
+      value: category ? (non ? "Non-standard" : "Standard") : null,
+      done: !!category && (!non || !!reason.trim()),
+    },
+    { id: "appr", label: "Approval", value: approver?.name, done: !!approver },
+  ].map((s) => ({ ...s, error: !!errorFor(s.id) }));
+
+  const route = previewRoute({
+    kind: "accessory",
+    nonStandard: non,
+    forMe,
+    forName: requestee?.name ?? null,
+    site: requestee?.locationName ?? null,
+    approverName: approver?.name ?? null,
+    autoApproved,
+    noun: null,
+    deviceName: null,
+    start: null,
+    end: null,
+  });
+
+  const whose = forMe ? "your" : requestee ? `${requestee.name.split(" ")[0]}'s` : "the requester's";
+  const has = forMe ? "you have" : requestee ? `${requestee.name.split(" ")[0]} has` : "";
+  const heldModels = forMe ? (myHoldings?.assets ?? []).map((a) => a.model?.trim()).filter(Boolean) : [];
+
+  async function submit() {
+    setTried(true);
+    if (errors.length > 0) {
+      goToSection(errors[0].section);
       return;
     }
-    if (!formState.categoryId) {
-      setError("Please select an accessory type.");
-      return;
-    }
-    if (!formState.managerId) {
-      setError("Please select an approver.");
-      return;
-    }
-    // if (formState.userId === formState.managerId) {
-    //   setError("Requester cannot be the same as the approver.");
-    //   return;
-    // }
-    // Only require a pick when this category actually offers choices.
-    if (
-      options.length > 0 &&
-      !formState.somethingElse &&
-      !formState.accessoryOptionId
-    ) {
-      setError("Please choose what you need.");
-      return;
-    }
-    if (effectiveRequestType === "NON_STANDARD" && !formState.reason.trim()) {
-      setError(
-        formState.somethingElse
-          ? "Please describe what you need in the reason."
-          : "Please provide a reason for the non-standard request."
-      );
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const payload = {
-      userId: formState.userId,
-      userName: formState.userName,
-      categoryId: formState.categoryId,
-      categoryName: formState.categoryName,
-      requestKind: "ACCESSORY",
-      requestType: effectiveRequestType,
-      // The id is the binding; the label rides along as the display snapshot.
-      accessoryOptionId: formState.somethingElse ? null : formState.accessoryOptionId,
-      accessoryOption: formState.somethingElse ? null : formState.accessoryOption,
-      // Both are non-standard-only fields, and the toggle hides them the moment
-      // the request resolves to STANDARD — so anything still sitting in state
-      // was typed before an option was picked and no longer describes the
-      // request. Sending it would put orphaned prose in the Reason column of a
-      // row whose reason is "it's the standard option".
-      reason: effectiveRequestType === "NON_STANDARD" ? formState.reason : "",
-      preferredModel:
-        effectiveRequestType === "NON_STANDARD" ? formState.preferredModel : "",
-      manager: formState.manager,
-      managerId: formState.managerId,
-    };
-
+    setSubmitting(true);
+    setSubmitError(null);
     try {
       const data = await apiFetch<{ request: unknown }>("/api/requests", {
         method: "POST",
-        body: payload,
-      });
-      void invalidateWorkflow();
-
-      navigate("/success", {
-        state: {
-          request: data.request,
+        body: {
+          userId: requestee!.id,
+          userName: requestee!.name,
+          categoryId: category!.id,
+          categoryName: category!.name,
+          requestKind: "ACCESSORY",
+          requestType: effective,
+          // The id is the binding; the label rides along as the snapshot.
+          accessoryOptionId: named?.id ?? null,
+          accessoryOption: named?.label ?? null,
+          // Non-standard-only fields. Anything typed before a named option
+          // was picked no longer describes the request, so it isn't sent.
+          reason: non ? reason : "",
+          preferredModel: non ? model : "",
+          manager: approver!.name,
+          managerId: approver!.id,
         },
       });
-
-      setFormKey((k) => k + 1);
-      resetForm();
-    } catch (err: any) {
-      console.error("ERROR:", err);
-      setError(err.message || "Something went wrong. Please try again.");
+      void invalidateWorkflow();
+      navigate("/success", { state: { request: data.request } });
+    } catch (err) {
+      setSubmitError(submitErrorText(err));
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
-  };
-
-  const resetForm = () => {
-    setFormState(INITIAL_STATE);
-    setOptions([]);
-    setAccessoryCategories([]);
-    setError(null);
-  };
-
-  useEffect(() => {
-    queryClient.fetchQuery(usersQuery).then((data) => {
-      const formatted = data.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone,
-        mobile: u.mobile,
-      })).sort((a, b) => a.name.localeCompare(b.name));
-      setUsers(formatted);
-    });
-  }, []);
-
-  // Default the requester to the signed-in user once the list is loaded.
-  useEffect(() => {
-    if (!authEmail || users.length === 0 || formState.userId) return;
-    const me = users.find(
-      (u) => u.email?.toLowerCase() === authEmail.toLowerCase()
-    );
-    if (me) {
-      setFormState((prev) => ({ ...prev, userId: me.id, userName: me.name }));
-    }
-  }, [authEmail, users, formState.userId]);
-
-  // Derive the accessory categories from the selected user's devices. Runs on
-  // every requester change: a different user's devices unlock a different set,
-  // so the current category/option pick is cleared before refetching.
-  useEffect(() => {
-    setFormState((prev) => ({
-      ...prev,
-      categoryId: 0,
-      categoryName: "",
-      accessoryOptionId: null,
-      accessoryOption: null,
-      somethingElse: false,
-    }));
-    setOptions([]);
-
-    if (!formState.userId) {
-      setAccessoryCategories([]);
-      setCategoriesError(null);
-      setCategoriesLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setCategoriesLoading(true);
-    setCategoriesError(null);
-    getAccessoryCategoriesForUser(formState.userId)
-      .then((cats) => {
-        if (!cancelled) setAccessoryCategories(cats);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setAccessoryCategories([]);
-          setCategoriesError("Couldn't load the accessories available for this user.");
-          console.error("Failed to load user-derived accessory categories", err);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setCategoriesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formState.userId]);
-
-  const accessoryEmptyMessage = !formState.userId
-    ? "Pick a requester above to see the accessories available for their devices."
-    : "No accessories are available based on this user's devices.";
+  }
 
   return (
-    <main className="min-h-screen bg-landing-bg text-on-background flex flex-col">
-      <div className="flex-grow my-24 pb-20 px-4 md:px-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="mb-10">
-            <div className="flex flex-row">
-              <span className="material-symbols-outlined mx-3 !text-4xl"> keyboard </span>
-              <h1 className="text-4xl font-bold text-nav-selected flex tracking-tight mb-2">Checkout Accessory</h1>
+    <FormLayout
+      kind="accessory"
+      title="Request an accessory"
+      intro="Pick who it's for first and we'll show the accessories that fit their devices."
+      steps={steps}
+      route={route}
+      pill={non ? { label: "Non-standard", accent: "id2" } : { label: "Standard", accent: "id1" }}
+      errors={errors}
+      tried={tried}
+      submitError={submitError}
+      submitting={submitting}
+      submitLabel="Send request"
+      onSubmit={submit}
+    >
+      <FormSection id="who" label="Who it's for">
+        <Question hint="The accessories we can offer depend on what this person already has.">
+          Who needs this accessory?
+        </Question>
+        <WhoFor
+          mode={forMode}
+          onMode={(m) => {
+            setForMode(m);
+            setSubmitError(null);
+          }}
+          me={me}
+          users={users}
+          other={other}
+          onOther={setOther}
+          invalid={!!errorFor("who")}
+        />
+        {forMe && heldModels.length > 0 && avail.length > 0 && (
+          <p className="m-0 flex items-start gap-1.5 fs-12 leading-[1.45] text-tx3">
+            <Icon name="devices" size={15} className="text-mut" />
+            <span>
+              You have {heldModels.length === 1 ? heldModels[0] : `${heldModels.slice(0, -1).join(", ")} and ${heldModels.at(-1)}`}.
+            </span>
+          </p>
+        )}
+        <FieldError>{errorFor("who")}</FieldError>
+      </FormSection>
+
+      <FormSection id="type" label="Accessory type">
+        {!requestee ? (
+          <p className="m-0 flex items-center gap-2 fs-12.5 text-tx3">
+            <Icon name="arrow_upward" size={17} className="text-mut" />
+            Pick a requester above to see the accessories available for their devices.
+          </p>
+        ) : available.isPending ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(9.375rem,1fr))] gap-2">
+            {[1, 2, 3].map((k) => (
+              <div key={k} className="h-23 rounded-10 bg-track" />
+            ))}
+          </div>
+        ) : available.isError ? (
+          <p className="m-0 flex items-center gap-2 fs-12.5 text-tx2">
+            <Icon name="cloud_off" size={18} className="text-mut" />
+            Couldn't load the accessories available for this person. Try again in a minute.
+          </p>
+        ) : avail.length === 0 ? (
+          <div className="flex flex-col gap-1">
+            <span className="fs-13.5 font-semibold">No accessories are available based on this user's devices.</span>
+            <span className="fs-12.5 leading-normal text-pretty text-tx3">
+              Accessories unlock from the devices someone holds. If {has} a device that isn't in our records, report it
+              from Home first.
+            </span>
+          </div>
+        ) : (
+          <>
+            <Question hint={`Based on the devices ${has}.`}>What do they need?</Question>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(9.375rem,1fr))] gap-2">
+              {avail.map((c) => (
+                <ChoiceCard
+                  key={c.id}
+                  selected={category?.id === c.id}
+                  icon={iconForCategory(c.name)}
+                  name={c.name}
+                  note={fitsText(c, assetNames, forMe)}
+                  onClick={() => {
+                    setPick({ forId: requestee.id, cat: c });
+                    setSubmitError(null);
+                  }}
+                />
+              ))}
             </div>
-            <p className="text-info-light ml-5">
-              Submit a request for a workplace accessory. Pick who it's for and
-              we'll show the accessories available for their devices.
-            </p>
-          </div>
+          </>
+        )}
+        <FieldError>{errorFor("type")}</FieldError>
+      </FormSection>
 
-          <div className="bg-surface-container-lowest rounded-xl p-8 shadow-md">
-            <form onSubmit={handleSubmit} key={formKey} className="space-y-10"
-            >
+      {category && hasOpts && (
+        <FormSection id="opt" label="Option" sheetClassName="gap-2">
+          <div className="mb-1 fs-13.5 font-semibold">Which one?</div>
+          <OptionRows
+            label="Which one?"
+            value={chosen}
+            onChange={(v) => setOpt({ catId: category.id, value: v })}
+            options={[
+              ...opts.map((o) => ({ value: o.id, label: o.label })),
+              { value: SOMETHING_ELSE, label: "Something else", sub: "Describe what you need in the reason below." },
+            ]}
+          />
+          <FieldError>{errorFor("opt")}</FieldError>
+        </FormSection>
+      )}
 
-              <UserDetailsInput
-                users={users}
-                value={selectedRequester}
-                label="1. User Details"
-                placeholder="Who needs this accessory?"
-                onSelected={(userID, userName) => {
-                  setFormState((prev) => ({ ...prev, userId: userID, userName }));
-                }}
-              />
+      {showSpec && (
+        <SpecSection
+          kind="accessory"
+          value={effective}
+          onChange={(v) => {
+            // Standard from "Something else" means going back to the list.
+            if (somethingElse && v === "STANDARD") setOpt(null);
+            else setSpec(v);
+          }}
+          lockedTo={named ? "STANDARD" : undefined}
+          hint={
+            named
+              ? "A listed option, from stock, so it's a standard request. Quickest to arrive."
+              : somethingElse
+                ? "“Something else” is always a non-standard request. Choose Standard to pick a listed option."
+                : non
+                  ? "Tell IT why the standard option won't do. It takes longer, because IT has to source it."
+                  : "The option you picked, from stock. Quickest to arrive."
+          }
+          reason={reason}
+          onReason={setReason}
+          model={model}
+          onModel={setModel}
+          error={errorFor("spec")}
+          budgetNote={
+            non
+              ? `Non-standard accessories are paid from ${whose} department budget, not IT's. ${approver?.name ?? "The manager"} will be asked to approve a quote before anything is ordered.`
+              : null
+          }
+        />
+      )}
 
-              <AccessoryTypeSelector
-                value={formState.categoryId}
-                categories={accessoryCategories}
-                loading={categoriesLoading}
-                error={categoriesError}
-                preselectId={preselectId}
-                emptyMessage={accessoryEmptyMessage}
-                onChange={(id, name) => {
-                  // Category change always resets the option decision —
-                  // no state carries over between accessory types.
-                  setFormState((prev) => ({
-                    ...prev,
-                    categoryId: id,
-                    categoryName: name,
-                    accessoryOptionId: null,
-                    accessoryOption: null,
-                    somethingElse: false,
-                  }));
-                }}
-              />
-
-              <AccessoryOptionsSection
-                categoryId={formState.categoryId}
-                selectedOptionId={formState.accessoryOptionId}
-                somethingElse={formState.somethingElse}
-                onChange={(selectedOptionId, selectedOptionLabel, somethingElse) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    accessoryOptionId: selectedOptionId,
-                    accessoryOption: selectedOptionLabel,
-                    somethingElse,
-                  }))
-                }
-                onOptionsLoaded={setOptions}
-              />
-
-              <SpecLevelToggle
-                value={effectiveRequestType}
-                reason={formState.reason}
-                preferredModel={formState.preferredModel}
-                lockedTo={
-                  formState.somethingElse
-                    ? "NON_STANDARD"
-                    : hasNamedOption
-                    ? "STANDARD"
-                    : undefined
-                }
-                lockedHint={
-                  formState.somethingElse
-                    ? '"Something else" is always a non-standard request.'
-                    : `${formState.accessoryOption} is a standard option, so this request is standard.`
-                }
-                onChange={(val) =>
-                  setFormState((prev) => ({ ...prev, requestType: val }))
-                }
-                onReasonChange={(val) =>
-                  setFormState((prev) => ({ ...prev, reason: val }))
-                }
-                onPreferredModelChange={(val) =>
-                  setFormState((prev) => ({ ...prev, preferredModel: val }))
-                }
-              />
-
-              <ApprovalInput
-                users={users}
-                value={selectedManager}
-                onSelected={(managerID, manager) => {
-                  setFormState((prev) => ({ ...prev, manager, managerId: managerID }));
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 text-white font-bold rounded-3xl shadow-lg hover:shadow-xl hover:cursor-pointer hover:brightness-110 transition-all twilight-gradient disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <span className="flex items-center justify-center">
-                  {isSubmitting ? (
-                    <>
-                      <span className="mr-2">Submitting...</span>
-                      <span className="animate-spin h-5 w-5 border-2 border-outline border-t-transparent rounded-full" />
-                    </>
-                  ) : (
-                    <>
-                      <span className="mb-0.5 mr-2">Submit Request</span>
-                      <span
-                        className="material-symbols-outlined leading-none mb-0.5"
-                        style={{ fontVariationSettings: `'FILL' 1` }}
-                      >
-                        send
-                      </span>
-                    </>
-                  )}
-                </span>
-              </button>
-
-              {error && (
-                <div className="flex items-center justify-center gap-2 text-sm text-error bg-error-background rounded-xl p-3">
-                  <span className="material-symbols-outlined !text-[18px]">info</span>
-                  <span className="text-center">{error}</span>
-                </div>
-              )}
-            </form>
-          </div>
-        </div>
-      </div>
-    </main>
+      {category && (
+        <ApprovalSection
+          question="Who manages the person this is for?"
+          users={users}
+          approver={approver}
+          onApprover={setApprover}
+          requestee={requestee}
+          autoApproved={autoApproved}
+          error={errorFor("appr")}
+        />
+      )}
+    </FormLayout>
   );
 }

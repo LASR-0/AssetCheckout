@@ -5,10 +5,9 @@ import { cn } from "@/lib/utils";
 ///  |                        THE CALENDAR                             |
 ///  +-----------------------------------------------------------------+
 //
-//  react-day-picker, dressed in this app's own tokens rather than the stock
-//  shadcn palette — every colour here is a `surface-*` / `on-*` / `primary`
-//  token from index.css, so it follows the theme switch and the org preset
-//  like everything else. Nothing in it is hardcoded to a hue.
+//  react-day-picker, dressed in the design tokens (styles/tokens.css) rather
+//  than the stock shadcn palette, so it follows the theme switch and the
+//  palette like everything else. Nothing in it is hardcoded to a hue.
 //
 //  IT SHIPS NO CSS FILE. react-day-picker's stylesheet is deliberately not
 //  imported: it styles by element rather than by class, so it would leak into
@@ -34,82 +33,48 @@ export type CalendarProps = DayPickerProps & {
  * calendar, and the only way to find out is to look. Hence a test.
  */
 export const CALENDAR_CLASS_NAMES = {
-  ///  MONTH NAVIGATION
-  //
-  //  `relative` HERE IS LOAD-BEARING. react-day-picker renders <Nav> as
-  //  the first child of `months`, and the nav is absolutely positioned
-  //  so it can straddle the caption row. Without a positioned ancestor
-  //  it resolves against whatever further up the tree happens to be
-  //  positioned — the dialog, or the page — and the arrows silently
-  //  leave the calendar entirely. Nothing errors; the buttons are just
-  //  somewhere else, and the month cannot be changed.
-  months: "relative flex flex-col sm:flex-row gap-6",
-  month: "space-y-3",
-  month_caption: "flex items-center justify-center h-9",
-  caption_label: "text-sm font-semibold text-on-surface",
+  months: "relative flex flex-col gap-x-7 gap-y-3 phone:flex-row",
+  month: "flex min-w-0 flex-1 flex-col gap-1.5",
+  month_caption: "flex h-8 items-center justify-center",
+  caption_label: "fs-13 font-semibold text-tx",
 
-  // Spans the full width of `months` so that with two months shown the
-  // arrows sit at the outer edges rather than bracketing the first one.
-  // pointer-events are off on the bar and back on for the buttons, so
-  // the strip between them doesn't swallow clicks on the caption.
-  nav: "absolute inset-x-0 top-0 z-10 flex h-9 items-center justify-between pointer-events-none",
+  nav: "absolute inset-x-0 top-0 z-10 flex h-8 items-center justify-between pointer-events-none",
 
-  // aria-disabled, NOT disabled: Nav marks the end of the navigable
-  // range with aria-disabled and leaves the button enabled. A
-  // `disabled:` variant matches nothing here, so the arrow at the
-  // boundary would look live and do nothing when clicked.
   button_previous:
-    "pointer-events-auto size-8 grid place-items-center rounded-lg text-info-light " +
-    "hover:bg-surface-container-high hover:text-on-surface transition-colors " +
-    "aria-disabled:opacity-25 aria-disabled:pointer-events-none cursor-pointer",
+    "pointer-events-auto grid size-8 cursor-pointer place-items-center rounded-8 text-tx2 " +
+    "transition-colors hover:bg-hover hover:text-tx " +
+    "aria-disabled:pointer-events-none aria-disabled:text-dis",
   button_next:
-    "pointer-events-auto size-8 grid place-items-center rounded-lg text-info-light " +
-    "hover:bg-surface-container-high hover:text-on-surface transition-colors " +
-    "aria-disabled:opacity-25 aria-disabled:pointer-events-none cursor-pointer",
+    "pointer-events-auto grid size-8 cursor-pointer place-items-center rounded-8 text-tx2 " +
+    "transition-colors hover:bg-hover hover:text-tx " +
+    "aria-disabled:pointer-events-none aria-disabled:text-dis",
 
-  // The arrow glyph is a bare <polygon> with no fill of its own, so
-  // unstyled it paints browser-default black — invisible on the dark
-  // theme and off-palette on the light one. fill-current inherits the
-  // button's colour, which is what makes it follow the theme and the
-  // hover state. The size utilities override the SVG's own width/height
-  // attributes (it defaults to 24).
-  chevron: "size-4 fill-current",
+  chevron: "size-4.5 fill-current",
 
   month_grid: "w-full border-collapse",
   weekdays: "flex",
-  weekday:
-    "w-9 text-[11px] font-semibold uppercase tracking-wider text-info-light",
-  week: "flex w-full mt-1",
+  weekday: "grid h-6 flex-1 place-items-center fs-10.5 font-medium text-mut",
+  week: "mt-0.5 flex w-full",
 
-  // The cell, not the button. Range backgrounds live here so they meet
-  // edge to edge across the row instead of leaving gaps between days.
-  day: "relative w-9 h-9 p-0 text-center text-sm focus-within:relative focus-within:z-20",
+  day: "relative h-8.5 flex-1 p-0 text-center focus-within:z-20",
   day_button:
-    "w-9 h-9 rounded-lg font-normal text-on-surface transition-colors cursor-pointer " +
-    "hover:bg-surface-container-high aria-selected:font-semibold " +
+    "h-full w-full cursor-pointer rounded-8 font-sans fs-12.5 text-tx tabular-nums transition-colors " +
+    "outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-brand " +
     "disabled:pointer-events-none",
 
-  // Both ends of the range are solid; the middle is a tint. Squaring the
-  // inner corners is what makes a five-day booking read as one bar
-  // rather than five chips.
-  range_start:
-    "bg-primary/15 rounded-l-lg [&>button]:bg-primary [&>button]:text-on-primary " +
-    "[&>button]:hover:bg-primary",
-  range_end:
-    "bg-primary/15 rounded-r-lg [&>button]:bg-primary [&>button]:text-on-primary " +
-    "[&>button]:hover:bg-primary",
+  // A single pick and the two ends of a range: the brand chip.
+  selected: "[&>button]:bg-brand [&>button]:font-semibold [&>button]:text-on-brand [&>button]:hover:bg-brand",
+  range_start: "",
+  range_end: "",
+  // Inside a range: a tint, joined across the row and rounded at its ends.
   range_middle:
-    "bg-primary/15 [&>button]:bg-transparent [&>button]:text-on-surface " +
-    "[&>button]:rounded-none [&>button]:hover:bg-primary/25",
-  selected: "",
+    "bg-brand-sub first:rounded-l-8 last:rounded-r-8 " +
+    "[&>button]:rounded-none! [&>button]:bg-transparent! [&>button]:font-normal! [&>button]:text-tx! " +
+    "[&>button]:hover:bg-brand-sub!",
 
-  // A ring rather than a fill, so "today" never competes with the
-  // selection it might also be part of.
-  today:
-    "[&>button]:ring-1 [&>button]:ring-inset [&>button]:ring-primary/50 " +
-    "[&>button]:font-semibold",
-  outside: "[&>button]:text-info-light/40",
-  disabled: "[&>button]:text-info-light/30 [&>button]:line-through",
+  today: "[&>button]:shadow-[inset_0_0_0_1px_var(--strong)]",
+  outside: "[&>button]:text-dis",
+  disabled: "[&>button]:text-dis [&>button]:line-through",
   hidden: "invisible",
 } as const;
 

@@ -5,7 +5,7 @@
  * icon-font.test.ts fails the suite if this drifts from what the source uses.
  *
  * Contains 209 of the 4,284 Material Symbols glyphs, which is the
- * difference between 204 KB and 3.98 MB.
+ * difference between 202 KB and 3.98 MB.
  */
 
 @font-face {

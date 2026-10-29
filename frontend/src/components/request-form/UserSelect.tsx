@@ -40,6 +40,11 @@ export type User = {
   email: string | null;
   phone: string | null;
   mobile: string | null;
+  /** Their Snipe-IT location: where they collect. */
+  locationId?: number | null;
+  locationName?: string | null;
+  /** Their manager in Snipe-IT. Filing as that manager auto-approves. */
+  managerId?: number | null;
 };
 
 type Props = {

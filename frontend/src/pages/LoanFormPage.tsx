@@ -1,278 +1,299 @@
-import { useState, useEffect } from "react";
-import { invalidateWorkflow } from "@/api/queries";
-import { queryClient } from "@/api/queryClient";
-import { loanDevicesQuery, usersQuery } from "@/api/queries";
-import type { DateRange } from "react-day-picker";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import UserDetailsInput from "@/components/request-form/UserDetailsInput";
-import LoanWindowSection, {
-  toDateString,
-  countDays,
-} from "@/components/loan-form/LoanWindowSection";
-import LoanDevicePicker from "@/components/loan-form/LoanDevicePicker";
-import { createLoanRequest, type LoanDeviceChoice } from "@/api/loans";
+import { useQuery } from "@tanstack/react-query";
+import type { DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import Calendar from "@/components/ui/calendar";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { createLoanRequest } from "@/api/loans";
+import { invalidateWorkflow, loanConfigQuery, loanDevicesQuery } from "@/api/queries";
+import { iconForCategory } from "@/lib/categoryIcon";
+import { countDays, toDateString } from "@/lib/format";
+import { previewRoute, weekdayDate } from "@/lib/formRoute";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { User } from "@/components/request-form/UserSelect";
-import { useAuth } from "@/hooks/useAuth";
+import { FormLayout, type FormError } from "@/components/forms/FormLayout";
+import { goToSection } from "@/components/forms/helpers";
+import { Field, FieldError, FormSection, Question } from "@/components/forms/FormSection";
+import { WhoFor, type ForMode } from "@/components/forms/WhoFor";
+import { useDirectory } from "@/components/forms/useDirectory";
+import { submitErrorText } from "@/components/forms/submit";
 
 ///  +-----------------------------------------------------------------+
-///  |                  LOAN REQUEST FORM PAGE                         |
+///  |                      BORROW A DEVICE                            |
 ///  +-----------------------------------------------------------------+
 //
-//  The shortest form in the app, and deliberately: what, who, when, what for.
-//  That is the whole thing.
+//  What, who, when, what for. That's the whole form.
 //
-//  ONE QUESTION THE HOTSPOT FORM NEVER ASKED: WHICH DEVICE. Loans now cover
-//  more than hotspots (KVMs, for remote support of iPads, were the reason), so
-//  the requester picks from the devices IT has made loanable. The list is the
-//  whitelist in Settings → Loans, not a Snipe category — see LoanDevice.
+//  NO APPROVER and NO SPEC LEVEL: a loan goes straight to IT, and nothing is
+//  bought. IT assigns a unit and the site's stock keeper hands it over; the
+//  loan starts on collection and is due back on the last day.
 //
-//  NO APPROVER FIELD. A loan has no manager stage — it goes straight to IT —
-//  so there is nothing to ask. This is the single biggest difference from the
-//  asset and accessory forms and the reason this is a page rather than a mode
-//  on one of them.
+//  The devices are the whitelist in Settings → Loans. With exactly one,
+//  there is no question to ask. Availability is today's, and advisory: a
+//  booking for next week is fine even if every unit is out now.
 //
-//  NO SPEC LEVEL. Standard-versus-non-standard is a question about what to
-//  BUY, and nothing is being bought — a loan hands over something already on
-//  the shelf and takes it back afterwards.
+//  The longest loan is a setting; the form shows it and the server enforces
+//  it. A single day is a range with no end.
 //
-//  THE EVENT NAME IS PER DEVICE. It is what a keeper needs on a hotspot row
-//  ("Toowoomba roadshow"); on a KVM row it is a field nobody can answer.
+//  The event name is per device: a keeper needs it on a hotspot ("Toowoomba
+//  roadshow"); on a KVM it is a field nobody can answer.
 ///  +-----------------------------------------------------------------+
-
-// Mirrors loan_max_days. The form shows the limit and the server
-// enforces it; if an admin changes the setting the worst case is a submission
-// refused with the real number in the message, which is why this does not
-// need to be fetched.
-const MAX_LOAN_DAYS = 30;
 
 export default function LoanFormPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [userId, setUserId] = useState("");
-  const [userName, setUserName] = useState("");
+  const navigate = useNavigate();
+  const { users, me } = useDirectory();
+  const devices = useQuery(loanDevicesQuery);
+  const { data: config } = useQuery(loanConfigQuery);
+  const maxDays = config?.maxLoanDays ?? 30;
+  const twoMonths = useMediaQuery("(min-width: 36rem)");
+
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [forMode, setForMode] = useState<ForMode>("me");
+  const [other, setOther] = useState<User | null>(null);
   const [range, setRange] = useState<DateRange | undefined>();
   const [reason, setReason] = useState("");
   const [eventName, setEventName] = useState("");
+  const [tried, setTried] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [devices, setDevices] = useState<LoanDeviceChoice[]>([]);
-  const [devicesLoading, setDevicesLoading] = useState(true);
-  const [devicesError, setDevicesError] = useState<string | null>(null);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const navigate = useNavigate();
-  const { email: authEmail } = useAuth();
-  const selectedRequester = users.find((u) => u.id === userId) ?? null;
-  const device = devices.find((d) => d.id === deviceId) ?? null;
-
-  useEffect(() => {
-    queryClient.fetchQuery(usersQuery).then((data) => {
-      setUsers(
-        data
-          .map((u) => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            phone: u.phone,
-            mobile: u.mobile,
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-      );
-    });
+  const list = devices.data ?? [];
+  const device = list.find((d) => d.id === deviceId) ?? (list.length === 1 ? list[0] : null);
+  const loansOff = devices.isSuccess && list.length === 0;
+  const requestee = forMode === "me" ? me : other;
+  const days = countDays(range?.from, range?.to);
+  const over = days > maxDays;
+  const today = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }, []);
+  const availabilityUnknown = list.length > 0 && list.every((d) => d.remaining === null);
 
-  useEffect(() => {
-    let cancelled = false;
-    queryClient.fetchQuery(loanDevicesQuery)
-      .then((list) => {
-        if (cancelled) return;
-        setDevices(list);
-        // With only one thing to lend there is no question to ask.
-        if (list.length === 1) setDeviceId(list[0].id);
-      })
-      .catch((err) => {
-        if (!cancelled) setDevicesError(err.message ?? "Couldn't load the devices.");
-      })
-      .finally(() => {
-        if (!cancelled) setDevicesLoading(false);
+  // ---- what's missing -------------------------------------------------
+  const errors: FormError[] = [];
+  if (!device) errors.push({ section: "dev", message: "Please pick a device to borrow." });
+  if (!requestee) errors.push({ section: "who", message: "Please select a requester." });
+  if (!range?.from) errors.push({ section: "when", message: "Please pick the days you need it." });
+  else if (over) errors.push({ section: "when", message: `That's ${days} days, which is longer than the ${maxDays}-day maximum.` });
+  if (!reason.trim()) errors.push({ section: "why", message: "Please say what it's for." });
+  // Too long is worth saying the moment it happens, not only after Send.
+  const errorFor = (section: string) =>
+    tried || (section === "when" && over) ? errors.find((e) => e.section === section)?.message : undefined;
+
+  const steps = [
+    { id: "dev", label: "What to borrow", value: device?.displayName, done: !!device },
+    { id: "who", label: "Who it's for", value: requestee?.name, done: !!requestee },
+    { id: "when", label: "When", value: days ? `${days} day${days > 1 ? "s" : ""}` : null, done: !!range?.from && !over },
+    { id: "why", label: "What it's for", value: reason.trim() ? "Added" : null, done: !!reason.trim() },
+  ].map((s) => ({ ...s, error: !!errorFor(s.id) }));
+
+  const route = loansOff
+    ? null
+    : previewRoute({
+        kind: "loan",
+        nonStandard: false,
+        forMe: forMode === "me",
+        forName: requestee?.name ?? null,
+        site: requestee?.locationName ?? null,
+        approverName: null,
+        autoApproved: false,
+        noun: null,
+        deviceName: device?.displayName.toLowerCase() ?? null,
+        start: range?.from ?? null,
+        end: range?.to ?? null,
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
-  // Default the requester to the signed-in user, as the accessory form does.
-  // Booking on somebody else's behalf stays possible — for an event, whoever
-  // is organising it books as often as the person carrying the device does.
-  useEffect(() => {
-    if (!authEmail || users.length === 0 || userId) return;
-    const me = users.find((u) => u.email?.toLowerCase() === authEmail.toLowerCase());
-    if (me) {
-      setUserId(me.id);
-      setUserName(me.name);
+  async function submit() {
+    setTried(true);
+    if (errors.length > 0) {
+      goToSection(errors[0].section);
+      return;
     }
-  }, [authEmail, users, userId]);
-
-  const days = countDays(range);
-  const notConfigured = !devicesLoading && !devicesError && devices.length === 0;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!device) return setError("Please pick what you'd like to borrow.");
-    if (!userId) return setError(`Please select who the ${device.displayName} is for.`);
-    if (!range?.from) return setError("Please pick the first day you need it.");
-    if (days > MAX_LOAN_DAYS) {
-      return setError(
-        `A loan can be booked for at most ${MAX_LOAN_DAYS} days — this is ${days}.`
-      );
-    }
-    if (!reason.trim()) {
-      return setError(`Please say what you need the ${device.displayName} for.`);
-    }
-
-    setIsSubmitting(true);
+    setSubmitting(true);
+    setSubmitError(null);
     try {
-      // A single-day loan is a range with no `to` — the picker only fills it
-      // on the second click. Treating that as from==to is what makes one click
-      // mean "just today" rather than an incomplete form.
       const data = await createLoanRequest({
-        userId: Number(userId),
-        userName,
-        deviceOptionId: device.id,
-        startDate: toDateString(range.from),
-        endDate: toDateString(range.to ?? range.from),
+        userId: Number(requestee!.id),
+        userName: requestee!.name,
+        deviceOptionId: device!.id,
+        startDate: toDateString(range!.from!),
+        endDate: toDateString(range!.to ?? range!.from!),
         reason: reason.trim(),
-        eventName: device.showEventName ? eventName.trim() || null : null,
+        eventName: device!.showEventName ? eventName.trim() || null : null,
       });
-
       void invalidateWorkflow();
-      navigate("/success", { state: { request: data.request } });
-    } catch (err: any) {
-      console.error("ERROR:", err);
-      setError(err.message || "Something went wrong. Please try again.");
+      // The loan comes back beside the request; the success page wants both,
+      // and the device's name as the requester picked it.
+      navigate("/success", {
+        state: { request: { ...data.request, loan: data.loan }, deviceName: device!.displayName },
+      });
+    } catch (err) {
+      setSubmitError(submitErrorText(err));
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
-  };
+  }
 
   return (
-    <main className="min-h-screen bg-landing-bg text-on-background flex flex-col">
-      <div className="flex-grow my-24 pb-20 px-4 md:px-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="mb-10">
-            <div className="flex flex-row">
-              <span className="material-symbols-outlined mx-3 !text-4xl"> devices </span>
-              <h1 className="text-4xl font-bold text-nav-selected flex tracking-tight mb-2">
-                Borrow a device
-              </h1>
-            </div>
-            <p className="text-info-light ml-5">
-              Borrow a hotspot, a KVM or another device IT lends out. Pick what
-              you need and the days you need it, and we'll have it ready to
-              collect.
-            </p>
+    <FormLayout
+      kind="loan"
+      title="Borrow a device"
+      intro="Borrow a hotspot, a KVM or another device IT lends out. Pick what you need and the days you need it, and we'll have it ready to collect."
+      steps={steps}
+      route={route}
+      pill={{ label: "Loan", accent: "id4" }}
+      errors={errors}
+      tried={tried}
+      submitError={submitError}
+      submitting={submitting}
+      submitLabel="Book loan"
+      onSubmit={submit}
+    >
+      <FormSection id="dev" label="What to borrow" sheetClassName="gap-0 overflow-hidden p-0">
+        {devices.isPending ? (
+          <div className="flex flex-col gap-2 p-3.5">
+            {[1, 2, 3].map((k) => (
+              <div key={k} className="h-15 rounded-10 bg-track" />
+            ))}
           </div>
-
-          <div className="bg-surface-container-lowest rounded-xl p-8 shadow-md">
-            <form onSubmit={handleSubmit} className="space-y-10">
-              <LoanDevicePicker
-                devices={devices}
-                value={deviceId}
-                onChange={setDeviceId}
-                loading={devicesLoading}
-                error={devicesError}
-              />
-
-              <UserDetailsInput
-                users={users}
-                value={selectedRequester}
-                label="2. Who is it for?"
-                placeholder={`Who will be using the ${device?.displayName ?? "device"}?`}
-                onSelected={(id, name) => {
-                  setUserId(id);
-                  setUserName(name);
-                }}
-              />
-
-              <LoanWindowSection
-                value={range}
-                onChange={setRange}
-                maxDays={MAX_LOAN_DAYS}
-                label="3. When do you need it?"
-              />
-
-              <div>
-                <label className="block text-xs font-medium tracking-wider uppercase text-on-surface-variant mb-4">
-                  4. What's it for?
-                </label>
-
-                {device?.showEventName && (
-                  <input
-                    type="text"
-                    value={eventName}
-                    onChange={(e) => setEventName(e.target.value)}
-                    placeholder="Event or site name (optional)"
-                    className="w-full rounded-xl border border-outline bg-surface-container-low px-4 py-3 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none mb-3"
-                  />
-                )}
-
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={3}
-                  placeholder={
-                    device?.showEventName
-                      ? "Why do you need it? e.g. no site wifi at the Toowoomba roadshow"
-                      : "Why do you need it?"
-                  }
-                  className="w-full rounded-xl border border-outline bg-surface-container-low px-4 py-3 text-sm text-on-surface placeholder:text-info-light focus:border-primary focus:outline-none resize-y"
-                />
-
-                <p className="mt-2 ml-1 text-xs text-info-light">
-                  There's no manager approval on a loan — this goes straight to IT.
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting || notConfigured}
-                className="w-full py-4 text-white font-bold rounded-3xl shadow-lg hover:shadow-xl hover:cursor-pointer hover:brightness-110 transition-all twilight-gradient disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <span className="flex items-center justify-center">
-                  {isSubmitting ? (
-                    <>
-                      <span className="mr-2">Submitting...</span>
-                      <span className="animate-spin h-5 w-5 border-2 border-outline border-t-transparent rounded-full" />
-                    </>
-                  ) : (
-                    <>
-                      <span className="mb-0.5 mr-2">
-                        {device ? `Request ${device.displayName}` : "Request loan"}
-                      </span>
-                      <span
-                        className="material-symbols-outlined leading-none mb-0.5"
-                        style={{ fontVariationSettings: `'FILL' 1` }}
-                      >
-                        send
-                      </span>
-                    </>
-                  )}
-                </span>
-              </button>
-
-              {error && (
-                <div className="flex items-center justify-center gap-2 text-sm text-error bg-error-background rounded-xl p-3">
-                  <span className="material-symbols-outlined !text-[18px]">info</span>
-                  <span className="text-center">{error}</span>
+        ) : devices.isError ? (
+          <p className="m-0 flex items-center gap-2 px-3.5 py-4 fs-12.5 text-tx2">
+            <Icon name="cloud_off" size={18} className="text-mut" />
+            Couldn't load the devices IT lends out. Try again in a minute.
+          </p>
+        ) : loansOff ? (
+          <div className="flex flex-col gap-1 px-3.5 py-4">
+            <span className="flex items-center gap-2 fs-13.5 font-semibold">
+              <Icon name="block" size={18} className="text-mut" />
+              Loans are currently disabled
+            </span>
+            <span className="fs-12.5 leading-normal text-tx3">
+              There are no devices set up to lend. If you need something urgently, ask IT, or request a device of your
+              own from Assets.
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="px-3.5 pt-3.5 pb-1.5">
+              <div className="fs-13.5 font-semibold">Pick a device</div>
+              {availabilityUnknown && (
+                <div className="mt-0.5 fs-12 text-tx3">
+                  Snipe-IT is unreachable, so today's availability isn't shown. You can still book.
                 </div>
               )}
-            </form>
-          </div>
-        </div>
-      </div>
-    </main>
+            </div>
+            <RadioGroup aria-label="Pick a device" value={device?.id ?? ""} onValueChange={setDeviceId} className="gap-0">
+              {list.map((d) => (
+                <label
+                  key={d.id}
+                  className="grid min-h-15 cursor-pointer grid-cols-[1.125rem_1.375rem_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line2 px-3.5 py-2.5 transition-colors hover:bg-subtle has-[[data-state=checked]]:bg-brand-sub"
+                >
+                  <RadioGroupItem value={d.id} />
+                  <Icon name={iconForCategory(d.displayName)} size={20} weight={300} className="text-tx3" />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="fs-13.5 font-medium">{d.displayName}</span>
+                    {d.description && <span className="fs-12 leading-[1.45] text-pretty text-tx3">{d.description}</span>}
+                  </span>
+                  {d.remaining !== null && (
+                    <span className={cn("fs-12 whitespace-nowrap", d.remaining > 0 ? "font-medium text-ok" : "text-mut")}>
+                      {d.remaining > 0 ? `${d.remaining} free today` : "None free today"}
+                    </span>
+                  )}
+                </label>
+              ))}
+            </RadioGroup>
+          </>
+        )}
+        <FieldError className="px-3.5 pb-3">{errorFor("dev")}</FieldError>
+      </FormSection>
+
+      {!loansOff && (
+        <>
+          <FormSection id="who" label="Who it's for">
+            <Question hint="They collect it, and it is booked under their name.">Who is it for?</Question>
+            <WhoFor
+              mode={forMode}
+              onMode={setForMode}
+              me={me}
+              users={users}
+              other={other}
+              onOther={setOther}
+              invalid={!!errorFor("who")}
+            />
+            <FieldError>{errorFor("who")}</FieldError>
+          </FormSection>
+
+          <FormSection id="when" label="When do you need it?" aside={`Up to ${maxDays} days`}>
+            <Calendar
+              mode="range"
+              selected={range}
+              onSelect={(r) => {
+                setRange(r);
+                setSubmitError(null);
+              }}
+              disabled={{ before: today }}
+              startMonth={today}
+              numberOfMonths={twoMonths ? 2 : 1}
+              modifiers={{ over: over && range?.from ? { from: range.from, to: range.to ?? range.from } : false }}
+              modifiersClassNames={{
+                // Past the maximum, the whole range turns red: the ends as
+                // chips, the days between as a tint.
+                over:
+                  "[&:not(.bg-brand-sub)>button]:bg-stop! [&:not(.bg-brand-sub)>button]:text-white! " +
+                  "[&.bg-brand-sub]:bg-stop-bg! [&.bg-brand-sub>button]:text-stop!",
+              }}
+            />
+            <div className="flex flex-wrap items-center gap-2 border-t border-line2 pt-3 fs-13">
+              <Icon name="date_range" size={17} className="text-mut" />
+              <span className={cn(range?.from ? "text-tx" : "text-tx3", range?.to && "font-medium")}>
+                {!range?.from
+                  ? "Pick the first day you need it."
+                  : range.to
+                    ? `${weekdayDate(range.from)} → ${weekdayDate(range.to)}`
+                    : `${weekdayDate(range.from)}. Pick the last day, or leave it for a single day.`}
+              </span>
+              {days > 0 && (
+                <span className={over ? "font-semibold text-stop" : "text-tx3"}>
+                  · {days} day{days > 1 ? "s" : ""}
+                </span>
+              )}
+              {range?.from && (
+                <button
+                  type="button"
+                  onClick={() => setRange(undefined)}
+                  className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-sans fs-12 font-medium text-tx3 hover:text-tx"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <FieldError>{errorFor("when")}</FieldError>
+          </FormSection>
+
+          <FormSection id="why" label="What's it for?">
+            <Field label="Why do you need it?">
+              <Textarea
+                size="lg"
+                rows={3}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                aria-invalid={!!errorFor("why") || undefined}
+                placeholder="e.g. no site wifi at the Toowoomba roadshow"
+              />
+            </Field>
+            <FieldError className="-mt-1.5">{errorFor("why")}</FieldError>
+            {device?.showEventName && (
+              <Field label="Event or site name" optional={`optional · ${device.displayName} asks for this`}>
+                <Input size="lg" value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="e.g. Toowoomba roadshow" />
+              </Field>
+            )}
+          </FormSection>
+        </>
+      )}
+    </FormLayout>
   );
 }

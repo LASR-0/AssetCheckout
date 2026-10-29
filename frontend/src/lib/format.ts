@@ -39,3 +39,20 @@ export function dayDate(iso: string | null | undefined): string {
 export function longDate(date: Date): string {
   return `${WEEKDAY.format(date)}, ${DAY_MONTH.format(date)}`;
 }
+
+/** Local calendar parts as "YYYY-MM-DD": the form the API takes for a picked day. */
+export function toDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Days in an inclusive range of calendar days; one for a single day. */
+export function countDays(from: Date | undefined, to?: Date): number {
+  if (!from) return 0;
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = to ?? from;
+  const b = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1;
+}

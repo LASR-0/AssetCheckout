@@ -12,6 +12,8 @@ import { getMyHoldings } from "@/api/holdings";
 import {
   getAccessoryCategories,
   getAccessoryCategoriesForMe,
+  getAccessoryCategoriesForUser,
+  getAccessoryOptions,
   getAllAccessoryCategories,
   getAccessorySettings,
 } from "@/api/accessories";
@@ -176,6 +178,22 @@ export const accessoryCategoriesForMeQuery = queryOptions({
   queryFn: () => getAccessoryCategoriesForMe(),
   staleTime: REFERENCE,
 });
+
+/** What one person's devices unlock (the accessory form, filing for anyone). */
+export const accessoryCategoriesForUserQuery = (userId: string) =>
+  queryOptions({
+    queryKey: ["reference", "accessory-categories", "for-user", userId],
+    queryFn: () => getAccessoryCategoriesForUser(userId),
+    staleTime: REFERENCE,
+  });
+
+/** The named options configured for one accessory category. */
+export const accessoryOptionsQuery = (categoryId: number) =>
+  queryOptions({
+    queryKey: ["settings", "accessories", "options", categoryId],
+    queryFn: () => getAccessoryOptions(categoryId),
+    staleTime: REFERENCE,
+  });
 
 /** The site-wide requestable whitelist (not what this viewer's devices unlock). */
 export const requestableAccessoryCategoriesQuery = queryOptions({

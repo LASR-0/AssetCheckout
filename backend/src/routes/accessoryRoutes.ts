@@ -319,6 +319,26 @@ router.put("/settings/standard-accessories/:categoryId", async (req, res, next) 
   }
 });
 
+/**
+ * The accessory categories a person's devices unlock (L3 ∩ L1), each with
+ * `unlockedBy`: which of their asset categories open it up, so a form or
+ * Home can say what an accessory is for ("For your laptop").
+ */
+async function unlockedCategories(assetCategoryIds: number[]) {
+  const [allowedIds, map, allCategories] = await Promise.all([
+    getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds),
+    getAssetAccessoryCategoryMap(),
+    getAllAccessoryCategories(),
+  ]);
+  const allowed = new Set(allowedIds);
+  return allCategories
+    .filter((c) => allowed.has(c.id))
+    .map((c) => ({
+      ...c,
+      unlockedBy: assetCategoryIds.filter((a) => map[String(a)]?.includes(c.id)),
+    }));
+}
+
 router.get("/categories/for-user/:userId", async (req, res, next) => {
   try {
     const actorName = getActorName(req);
@@ -331,14 +351,7 @@ router.get("/categories/for-user/:userId", async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid userId" });
     }
 
-    const assetCategoryIds = await getUserAssetCategoryIds(userId);
-    const allowedIds =
-      await getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds);
-
-    const allowedSet = new Set(allowedIds);
-    const allCategories = await getAllAccessoryCategories();
-    const categories = allCategories.filter((c) => allowedSet.has(c.id));
-
+    const categories = await unlockedCategories(await getUserAssetCategoryIds(userId));
     res.json({ success: true, categories });
   } catch (err) {
     next(err);
@@ -358,23 +371,7 @@ router.get("/categories/for-me", async (req, res, next) => {
       return res.json({ success: true, categories: [] });
     }
 
-    const assetCategoryIds = await getUserAssetCategoryIds(user.id);
-    const [allowedIds, map] = await Promise.all([
-      getRequestableAccessoryCategoryIdsForAssetCategories(assetCategoryIds),
-      getAssetAccessoryCategoryMap(),
-    ]);
-
-    const allowedSet = new Set(allowedIds);
-    const allCategories = await getAllAccessoryCategories();
-    // unlockedBy: which of THIS person's asset categories open each one up,
-    // so Home can say what an accessory is for ("For your laptop").
-    const categories = allCategories
-      .filter((c) => allowedSet.has(c.id))
-      .map((c) => ({
-        ...c,
-        unlockedBy: assetCategoryIds.filter((a) => map[String(a)]?.includes(c.id)),
-      }));
-
+    const categories = await unlockedCategories(await getUserAssetCategoryIds(user.id));
     res.json({ success: true, categories });
   } catch (err) {
     next(err);
