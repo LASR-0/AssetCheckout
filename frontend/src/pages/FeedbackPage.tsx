@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { feedbackEnabledQuery } from "@/api/queries";
 import { useNavigate } from "react-router-dom";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  getFeedbackEnabled,
   submitFeedback,
   type FeedbackResponse,
 } from "@/api/feedback";
@@ -22,7 +23,7 @@ const commentsPlaceholder = "Tell us how we can improve this service or provide 
 export default function FeedbackPage() {
   const navigate = useNavigate();
 
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [formPhase, setPhase] = useState<Exclude<Phase, "loading" | "disabled">>("form");
   const [improvedRequesting, setImprovedRequesting] = useState<FeedbackResponse | null>(null);
   const [improvesItOverall, setImprovesItOverall] = useState<FeedbackResponse | null>(null);
   const [comments, setComments] = useState("");
@@ -30,11 +31,8 @@ export default function FeedbackPage() {
 
   // Gate on the feedback_enabled setting. The server also enforces this on
   // submit; this is the client-side UX so a disabled feature isn't shown.
-  useEffect(() => {
-    getFeedbackEnabled()
-      .then((r) => setPhase(r.enabled ? "form" : "disabled"))
-      .catch(() => setPhase("disabled"));
-  }, []);
+  const { data: enabled, isPending } = useQuery(feedbackEnabledQuery);
+  const phase: Phase = isPending ? "loading" : enabled ? formPhase : "disabled";
 
   const bothAnswered = improvedRequesting !== null && improvesItOverall !== null;
 

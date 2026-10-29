@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Popover,
@@ -6,10 +6,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useAuth } from "@/hooks/useAuth";
-import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
-import { getLocations } from "@/api/snipe";
+import { useQueries, useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { locationsQuery, requestsQuery, stockAccessoriesQuery, stockAssetsQuery } from "@/api/queries";
 import RequestsPagination from "@/components/request-table/RequestPagination";
-import { getRequests } from "@/api/requests";
 import { deriveFulfilment, isReturnable } from "@/lib/stage";
 import { canActAsStockKeeper } from "@/lib/permissions";
 import CountBadge from "@/components/ui/countbadge";
@@ -69,6 +68,21 @@ import StartDateChip from "@/components/request-table/StartDateChip";
 
 const PAGE_SIZES = [10, 25, 50];
 
+const NO_LOCATIONS: SnipeNamedRecord[] = [];
+const NO_REQUESTS: Request[] = [];
+const NO_ACCESSORIES: LocationAccessory[] = [];
+
+/** One pass over the per-site asset queries: each site's rows (undefined
+ *  until loaded or when it failed), which are still loading, and how many
+ *  failed. A module-level function so its result is memoised by Query. */
+function summariseSites(results: UseQueryResult<LocationAsset[]>[]) {
+  return {
+    data: results.map((r) => r.data),
+    pending: results.map((r) => r.isPending),
+    failures: results.filter((r) => r.isError).length,
+  };
+}
+
 export default function StockPage() {
   const { role, stockKeeperLocations, isLoading: authLoading } = useAuth();
 
@@ -88,12 +102,6 @@ export default function StockPage() {
   const [pickedSite, setPickedSite] = useState<number | null>(null);
   const siteId = pickedSite ?? stockKeeperLocations[0]?.id ?? null;
   const setSiteId = setPickedSite;
-  const [assetsBySite, setAssetsBySite] = useState<Map<number, LocationAsset[]>>(
-    new Map()
-  );
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [loadingAssets, setLoadingAssets] = useState(true);
-  const [assetError, setAssetError] = useState<string | null>(null);
 
   ///  +-----------------------------------------------------------------+
   ///  |             ADMINS ARE NOT LIMITED TO THEIR OWN SITES           |
@@ -111,7 +119,7 @@ export default function StockPage() {
   //  assignments, which they already have from /auth/role.
   ///  +-----------------------------------------------------------------+
   const isAdmin = role === "ADMIN";
-  const [allLocations, setAllLocations] = useState<SnipeNamedRecord[]>([]);
+  const { data: allLocations = NO_LOCATIONS } = useQuery({ ...locationsQuery, enabled: isAdmin });
   const [adminSite, setAdminSite] = useState<{ id: number; name: string } | null>(null);
   const [locationsOpen, setLocationsOpen] = useState(false);
 
@@ -134,9 +142,6 @@ export default function StockPage() {
   // headsets than laptops, so the ledger they open on should be the one they
   // reach for most. Assets are a click away.
   const [mode, setMode] = useState<"ASSETS" | "ACCESSORIES">("ACCESSORIES");
-  const [accessoriesBySite, setAccessoriesBySite] = useState<
-    Map<number, LocationAccessory[]>
-  >(new Map());
   const [accessoryFilters, setAccessoryFilters] = useState<AccessoryFilterState>(
     EMPTY_ACCESSORY_FILTERS
   );
@@ -163,128 +168,40 @@ export default function StockPage() {
     setPage(1);
   }
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const rows = await getLocations();
-        if (!cancelled) setAllLocations(rows);
-      } catch (err) {
-        // The picker just won't populate; the keeper chips still work.
-        console.error("Failed to load locations", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAdmin]);
+  // Every site the reader keeps, at once, because the chips show each one's
+  // count; plus a site an admin picked from the full list. Partial failure is
+  // tolerated: a site whose fetch fails is simply absent from the map and
+  // reads as empty, rather than blanking the sites that did load.
+  const siteIds = useMemo(() => {
+    const ids = stockKeeperLocations.map((l) => l.id);
+    if (siteId !== null && !ids.includes(siteId)) ids.push(siteId);
+    return ids;
+  }, [stockKeeperLocations, siteId]);
+  const siteResults = useQueries({
+    queries: siteIds.map((id) => stockAssetsQuery(id)),
+    combine: summariseSites,
+  });
+  const assetsBySite = useMemo(
+    () => new Map(siteIds.flatMap((id, i) => (siteResults.data[i] ? [[id, siteResults.data[i]] as const] : []))),
+    [siteIds, siteResults]
+  );
+  const loadingAssets = siteId !== null && siteResults.pending[siteIds.indexOf(siteId)] === true;
+  const assetError =
+    siteResults.failures === 0
+      ? null
+      : siteResults.failures === siteIds.length
+      ? "Couldn't reach Snipe-IT for the inventory."
+      : `Couldn't load ${siteResults.failures} of ${siteIds.length} locations.`;
 
-  // One pass over every site the reader keeps. Partial failure is tolerated:
-  // a site whose fetch fails is simply absent from the map and reads as empty,
-  // rather than blanking the sites that did load.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      // Both branches set state from inside the async body rather than
-      // synchronously in the effect, so neither triggers a cascading render.
-      if (stockKeeperLocations.length === 0) {
-        setLoadingAssets(false);
-        return;
-      }
-      setLoadingAssets(true);
-      setAssetError(null);
-      const results = await Promise.allSettled(
-        stockKeeperLocations.map(async (l) => [l.id, await getAssetsAtLocation(l.id)] as const)
-      );
-      if (cancelled) return;
+  // The queues. The same cached list as Home and Requests; the ledger is
+  // still useful without it, so a failure stays quiet.
+  const { data: requests = NO_REQUESTS } = useQuery(requestsQuery);
 
-      const map = new Map<number, LocationAsset[]>();
-      let failures = 0;
-      for (const r of results) {
-        if (r.status === "fulfilled") map.set(r.value[0], r.value[1]);
-        else failures++;
-      }
-      setAssetsBySite(map);
-      setAssetError(
-        failures === 0
-          ? null
-          : failures === results.length
-          ? "Couldn't reach Snipe-IT for the inventory."
-          : `Couldn't load ${failures} of ${results.length} locations.`
-      );
-      setLoadingAssets(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [stockKeeperLocations]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getRequests({});
-        if (!cancelled) setRequests(data.requests);
-      } catch (err) {
-        // The ledger is still useful without the queues, so this stays quiet.
-        console.error("Failed to load requests", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // A site the reader is not assigned to — an admin's pick — was never in the
-  // prefetch, so it is fetched on demand and cached alongside the rest.
-  useEffect(() => {
-    if (siteId === null || assetsBySite.has(siteId)) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoadingAssets(true);
-        const rows = await getAssetsAtLocation(siteId);
-        if (cancelled) return;
-        setAssetsBySite((prev) => new Map(prev).set(siteId, rows));
-        setAssetError(null);
-      } catch (err) {
-        if (!cancelled) {
-          setAssetError(
-            err instanceof Error ? err.message : "Couldn't load this location."
-          );
-        }
-      } finally {
-        if (!cancelled) setLoadingAssets(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [siteId, assetsBySite]);
-
-  // Accessories come from a shared cached catalogue rather than a per-location
-  // query, so this is cheap — but it is still only fetched for a site somebody
-  // actually looks at, and only once.
-  useEffect(() => {
-    if (siteId === null || accessoriesBySite.has(siteId)) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const rows = await getAccessoriesAtLocation(siteId);
-        if (!cancelled) {
-          setAccessoriesBySite((prev) => new Map(prev).set(siteId, rows));
-        }
-      } catch (err) {
-        // The asset ledger and the queues are unaffected, so this stays quiet
-        // and the accessory view shows its empty state.
-        console.error("Failed to load accessories", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [siteId, accessoriesBySite]);
+  // Accessories are only fetched for a site somebody actually looks at.
+  const { data: siteAccessoryRows } = useQuery({
+    ...stockAccessoriesQuery(siteId ?? -1),
+    enabled: siteId !== null,
+  });
 
   // The chips cover assigned sites; adminSite covers anything else they picked.
   const site =
@@ -366,10 +283,7 @@ export default function StockPage() {
   const safePage = Math.min(page, pageCount);
   const slice = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const siteAccessories = useMemo(
-    () => (siteId === null ? [] : accessoriesBySite.get(siteId) ?? []),
-    [accessoriesBySite, siteId]
-  );
+  const siteAccessories = siteAccessoryRows ?? NO_ACCESSORIES;
 
   const accessoriesFiltered = useMemo(
     () => applyAccessoryFilters(siteAccessories, accessoryFilters),

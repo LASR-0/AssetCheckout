@@ -5,10 +5,11 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogFooter,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
+import { queryClient } from "@/api/queryClient";
+import { locationsQuery } from "@/api/queries";
 import { useEffect, useState, useRef } from "react";
 import ComboboxField from "@/components/ui/comboboxfield";
 import type { Request } from "@/types/requestType";
-import { getLocations } from "@/api/snipe";
 import type { SnipeNamedRecord } from "@/types/snipeTypes";
 import {
   searchAccessoriesForRequest,
@@ -97,7 +98,7 @@ export default function CreateAccessoryDialog({
     let cancelled = false;
     (async () => {
       try {
-        const locs = await getLocations();
+        const locs = await queryClient.fetchQuery(locationsQuery);
         if (!cancelled) setLocations(locs);
       } catch (err) {
         // Non-fatal: search + pick-existing still work; only create-new needs

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { getAssetCategories } from "@/api/categories";
+import { queryClient } from "@/api/queryClient";
+import { assetCategoriesQuery } from "@/api/queries";
 import { iconForCategory } from "@/lib/categoryIcon";
 import type { AssetCategory } from "@/types/categoriesType";
 
@@ -24,7 +25,7 @@ export default function AssetTypeSelector({ value, onChange, preselectId }: Prop
       try {
         setLoading(true);
         setError(null);
-        const data = await getAssetCategories();
+        const data = await queryClient.fetchQuery(assetCategoriesQuery);
         if (!cancelled) setCategories(data);
       } catch (err) {
         if (!cancelled) {

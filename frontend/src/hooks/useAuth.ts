@@ -1,57 +1,32 @@
-import { useEffect, useState } from "react";
-import type { Role, StockKeeperLocation } from "@/types/authType";
+import { useQuery } from "@tanstack/react-query";
+import { identityQuery } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
+import { SIGNED_OUT, type Identity } from "@/api/auth";
 
-export interface AuthState {
-  name: string;
-  email: string;
-  /**
-   * The actor's Snipe-IT user id, which is what requests are keyed on.
-   * Null when Snipe has no account for this email, or could not be reached.
-   * Prefer it over `name` for any "is this mine?" comparison: the display
-   * name comes from a different directory and the two do not always agree.
-   */
-  userId: number | null;
-  role: Role;
-  /**
-   * Snipe locations this actor is assigned to keep stock for. Empty for most
-   * people, and empty for an admin who has not been explicitly assigned —
-   * admins can act as stock keeper anywhere regardless, which is why the
-   * permission check takes `role` as well as this list.
-   */
-  stockKeeperLocations: StockKeeperLocation[];
+///  +-----------------------------------------------------------------+
+///  |                     WHO IS SIGNED IN                            |
+///  +-----------------------------------------------------------------+
+//
+//  One cached query, however many components ask. It used to be a hook with
+//  its own state, so every caller fired its own /api/auth/role: a dozen per
+//  page load. Now the first caller fetches and the rest read the cache.
+//
+//  Switching the dev user resets the WHOLE cache, not just this query:
+//  requests, counts and holdings all belong to whoever was signed in, and
+//  keeping them would show one person's queue to another.
+///  +-----------------------------------------------------------------+
+
+export type AuthState = Identity & {
   isLoading: boolean;
   refresh: () => void;
-}
+};
 
 const STORAGE_KEY = "dev-user-name";
 const STORAGE_KEY_EMAIL = "dev-user-email";
-const CHANGE_EVENT = "dev-user-changed";
-
-
-function normalizeDisplayName(raw: string): string {
-  const trimmed = raw.trim();
-  const commaIdx = trimmed.indexOf(",");
-  if (commaIdx !== -1) {
-    const last = trimmed.slice(0, commaIdx).trim();
-    const first = trimmed.slice(commaIdx + 1).trim();
-    if (first && last) return `${first} ${last}`;
-  }
-  return trimmed;
-}
 
 export function getDevUserName(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(STORAGE_KEY) ?? "";
-}
-
-export function setDevUserName(name: string): void {
-  if (typeof window === "undefined") return;
-  if (name) {
-    localStorage.setItem(STORAGE_KEY, name);
-  } else {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-  window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
 export function getDevUserEmail(): string {
@@ -59,103 +34,24 @@ export function getDevUserEmail(): string {
   return localStorage.getItem(STORAGE_KEY_EMAIL) ?? "";
 }
 
-export function setDevUserEmail(email: string): void {
+function store(key: string, value: string): void {
+  if (value) localStorage.setItem(key, value);
+  else localStorage.removeItem(key);
+}
+
+/** Sign in as someone else (development only). */
+export function setDevUser(name: string, email: string): void {
   if (typeof window === "undefined") return;
-  if (email) {
-    localStorage.setItem(STORAGE_KEY_EMAIL, email);
-  } else {
-    localStorage.removeItem(STORAGE_KEY_EMAIL);
-  }
-  window.dispatchEvent(new Event(CHANGE_EVENT));
+  store(STORAGE_KEY, name);
+  store(STORAGE_KEY_EMAIL, email);
+  void queryClient.resetQueries();
 }
 
 export function useAuth(): AuthState {
-  const [name, setName] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [userId, setUserId] = useState<number | null>(null);
-  const [role, setRole] = useState<Role>(null);
-  const [stockKeeperLocations, setStockKeeperLocations] = useState<
-    StockKeeperLocation[]
-  >([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [tick, setTick] = useState(0);
-
-  const refresh = () => setTick((t) => t + 1);
-
-  useEffect(() => {
-    function onChange() {
-      refresh();
-    }
-    window.addEventListener(CHANGE_EVENT, onChange);
-    return () => window.removeEventListener(CHANGE_EVENT, onChange);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadRole() {
-      try {
-        setIsLoading(true);
-        const isDev = import.meta.env.VITE_APP_ENV === "development";
-        const devName = isDev ? getDevUserName() : "";
-
-        if (isDev && !devName) {
-          if (!cancelled) {
-            setName("");
-            setEmail("");
-            setUserId(null);
-            setRole(null);
-            setStockKeeperLocations([]);
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        const devEmail = isDev ? getDevUserEmail() : "";
-        const headers: Record<string, string> = {};
-        if (devName) headers["x-dev-user-name"] = devName;
-        if (devEmail) headers["x-dev-user-email"] = devEmail;
-
-        const res = await fetch("/api/auth/role", { headers });
-
-        if (!res.ok) throw new Error(`Failed to fetch role: ${res.status}`);
-        const data = await res.json();
-
-        if (!cancelled) {
-          setName(normalizeDisplayName(data.name ?? devName));
-          setEmail(data.email ?? devEmail);
-          setUserId(typeof data.userId === "number" ? data.userId : null);
-          setRole(data.role);
-          // Shape-checked rather than trusted: an older backend returns no
-          // such field at all, and "not a stock keeper" is the safe reading.
-          setStockKeeperLocations(
-            Array.isArray(data.stockKeeperLocations)
-              ? data.stockKeeperLocations.filter(
-                  (l: unknown): l is StockKeeperLocation =>
-                    typeof l === "object" &&
-                    l !== null &&
-                    typeof (l as StockKeeperLocation).id === "number"
-                )
-              : []
-          );
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error("useAuth failed", err);
-        if (!cancelled) {
-          setUserId(null);
-          setRole(null);
-          setStockKeeperLocations([]);
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadRole();
-    return () => {
-      cancelled = true;
-    };
-  }, [tick]);
-
-  return { name, email, userId, role, stockKeeperLocations, isLoading, refresh };
+  const { data, isPending, refetch } = useQuery(identityQuery);
+  return {
+    ...(data ?? SIGNED_OUT),
+    isLoading: isPending,
+    refresh: () => void refetch(),
+  };
 }

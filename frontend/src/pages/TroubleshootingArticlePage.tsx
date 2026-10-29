@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { troubleshootingConfigQuery } from "@/api/queries";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useTheme } from "next-themes";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
@@ -6,11 +8,7 @@ import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape
 import SymptomLink from "@/components/troubleshooting/SymptomLink";
 import { Callout } from "@/components/ui/callout";
 import { Badge } from "@/components/ui/statusbadge";
-import {
-  getSymptom,
-  getTroubleshootingConfig,
-  createArticleDraft,
-} from "@/api/troubleshooting";
+import { getSymptom, createArticleDraft } from "@/api/troubleshooting";
 import FigureLightbox from "@/components/troubleshooting/FigureLightbox";
 import RichText from "@/components/troubleshooting/RichText";
 import { orderedBlocks } from "@/lib/troubleshootingBlocks";
@@ -430,7 +428,7 @@ export default function TroubleshootingArticlePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getTroubleshootingConfig()
+    queryClient.fetchQuery(troubleshootingConfigQuery)
       .then(setConfig)
       .catch(() => setConfig(null));
   }, []);

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { getFeedbackEnabled } from "@/api/feedback";
+import { useQuery } from "@tanstack/react-query";
+import { feedbackEnabledQuery } from "@/api/queries";
 
 ///  +-----------------------------------------------------------------+
 ///  |                    FOOTER (app-wide, in App.tsx)                |
@@ -58,19 +58,11 @@ export default function Footer() {
 ///  |                      FEEDBACK NAV LINK                          |
 ///  +-----------------------------------------------------------------+
 //
-//  Only renders when the feedback feature is switched on server-side.
-//  Fetches once per mount — fine for a footer, but if you ever notice
-//  it firing on every route change (footer stays mounted in App.tsx,
-//  so it shouldn't), it could be lifted into a context/settings hook.
+//  Only renders when the feedback feature is switched on server-side. The
+//  switch is a cached session query, shared with the Feedback page.
 
 function FeedbackNavLink() {
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    getFeedbackEnabled()
-      .then((r) => setEnabled(r.enabled))
-      .catch(() => setEnabled(false));
-  }, []);
+  const { data: enabled = false } = useQuery(feedbackEnabledQuery);
 
   if (!enabled) return null;
 

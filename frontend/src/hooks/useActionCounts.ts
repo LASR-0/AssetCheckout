@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
-import { apiFetch } from "@/api/client";
+import { actionCountsQuery, type ActionCounts } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
 
 ///  +-----------------------------------------------------------------+
 ///  |              WHAT IS WAITING ON THE SIGNED-IN PERSON            |
@@ -10,43 +12,43 @@ import { apiFetch } from "@/api/client";
 //  it is deliberately one small count query rather than the requests list —
 //  fetching every row on every page to render two digits would be absurd.
 //
-//  FAILS TO ZERO, SILENTLY. A badge is an enhancement; a red error where a
-//  count should be is worse than no count. A Snipe blip or an unresolvable
-//  actor degrades to "nothing waiting", and the next refresh picks it up.
-//
-//  THREE THINGS MAKE IT REFETCH: navigation, the dev user switcher, and an
-//  explicit signal from a page that has just changed something. The third
-//  exists because the counts' most common change — dismissing a marker by
-//  hovering a row — happens WITHOUT navigating, so the badge sat stale until
-//  the next page load and looked broken.
+//  WHEN IT REFETCHES. The query is workflow-fresh (30 s, and on window
+//  focus). Navigating rechecks it only once it has gone stale; it used to
+//  refetch on every navigation whether or not anything could have moved.
+//  Anything that changes the counts says so through the two helpers below,
+//  and switching the dev user resets the whole cache.
 ///  +-----------------------------------------------------------------+
 
-export type ActionCounts = {
-  /** Requests blocked on this person and not yet seen by them. */
-  requests: number;
-  /** Devices at their site waiting to be handed over. */
-  stock: number;
-};
+export type { ActionCounts };
 
 const EMPTY: ActionCounts = { requests: 0, stock: 0 };
 
-/** Something changed that the counts depend on — reconcile with the server. */
-const COUNTS_CHANGED = "action-counts-changed";
-/** One counted request was just dismissed — drop the badge now, ask later. */
-const SEEN_CLEARED = "action-counts-seen-cleared";
+/** Long enough to collapse a burst of dismissals into one request. */
+const RECONCILE_MS = 1500;
+let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Debounced: dwelling down a column of rows fires one of these per row, and
+// each would otherwise be its own request.
+function scheduleReconcile(): void {
+  if (reconcileTimer) clearTimeout(reconcileTimer);
+  reconcileTimer = setTimeout(() => {
+    reconcileTimer = null;
+    void queryClient.invalidateQueries({ queryKey: actionCountsQuery.queryKey });
+  }, RECONCILE_MS);
+}
 
 /**
  * Tell the badges to recheck. Call after anything that could change what is
  * waiting on the reader: approving, handing over, confirming a collection.
  */
 export function notifyActionCountsChanged(): void {
-  window.dispatchEvent(new Event(COUNTS_CHANGED));
+  scheduleReconcile();
 }
 
 /**
  * A request that WAS being counted has just been marked seen.
  *
- * Fires an optimistic decrement as well as a reconcile, because this one is
+ * Drops the badge optimistically as well as reconciling, because this one is
  * triggered by the reader's own pointer resting on a row — they are looking
  * straight at the badge when it happens, and a round trip's worth of delay
  * reads as the number being stuck. The reconcile behind it corrects any
@@ -57,66 +59,23 @@ export function notifyActionCountsChanged(): void {
  * for those would run the number to zero while work remained.
  */
 export function notifySeenCleared(): void {
-  window.dispatchEvent(new Event(SEEN_CLEARED));
-  window.dispatchEvent(new Event(COUNTS_CHANGED));
+  // Never below zero: the optimistic path can race the reconcile, and a
+  // badge reading "-1" is a worse failure than one that is briefly high.
+  queryClient.setQueryData(actionCountsQuery.queryKey, (c) =>
+    c ? { ...c, requests: Math.max(0, c.requests - 1) } : c
+  );
+  scheduleReconcile();
 }
 
-/** Long enough to collapse a burst of dismissals into one request. */
-const RECONCILE_MS = 1500;
-
 export function useActionCounts(): ActionCounts {
-  const [counts, setCounts] = useState<ActionCounts>(EMPTY);
+  const { data } = useQuery(actionCountsQuery);
 
-  // The Navbar sits OUTSIDE <Routes> and never unmounts, so a bare [] would
-  // fetch once at boot and then describe a world several actions out of date.
+  // The Navbar sits OUTSIDE <Routes> and never unmounts, so nothing would
+  // otherwise recheck the counts between window focuses.
   const { pathname } = useLocation();
-  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await apiFetch<{ requests: number; stock: number }>(
-          "/api/requests/action-counts"
-        );
-        if (cancelled) return;
-        setCounts({
-          requests: Number.isFinite(data.requests) ? data.requests : 0,
-          stock: Number.isFinite(data.stock) ? data.stock : 0,
-        });
-      } catch {
-        if (!cancelled) setCounts(EMPTY);
-      }
-    }
-
-    // Debounced: dwelling down a column of rows fires one of these per row,
-    // and each would otherwise be its own request.
-    function scheduleReconcile() {
-      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
-      reconcileTimer.current = setTimeout(() => void load(), RECONCILE_MS);
-    }
-
-    // Never below zero: the optimistic path can race the reconcile, and a
-    // badge reading "-1" is a worse failure than one that is briefly high.
-    function decrement() {
-      setCounts((c) => ({ ...c, requests: Math.max(0, c.requests - 1) }));
-    }
-
-    void load();
-
-    window.addEventListener("dev-user-changed", load);
-    window.addEventListener(COUNTS_CHANGED, scheduleReconcile);
-    window.addEventListener(SEEN_CLEARED, decrement);
-
-    return () => {
-      cancelled = true;
-      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
-      window.removeEventListener("dev-user-changed", load);
-      window.removeEventListener(COUNTS_CHANGED, scheduleReconcile);
-      window.removeEventListener(SEEN_CLEARED, decrement);
-    };
+    void queryClient.refetchQueries({ queryKey: actionCountsQuery.queryKey, stale: true, type: "active" });
   }, [pathname]);
 
-  return counts;
+  return data ?? EMPTY;
 }

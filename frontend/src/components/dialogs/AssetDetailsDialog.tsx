@@ -5,16 +5,23 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogFooter,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
+import { queryClient } from "@/api/queryClient";
+import { companiesQuery, locationsQuery, statusesQuery, tiersQuery } from "@/api/queries";
 import ComboboxField from "@/components/ui/comboboxfield";
 import { useEffect, useState, useRef } from "react";
 import type { Request } from "@/types/requestType";
-import {
-  getCompanies,
-  getLocations,
-  getStatuses,
-} from "@/api/snipe";
-import { getTiers } from "@/api/analytics";
 import type { SnipeNamedRecord } from "@/types/snipeTypes";
+import { apiFetch } from "@/api/client";
+
+/** The fields of a Snipe-IT hardware record this dialog pre-fills from. */
+type SnipeAssetDetail = {
+  company?: { id: number } | null;
+  serial?: string | null;
+  status_label?: { id: number } | null;
+  location?: { id: number } | null;
+  custom_fields?: { Tier?: { value?: string } };
+  asset_tag?: string | null;
+};
 
 type DialogState =
   | { phase: "loading" }
@@ -48,7 +55,6 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  currentUserName: string;
   averages: Record<string, Record<number, number>>;
 };
 
@@ -59,7 +65,6 @@ export default function AssetDetailsDialog({
   open,
   onOpenChange,
   onSuccess,
-  currentUserName,
   averages,
 }: Props) {
   const [dialogState, setDialogState] = useState<DialogState>({ phase: "loading" });
@@ -106,15 +111,13 @@ export default function AssetDetailsDialog({
           tierValuesData,
           assetData,
         ] = await Promise.all([
-          getCompanies(),
-          getLocations(),
-          getStatuses(),
-          getTiers(),
-          fetch(`/api/snipe/asset/${request!.modelRequest!.linkedAssetId}`, {
-            headers: {
-              "x-dev-user-name": currentUserName,
-            },
-          }).then((r) => (r.ok ? r.json() : null)),
+          queryClient.fetchQuery(companiesQuery),
+          queryClient.fetchQuery(locationsQuery),
+          queryClient.fetchQuery(statusesQuery),
+          queryClient.fetchQuery(tiersQuery),
+          apiFetch<{ asset?: SnipeAssetDetail }>(
+            `/api/snipe/asset/${request!.modelRequest!.linkedAssetId}`
+          ).catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -162,7 +165,7 @@ export default function AssetDetailsDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, request, currentUserName]);
+  }, [open, request]);
 
   useEffect(() => {
     if (dialogState.phase === "success" && !successFiredRef.current) {
@@ -236,19 +239,10 @@ export default function AssetDetailsDialog({
         price: form.price === "" ? undefined : parseFloat(form.price),
       };
 
-      const res = await fetch(`/api/approval/${request.id}/asset-details`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-dev-user-name": currentUserName,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || data.error || "Submission failed");
-      }
+      const data = await apiFetch<{ modelRequest?: { assetReady?: boolean } }>(
+        `/api/approval/${request.id}/asset-details`,
+        { method: "POST", body }
+      );
 
       const assetReady = data?.modelRequest?.assetReady === true;
       setDialogState({

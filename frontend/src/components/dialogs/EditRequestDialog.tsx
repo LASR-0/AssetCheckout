@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { assetCategoriesQuery, usersQuery } from "@/api/queries";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -12,9 +14,7 @@ import SpecLevelToggle from "@/components/request-form/SpecLevelToggle";
 import ApprovalInput from "@/components/request-form/ApprovalInput";
 import type { User } from "@/components/request-form/UserSelect";
 import { editRequest, type EditRequestPayload } from "@/api/requests";
-import { getAssetCategories } from "@/api/categories";
 import { getAccessoryCategoriesForUser, type AccessoryOptionChoice } from "@/api/accessories";
-import { fetchUsers } from "@/api/users";
 import { canEditRequestShape } from "@/lib/permissions";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { resolveMobileNumber } from "@/lib/mobileNumber";
@@ -255,7 +255,7 @@ export default function EditRequestDialog({
   // dialog is open.
   useEffect(() => {
     if (!open || users.length > 0) return;
-    fetchUsers()
+    queryClient.fetchQuery(usersQuery)
       .then((data) =>
         setUsers(
           data
@@ -301,7 +301,7 @@ export default function EditRequestDialog({
     const load =
       state.requestKind === "ACCESSORY"
         ? getAccessoryCategoriesForUser(request.userId)
-        : getAssetCategories();
+        : queryClient.fetchQuery(assetCategoriesQuery);
 
     load
       .then((cats) => {

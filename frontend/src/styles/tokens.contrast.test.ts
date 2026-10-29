@@ -52,27 +52,14 @@ const PAIRS: [string, string][] = [
   ["on-brand", "brand"],
 ];
 
-// Shortfalls in the design as delivered, pending a decision (raised
-// 2026-10-29). Listed so that everything ELSE is enforced today; remove an
-// entry once the token is settled and the pair passes.
-const KNOWN_GAPS: Record<string, string[]> = {
-  light: ["mut on tray", "placeholder on sheet"],
-  dark: ["placeholder on sheet"],
-};
 
 const MODES = { light: palette(":root"), dark: palette("\\.dark") };
 
-describe.each(Object.entries(MODES))("Platinum %s", (mode, tokens) => {
+describe.each(Object.entries(MODES))("Platinum %s", (_mode, tokens) => {
   it.each(PAIRS)("%s on %s is at least 4.5:1", (text, ground) => {
     expect(tokens[text], `--${text} missing`).toBeDefined();
     expect(tokens[ground], `--${ground} missing`).toBeDefined();
-    const ratio = contrast(tokens[text], tokens[ground]);
-    if (KNOWN_GAPS[mode].includes(`${text} on ${ground}`)) {
-      // Still guard against it getting worse while it waits.
-      expect(ratio).toBeGreaterThanOrEqual(3);
-      return;
-    }
-    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(tokens[text], tokens[ground])).toBeGreaterThanOrEqual(4.5);
   });
 
   it("defines every themed token in both modes, so the theme fade has both ends", () => {

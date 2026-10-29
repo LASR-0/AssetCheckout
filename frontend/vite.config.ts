@@ -63,6 +63,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss(), preloadIconFont()],
+    // Changes on every build, so data the browser saved under an older build
+    // (api/persist.ts) is dropped rather than read back in a stale shape.
+    define: {
+      __BUILD_ID__: JSON.stringify(Date.now().toString(36)),
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

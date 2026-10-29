@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { allAccessoryCategoriesQuery } from "@/api/queries";
 import ComboboxField from "@/components/ui/comboboxfield";
 import { Switch } from "@/components/ui/switch";
-import { getAllAccessoryCategories, getAccessoriesByCategory } from "@/api/accessories";
+import { getAccessoriesByCategory } from "@/api/accessories";
 import { getLoanConfig, setLoanConfig, type LoanDevice } from "@/api/settings";
 import type { AccessoryCategory, AccessorySummary } from "@/types/accessoriesType";
 import { iconForCategory } from "@/lib/categoryIcon";
@@ -80,7 +82,7 @@ export default function LoanConfiguration() {
         setLoading(true);
         setError(null);
         const [cats, config] = await Promise.all([
-          getAllAccessoryCategories(),
+          queryClient.fetchQuery(allAccessoryCategoriesQuery),
           getLoanConfig(),
         ]);
         if (cancelled) return;

@@ -47,10 +47,10 @@
     --tx: #1F1C18;
     --tx2: #3E3933;
     --tx3: #5C564E;
-    --mut: #6E685F;
+    --mut: #6D675E;
     --dis: #A7A096;
     /* Between mut and dis: only ever placeholder text. */
-    --placeholder: #8A847B;
+    --placeholder: #7A746B;
 
     /* Brand */
     --brand: #7E22CE;
@@ -105,7 +105,7 @@
     --tx3: #B8B1A8;
     --mut: #9E978E;
     --dis: #6A645E;
-    --placeholder: #847D75;
+    --placeholder: #8C857D;
 
     --brand: #C084FC;
     --brand-tx: #D8B4FE;

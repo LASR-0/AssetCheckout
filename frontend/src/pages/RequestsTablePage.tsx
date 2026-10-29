@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import RequestsToolbar from "@/components/request-table/RequestsToolbar";
 import RequestsPagination from "@/components/request-table/RequestPagination";
@@ -6,8 +6,10 @@ import RequestsTable from "@/components/request-table/RequestsTable";
 import CreateModelDialog from "@/components/dialogs/CreateModelDialog";
 import RejectionReasonDialog from "@/components/dialogs/RejectRequestDialog";
 import ShipDialog from "@/components/dialogs/ShipDialog";
-import { getRequests, markRequestSeen } from "@/api/requests";
-import { getPriceAverages, getTiers } from "@/api/analytics";
+import { markRequestSeen } from "@/api/requests";
+import { useQueries, useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { queryClient } from "@/api/queryClient";
+import { invalidateWorkflow, priceAveragesQuery, requestsQuery, tiersQuery } from "@/api/queries";
 import type { Request } from "@/types/requestType";
 import { deriveStage, isDoneStage } from "@/lib/stage";
 import {
@@ -39,7 +41,6 @@ import { skipQuote } from "@/api/quotes";
 import { markUserProcured } from "@/api/selfProcurement";
 import { useTourReady } from "@/components/tour/TourProvider";
 import {
-  notifyActionCountsChanged,
   notifySeenCleared,
 } from "@/hooks/useActionCounts";
 
@@ -90,13 +91,33 @@ const SELECTABLE_STATUSES = [
   "COMPLETED",
 ];
 
+const NO_REQUESTS: Request[] = [];
+const NO_TIERS: string[] = [];
+
+/** Tier name (lower case) → model id → average price, from whichever tiers
+ *  have loaded so far. */
+function byTier(
+  results: UseQueryResult<{ tier: string; averages: Record<number, number> }>[]
+): Record<string, Record<number, number>> {
+  const out: Record<string, Record<number, number>> = {};
+  for (const r of results) if (r.data) out[r.data.tier.toLowerCase()] = r.data.averages;
+  return out;
+}
+
 export default function RequestTablePage() {
-  const [requests, setRequests] = useState<Request[]>([]);
+  // Always unfiltered. The dropdown selects a derived STAGE, which the
+  // backend's single-status param can't express at all, so narrowing happens
+  // in visibleRequests below. Safe because this endpoint is not paginated, so
+  // we already hold every row the actor can see and the table paginates
+  // locally. The same cached list backs Home and Stock.
+  const requestsResult = useQuery(requestsQuery);
+  const requests = requestsResult.data ?? NO_REQUESTS;
   /** Whether the first fetch has settled — the tour waits for it, so that a
-   *  step pointing at a row's actions has rows to find. */
-  const [loaded, setLoaded] = useState(false);
-  /** Distinguishes the mount fetch from a post-action reload — see loadRequests. */
-  const hasLoadedOnce = useRef(false);
+   *  step pointing at a row's actions has rows to find. Settled whether it
+   *  worked or not: the tour's fallbacks cover an empty table, and blocking
+   *  it behind a failed request would leave the page permanently
+   *  un-touchable. */
+  const loaded = !requestsResult.isPending;
 
   // Seeded from the URL so widgets elsewhere can deep-link into a view:
   // ?status=IN_PROGRESS&q=<name> is what the home page's "In progress" tile
@@ -143,7 +164,7 @@ export default function RequestTablePage() {
   const [returnLoanOpen, setReturnLoanOpen] = useState(false);
   const [returnLoanPending, setReturnLoanPending] = useState(false);
   const [returnLoanError, setReturnLoanError] = useState<string | null>(null);
-  const [tiers, setTiers] = useState<string[]>([]);
+  const { data: tiers = NO_TIERS } = useQuery(tiersQuery);
 
   const [filteredCount, setFilteredCount] = useState(0);
 
@@ -163,7 +184,10 @@ export default function RequestTablePage() {
     role,
     isStockKeeper(stockKeeperLocations)
   );
-  const [averages, setAverages] = useState<Record<string, Record<number, number>>>({});
+  const averages = useQueries({
+    queries: tiers.map((tier) => priceAveragesQuery(tier)),
+    combine: byTier,
+  });
   const [assetDetailsDialogOpen, setAssetDetailsDialogOpen] = useState(false);
   const [createAccessoryDialogOpen, setCreateAccessoryDialogOpen] = useState(false);
   const [accessoryStockDialogOpen, setAccessoryStockDialogOpen] = useState(false);
@@ -200,78 +224,13 @@ export default function RequestTablePage() {
   >(null);
 
   // -----------------------------
-  // DATA FETCH
+  // DATA
   // -----------------------------
-  useEffect(() => {
-    loadRequests();
-    loadTiers();
-    // No longer keyed on `status` — the fetch is unfiltered and narrowing is
-    // a pure client-side derivation, so changing the filter shouldn't refetch.
-  }, [page]);
-
-  useEffect(() => {
-  let cancelled = false;
-  async function load() {
-    try {
-      const tiers = await getTiers();
-
-      const tierAveragesArray = await Promise.all(
-        tiers.map(async (tier) => ({
-          tier: tier.toLowerCase(),
-          averages: await getPriceAverages(tier),
-        }))
-      );
-
-      const allTierAverages: Record<string, Record<number, number>> = {};
-      for (const entry of tierAveragesArray) {
-        allTierAverages[entry.tier] = entry.averages;
-      }
-
-      if (!cancelled) setAverages(allTierAverages);
-      } catch (err) {
-        console.error("Failed to load tier averages", err);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  async function loadTiers() {
-    try {
-      const data = await getTiers();
-      setTiers(data);
-    } catch (err) {
-      console.error("Failed to load tiers", err);
-    }
-  }
-
+  // Approving, handing over and confirming a collection all land here. Each
+  // changes what is waiting on somebody, so this refreshes the list and the
+  // nav badges together (see invalidateWorkflow).
   async function loadRequests() {
-    try {
-      // Always unfiltered. The dropdown now selects a derived STAGE, which the
-      // backend's single-status param can't express at all, so narrowing
-      // happens in visibleRequests below. Safe because this endpoint is not
-      // paginated (findMany with no take), so we already hold every row the
-      // actor can see and the table paginates locally.
-      const data = await getRequests({});
-
-      setRequests(data.requests);
-      // Approving, handing over and confirming a collection all land here via
-      // a reload. Each of them changes what is waiting on somebody, so the
-      // badges are told to recheck rather than waiting for a navigation.
-      //
-      // Skipped on the FIRST load: the hook fetches on mount anyway, and
-      // signalling here too would cost a second identical query on every
-      // visit to this page for no new information.
-      if (hasLoadedOnce.current) notifyActionCountsChanged();
-      hasLoadedOnce.current = true;
-    } catch (err) {
-      console.error("Failed to load requests", err);
-    } finally {
-      // Reported whether the fetch worked or not: the tour's fallbacks cover
-      // an empty table, and blocking it behind a failed request would leave
-      // the page permanently un-touchable.
-      setLoaded(true);
-    }
+    await invalidateWorkflow();
   }
 
   /**
@@ -757,8 +716,8 @@ export default function RequestTablePage() {
       !request.seenByMe &&
       needsMyAction(request, role, currentUserId, currentUserName);
 
-    setRequests((prev) =>
-      prev.map((r) => (r.id === request.id ? { ...r, seenByMe: true } : r))
+    queryClient.setQueryData(requestsQuery.queryKey, (prev) =>
+      prev?.map((r) => (r.id === request.id ? { ...r, seenByMe: true } : r))
     );
     void markRequestSeen(request.id);
 
@@ -970,7 +929,6 @@ export default function RequestTablePage() {
             request={selectedRequest}
             open={approveDialogOpen}
             onOpenChange={setApproveDialogOpen}
-            currentUserName={currentUserName}
             onSuccess={loadRequests}
           />
 
@@ -979,7 +937,6 @@ export default function RequestTablePage() {
             open={assetDetailsDialogOpen}
             onOpenChange={setAssetDetailsDialogOpen}
             onSuccess={loadRequests}
-            currentUserName={currentUserName}
             averages={averages}
           />
 

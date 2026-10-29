@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/api/client";
 import { resetPalettes } from "@/lib/theme-transition";
 import {
   DEFAULT_PRESET,
@@ -99,11 +100,7 @@ function swapPreset(id: PresetId): void {
 export async function syncOrgPreset(): Promise<void> {
   let preset: unknown;
   try {
-    const res = await fetch("/api/settings/appearance", {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) return;
-    preset = (await res.json())?.preset;
+    preset = (await apiFetch<{ preset?: unknown }>("/api/settings/appearance"))?.preset;
   } catch {
     return;
   }

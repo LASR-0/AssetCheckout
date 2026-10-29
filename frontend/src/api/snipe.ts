@@ -1,38 +1,22 @@
 /**
- * Phase 5d-iii: frontend API helpers for Snipe-IT read-only lookups.
- *
- * These power the dropdowns in the Asset Details dialog. All three endpoints
- * return the same shape: {id, name}[]. No caching at this layer — the form
- * fetches on open. If repeat opens become noticeable, consider an in-memory
- * cache or React Query later.
+ * Snipe-IT read-only lookups: the dropdowns in the Asset Details dialog, the
+ * stock keeper pickers. All three endpoints return the same shape: {id, name}[].
+ * Cached through api/queries.ts, so repeat opens cost nothing.
  */
+import { apiFetch } from "@/api/client";
 import type { SnipeNamedRecord } from "@/types/snipeTypes";
 
-function authHeaders(): HeadersInit {
-  const devName = localStorage.getItem("dev-user-name") ?? "";
-  return {
-    "Content-Type": "application/json",
-    "x-dev-user-name": devName,
-  };
-}
-
-export async function getCompanies(): Promise<SnipeNamedRecord[]> {
-  const res = await fetch("/api/snipe/companies", { headers: authHeaders() });
-  if (!res.ok) throw new Error("Failed to fetch companies");
-  const data = await res.json();
+export async function getCompanies(signal?: AbortSignal): Promise<SnipeNamedRecord[]> {
+  const data = await apiFetch<{ companies?: SnipeNamedRecord[] }>("/api/snipe/companies", { signal });
   return data.companies ?? [];
 }
 
-export async function getLocations(): Promise<SnipeNamedRecord[]> {
-  const res = await fetch("/api/snipe/locations", { headers: authHeaders() });
-  if (!res.ok) throw new Error("Failed to fetch locations");
-  const data = await res.json();
+export async function getLocations(signal?: AbortSignal): Promise<SnipeNamedRecord[]> {
+  const data = await apiFetch<{ locations?: SnipeNamedRecord[] }>("/api/snipe/locations", { signal });
   return data.locations ?? [];
 }
 
-export async function getStatuses(): Promise<SnipeNamedRecord[]> {
-  const res = await fetch("/api/snipe/statuses", { headers: authHeaders() });
-  if (!res.ok) throw new Error("Failed to fetch statuses");
-  const data = await res.json();
+export async function getStatuses(signal?: AbortSignal): Promise<SnipeNamedRecord[]> {
+  const data = await apiFetch<{ statuses?: SnipeNamedRecord[] }>("/api/snipe/statuses", { signal });
   return data.statuses ?? [];
 }

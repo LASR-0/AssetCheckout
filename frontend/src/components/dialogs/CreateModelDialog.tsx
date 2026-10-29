@@ -7,6 +7,7 @@ import {
 } from "@/components/dialogs/ResponsiveDialogWrapper";
 import { useEffect, useState, useRef } from "react";
 import type { Request } from "@/types/requestType";
+import { apiFetch } from "@/api/client";
 
 type SnipeMatch = {
   id: number;
@@ -53,7 +54,6 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  currentUserName: string;
 };
 
 export default function CreateModelDialog({
@@ -61,7 +61,6 @@ export default function CreateModelDialog({
   open,
   onOpenChange,
   onSuccess,
-  currentUserName,
 }: Props) {
   const [dialogState, setDialogState] = useState<DialogState>({ phase: "form" });
   const [form, setForm] = useState<FormFields>(EMPTY_FORM);
@@ -121,19 +120,9 @@ export default function CreateModelDialog({
         manufacturer,
         modelName,
       });
-      const res = await fetch(
-        `/api/approval/${request.id}/search-models?${params.toString()}`,
-        {
-          headers: { "x-dev-user-name": currentUserName },
-        }
+      const data = await apiFetch<{ matches?: SnipeMatch[] }>(
+        `/api/approval/${request.id}/search-models?${params.toString()}`
       );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Search failed");
-      }
-
-      const data = await res.json();
       const matches: SnipeMatch[] = data.matches ?? [];
 
       if (matches.length === 0) {
@@ -157,24 +146,10 @@ export default function CreateModelDialog({
     setDialogState({ phase: "linking" });
 
     try {
-      const res = await fetch(
+      const data = await apiFetch<{ message?: string } | undefined>(
         `/api/approval/${request.id}/use-existing-model`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-dev-user-name": currentUserName,
-          },
-          body: JSON.stringify({ snipeModelId }),
-        }
+        { method: "POST", body: { snipeModelId } }
       );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || err.error || "Failed to link model");
-      }
-
-      const data = await res.json().catch(() => ({}));
 
       setDialogState({
         phase: "success",
@@ -196,23 +171,14 @@ export default function CreateModelDialog({
     setDialogState({ phase: "creating" });
 
     try {
-      const res = await fetch(`/api/approval/${request.id}/create-model`, {
+      await apiFetch(`/api/approval/${request.id}/create-model`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-dev-user-name": currentUserName,
-        },
-        body: JSON.stringify({
+        body: {
           manufacturer: form.manufacturer.trim(),
           modelName: form.modelName.trim(),
           modelNumber: form.modelNumber.trim(),
-        }),
+        },
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || err.error || "Failed to create model");
-      }
 
       setDialogState({
         phase: "success",

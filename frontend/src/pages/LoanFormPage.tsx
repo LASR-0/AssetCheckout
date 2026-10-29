@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { invalidateWorkflow } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
+import { loanDevicesQuery, usersQuery } from "@/api/queries";
 import type { DateRange } from "react-day-picker";
 import { useNavigate } from "react-router-dom";
 import UserDetailsInput from "@/components/request-form/UserDetailsInput";
@@ -7,8 +10,7 @@ import LoanWindowSection, {
   countDays,
 } from "@/components/loan-form/LoanWindowSection";
 import LoanDevicePicker from "@/components/loan-form/LoanDevicePicker";
-import { fetchUsers } from "@/api/users";
-import { createLoanRequest, getLoanDevices, type LoanDeviceChoice } from "@/api/loans";
+import { createLoanRequest, type LoanDeviceChoice } from "@/api/loans";
 import type { User } from "@/components/request-form/UserSelect";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -65,7 +67,7 @@ export default function LoanFormPage() {
   const device = devices.find((d) => d.id === deviceId) ?? null;
 
   useEffect(() => {
-    fetchUsers().then((data) => {
+    queryClient.fetchQuery(usersQuery).then((data) => {
       setUsers(
         data
           .map((u) => ({
@@ -82,7 +84,7 @@ export default function LoanFormPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getLoanDevices()
+    queryClient.fetchQuery(loanDevicesQuery)
       .then((list) => {
         if (cancelled) return;
         setDevices(list);
@@ -146,6 +148,7 @@ export default function LoanFormPage() {
         eventName: device.showEventName ? eventName.trim() || null : null,
       });
 
+      void invalidateWorkflow();
       navigate("/success", { state: { request: data.request } });
     } catch (err: any) {
       console.error("ERROR:", err);

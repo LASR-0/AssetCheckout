@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAllAssetCategories } from "@/api/categories";
+import { queryClient } from "@/api/queryClient";
+import { allAssetCategoriesQuery } from "@/api/queries";
 import {
   getRequestableCategoryIds,
   setRequestableCategoryIds,
@@ -36,7 +37,7 @@ export default function AssetConfigurationSettings({
         setLoading(true);
         setError(null);
         const [allCats, allowedIds] = await Promise.all([
-          getAllAssetCategories(),
+          queryClient.fetchQuery(allAssetCategoriesQuery),
           getRequestableCategoryIds(),
         ]);
         if (cancelled) return;

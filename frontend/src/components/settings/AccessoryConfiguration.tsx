@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  getAllAccessoryCategories,
-  getAccessorySettings,
-  setRequestableAccessoryCategoryIds,
-} from "@/api/accessories";
+import { queryClient } from "@/api/queryClient";
+import { accessorySettingsQuery, allAccessoryCategoriesQuery } from "@/api/queries";
+import { setRequestableAccessoryCategoryIds } from "@/api/accessories";
 import { getAccessoryAssetMap } from "@/api/settings";
 import RequestableAccessoryCategoriesSelector from "@/components/settings/RequestableAccessoryCategoriesSelector";
 import StandardAccessoriesSelector from "@/components/settings/StandardAccessoriesSelector";
@@ -51,8 +49,8 @@ export default function AssetConfigurationSettings({
         setLoading(true);
         setError(null);
         const [allCats, settings, mapResult] = await Promise.all([
-          getAllAccessoryCategories(),
-          getAccessorySettings(),
+          queryClient.fetchQuery(allAccessoryCategoriesQuery),
+          queryClient.fetchQuery(accessorySettingsQuery),
           getAccessoryAssetMap().catch(() => null),
         ]);
         if (cancelled) return;

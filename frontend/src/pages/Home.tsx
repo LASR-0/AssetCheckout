@@ -1,16 +1,19 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { getRequests } from "@/api/requests";
-import { getAssetCategories } from "@/api/categories";
+import { useQuery } from "@tanstack/react-query";
+import {
+  accessoryCategoriesForMeQuery,
+  assetCategoriesQuery,
+  holdingsQuery,
+  requestsQuery,
+} from "@/api/queries";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { useAuth } from "@/hooks/useAuth";
 import { StatusBadge, Badge } from "@/components/ui/statusbadge";
 import { deriveStage, isDoneStage } from "@/lib/stage";
 import type { AssetCategory } from "@/types/categoriesType";
-import { getAccessoryCategoriesForMe } from "@/api/accessories";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 import type { Request } from "@/types/requestType"
-import { getMyHoldings } from "@/api/holdings";
 import MyHoldingsDialog, { type Row as HoldingRow } from "@/components/dialogs/MyHoldingsDialog";
 import type {
   UserHoldings,
@@ -85,49 +88,28 @@ function SectionHeader({
   );
 }
 
+// Stable empties, so a default does not change identity every render.
+const NO_ASSET_CATEGORIES: AssetCategory[] = [];
+const NO_ACCESSORY_CATEGORIES: AccessoryCategory[] = [];
+
 ///  +-----------------------------------------------------------------+
 ///  |                  DATA: THE USER'S REQUESTS                      |
 ///  +-----------------------------------------------------------------+
 //
-//  Scope: requests where the signed-in person is the TARGET USER.
-//  getRequests no longer accepts a userId filter, so we fetch the most
-//  recent org-wide page (limit 100) and filter client-side by userName —
-//  the same comparison RecentRequests already uses. NOTE: the 100-request
-//  window is now org-wide, so stats reflect the user's share of recent
-//  activity rather than a guaranteed all-time count.
+//  Scope: requests where the signed-in person is the TARGET USER. The list
+//  is the shared, cached requests query (Requests and Stock read the same
+//  one), filtered here by userName — the same comparison RecentRequests
+//  already uses.
 
 function useMyRequests() {
   const { name, isLoading: authLoading } = useAuth();
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const { data, isPending, isError } = useQuery({ ...requestsQuery, enabled: !authLoading && !!name });
+  const requests = useMemo(() => (data ?? []).filter((r) => r.userName === name), [data, name]);
   useEffect(() => {
-    if (authLoading) return;
-    if (!name) {
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await getRequests({ limit: 100 });
-        const all: Request[] = data.requests ?? [];
-        const mine = all.filter((r) => r.userName === name);
-        if (!cancelled) setRequests(mine);
-      } catch (err) {
-        console.error("Failed to load home page requests", err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [name, authLoading]);
-
+    if (isError) console.error("Failed to load home page requests");
+  }, [isError]);
+  // Signed out (dev) never fetches, so it is not loading either.
+  const loading = authLoading || (!!name && isPending);
   return { requests, loading };
 }
 
@@ -149,39 +131,20 @@ function useMyRequests() {
 
 function useMyHoldings() {
   const { name, isLoading: authLoading } = useAuth();
-  const [holdings, setHoldings] = useState<UserHoldings>({
-    assets: [],
-    accessories: [],
-  });
+  const { data, isSuccess, isError } = useQuery({ ...holdingsQuery, enabled: !authLoading && !!name });
+  const holdings: UserHoldings = useMemo(
+    () => ({ assets: data?.assets ?? [], accessories: data?.accessories ?? [] }),
+    [data]
+  );
   // "Did the fetch actually succeed?" — NOT the same question as "is the list
   // empty?". The tiles above can treat both the same way (they just render as
   // they did before holdings existed), but the "what you already have" section
   // cannot: telling someone they hold nothing when the request failed is a
   // confident lie, and the whole point of that section is to be trusted.
-  const [resolved, setResolved] = useState(false);
-
+  const resolved = isSuccess;
   useEffect(() => {
-    if (authLoading || !name) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getMyHoldings();
-        if (cancelled) return;
-        setHoldings({
-          assets: data.assets ?? [],
-          accessories: data.accessories ?? [],
-        });
-        setResolved(true);
-      } catch (err) {
-        console.error("Failed to load holdings for home page", err);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [name, authLoading]);
+    if (isError) console.error("Failed to load holdings for home page");
+  }, [isError]);
 
   const assetsByCategory = useMemo(
     () => groupByCategoryId(holdings.assets),
@@ -614,29 +577,8 @@ function QuickStart({
    *  did. */
   holdingsByCategory: Map<number, AssetHolding[]>;
 }) {
-  const [categories, setCategories] = useState<AssetCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const { data: categories = NO_ASSET_CATEGORIES, isPending: loading, isError: error } = useQuery(assetCategoriesQuery);
   const [holdingsOpen, setHoldingsOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await getAssetCategories();
-        if (!cancelled) setCategories(data);
-      } catch (err) {
-        console.error("Failed to load categories for home page", err);
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <section data-tour="home-request-assets" className={`${CARD} shadow-sm mb-8 scroll-mt-24`}>
@@ -947,26 +889,9 @@ function AccessoryQuickStart({
   /** Accessory holdings keyed by Snipe accessory category id. */
   holdingsByCategory: Map<number, AccessoryHolding[]>;
 }) {
-  const [categories, setCategories] = useState<AccessoryCategory[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const { data: categories = NO_ACCESSORY_CATEGORIES, isPending } = useQuery(accessoryCategoriesForMeQuery);
+  const loaded = !isPending;
   const [holdingsOpen, setHoldingsOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getAccessoryCategoriesForMe();
-        if (!cancelled) setCategories(data);
-      } catch (err) {
-        console.error("Failed to load accessory categories for home page", err);
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (!loaded || categories.length === 0) return null;
 

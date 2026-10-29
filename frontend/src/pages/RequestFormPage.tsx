@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
+import { invalidateWorkflow } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
+import { usersQuery } from "@/api/queries";
 import AssetTypeSelector from "@/components/request-form/AssetTypeSelector";
 import AssetOptionsSection from "@/components/request-form/AssetOptionsSection";
 import ApprovalInput from "@/components/request-form/ApprovalInput";
 import SpecLevelToggle from "@/components/request-form/SpecLevelToggle";
 import UserDetailsInput from "@/components/request-form/UserDetailsInput";
-import { fetchUsers } from "@/api/users";
+import { apiFetch } from "@/api/client";
 import { isPhoneCategory, isTabletCategory } from "@/lib/categoryIcon";
 import { resolveMobileNumber } from "@/lib/mobileNumber";
 import { useMobileFilterConfig } from "@/hooks/useMobileFilterConfig";
@@ -121,19 +124,11 @@ export default function RequestFormPage() {
   delete (payload as any).reuseUser;
 
     try {
-      const res = await fetch("/api/requests", {
+      const data = await apiFetch<{ request: unknown }>("/api/requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to create request");
-      }
-
-      const data = await res.json();
-      console.log("REQUEST CREATED:", data);
+      void invalidateWorkflow();
 
       navigate("/success", {
         state: {
@@ -157,7 +152,7 @@ export default function RequestFormPage() {
   };
 
   useEffect(() => {
-    fetchUsers().then((data) => {
+    queryClient.fetchQuery(usersQuery).then((data) => {
       const formatted = data.map((u) => ({
         id: u.id,
         name: u.name,

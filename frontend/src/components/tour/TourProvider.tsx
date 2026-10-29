@@ -9,7 +9,10 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { getTourState, markTourSeen } from "@/api/tours";
+import { useQuery } from "@tanstack/react-query";
+import { markTourSeen } from "@/api/tours";
+import { tourStateQuery } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
 import { planTour, TOURS } from "@/lib/tours/registry";
 import { startTour, stopTour, isTourRunning } from "@/lib/tours/driverAdapter";
 import type { TourId } from "@/lib/tours/types";
@@ -94,10 +97,13 @@ export default function TourProvider({ children }: { children: React.ReactNode }
   const { role, isLoading } = useAuth();
   const { pathname } = useLocation();
 
-  const [seen, setSeen] = useState<TourId[]>([]);
-  const [enabled, setEnabled] = useState(false);
-  const [identified, setIdentified] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  // A failed fetch leaves `identified` false, which stays quiet rather than
+  // guessing. See the header.
+  const tourState = useQuery(tourStateQuery);
+  const loaded = !tourState.isPending;
+  const enabled = tourState.data?.enabled ?? false;
+  const identified = tourState.data?.identified ?? false;
+  const seen = useMemo(() => tourState.data?.seen ?? [], [tourState.data]);
   const [running, setRunning] = useState(false);
 
   // null: no page has claimed it has anything to wait for.
@@ -108,29 +114,6 @@ export default function TourProvider({ children }: { children: React.ReactNode }
   // Which pathname has already had its shot this session. Without it, any
   // re-render between starting and recording would start a second tour.
   const startedFor = useRef<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getTourState()
-      .then((state) => {
-        if (cancelled) return;
-        setSeen(state.seen);
-        setEnabled(state.enabled);
-        setIdentified(state.identified);
-      })
-      .catch(() => {
-        // Stay quiet rather than guess. See the header.
-        if (!cancelled) setIdentified(false);
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // A new page is a new decision, and a new readiness question — including
   // whether anybody is going to answer it.
@@ -164,7 +147,9 @@ export default function TourProvider({ children }: { children: React.ReactNode }
 
           // Optimistic, and not only for responsiveness: it is what stops a
           // failed POST restarting the tour on the next navigation.
-          setSeen((current) => [...new Set([...current, ...ids])]);
+          queryClient.setQueryData(tourStateQuery.queryKey, (s) =>
+            s ? { ...s, seen: [...new Set([...s.seen, ...ids])] } : s
+          );
 
           for (const id of ids) {
             // Fire and forget — the server answers 204 either way, and there

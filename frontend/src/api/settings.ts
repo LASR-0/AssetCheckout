@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { invalidate } from "@/api/queryClient";
 import type {
   StandardModelsConfig,
   StockKeeperEntry,
@@ -53,6 +54,7 @@ export async function setRequestableCategoryIds(
       body: { ids },
     }
   );
+  await invalidate(["reference", "asset-categories"]);
   return data.ids ?? null;
 }
 
@@ -105,6 +107,7 @@ export async function setAccessoryCategoriesForAssetCategory(
     "/api/settings/accessory-asset-map",
     { method: "PUT", body: { assetCategoryId, accessoryCategoryIds } }
   );
+  await invalidate(["reference", "accessory-categories"]);
   return data.map ?? {};
 }
 
@@ -148,6 +151,7 @@ export async function setStockKeepersForLocation(
     method: "PUT",
     body: { locationId, keepers, locationName: locationName ?? null },
   });
+  await invalidate(["identity"], ["requests", "action-counts"]);
   return {
     config: data.config ?? {},
     maxPerLocation: data.maxPerLocation ?? DEFAULT_MAX_STOCK_KEEPERS,
@@ -203,6 +207,7 @@ export async function setLoanConfig(
       ...(config.maxLoanDays !== undefined ? { maxLoanDays: config.maxLoanDays } : {}),
     },
   });
+  await invalidate(["loans"]);
   return {
     devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,

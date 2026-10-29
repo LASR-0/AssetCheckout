@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { prefetchFromLink } from "@/api/prefetch";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import TourButton from "@/components/tour/TourButton";
@@ -43,7 +44,12 @@ export default function Navbar() {
   const isDark = resolvedTheme === "dark";
 
   return (
-    <header data-tour-region="navbar" className="fixed top-0 z-50 w-full">
+    <header
+      data-tour-region="navbar"
+      className="fixed top-0 z-50 w-full"
+      onMouseOver={prefetchFromLink}
+      onFocus={prefetchFromLink}
+    >
 
       {/* PRIMARY BAR */}
       <div className="bg-footer-bg shadow-md border-b border-outline flex justify-between items-center w-full px-8 h-16">

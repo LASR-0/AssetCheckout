@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { statusesQuery } from "@/api/queries";
 import ComboboxField from "@/components/ui/comboboxfield";
-import { getStatuses } from "@/api/snipe";
 import {
   getSkeletonStatusId,
   setSkeletonStatusId,
@@ -30,7 +31,7 @@ export default function SkeletonStatusSelector() {
         setError(null);
 
         const [statusesData, savedId] = await Promise.all([
-          getStatuses(),
+          queryClient.fetchQuery(statusesQuery),
           getSkeletonStatusId(),
         ]);
 

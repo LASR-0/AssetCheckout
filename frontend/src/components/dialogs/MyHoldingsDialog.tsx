@@ -7,12 +7,16 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogFooter,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
-import { getMyHoldings } from "@/api/holdings";
+import { queryClient } from "@/api/queryClient";
+import {
+  assetCategoriesQuery,
+  holdingsQuery,
+  invalidateWorkflow,
+  requestableAccessoryCategoriesQuery,
+  troubleshootingSubjectsQuery,
+} from "@/api/queries";
 import { submitCorrection, type NoLongerHeldReason } from "@/api/corrections";
-import { getAssetCategories } from "@/api/categories";
-import { getAccessoryCategories } from "@/api/accessories";
 import { iconForCategory } from "@/lib/categoryIcon";
-import { getTroubleshootingSubjects } from "@/api/troubleshooting";
 import { troubleshootingPathForCategory } from "@/lib/troubleshootingRoutes";
 import type { SubjectPickerTile } from "@/types/troubleshootingType";
 import { whereToFind } from "@/lib/whereToFind";
@@ -165,7 +169,8 @@ export default function MyHoldingsDialog({
   // open or what fails it.
   useEffect(() => {
     if (!open) return;
-    getTroubleshootingSubjects()
+    queryClient
+      .fetchQuery(troubleshootingSubjectsQuery)
       .then(setTsSubjects)
       .catch(() => setTsSubjects([]));
   }, [open]);
@@ -190,7 +195,7 @@ export default function MyHoldingsDialog({
       setLoading(true);
       try {
         const [holdings, categories] = await Promise.all([
-          getMyHoldings(),
+          queryClient.fetchQuery(holdingsQuery),
           // The SITE-WIDE requestable list, not every category in Snipe.
           // Snipe's full list carries plenty an end user should never be
           // picking from, which turned a short question into a hunt.
@@ -201,8 +206,8 @@ export default function MyHoldingsDialog({
           // their assets wouldn't entitle them to ask for, and those are
           // precisely the ones most likely to be missing from Snipe.
           isAsset
-            ? getAssetCategories().catch(() => [])
-            : getAccessoryCategories().catch(() => []),
+            ? queryClient.fetchQuery(assetCategoriesQuery).catch(() => [])
+            : queryClient.fetchQuery(requestableAccessoryCategoriesQuery).catch(() => []),
         ]);
         if (cancelled) return;
 
@@ -267,6 +272,7 @@ export default function MyHoldingsDialog({
     setError(null);
     try {
       await submitCorrection(payload);
+      void invalidateWorkflow();
       setPhase("done");
     } catch (err) {
       setError(

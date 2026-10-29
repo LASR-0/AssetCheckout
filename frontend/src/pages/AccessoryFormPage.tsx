@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { invalidateWorkflow } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
+import { usersQuery } from "@/api/queries";
 import AccessoryTypeSelector from "@/components/accessory-form/AccessoryTypeSelector";
 import AccessoryOptionsSection from "@/components/accessory-form/AccessoryOptionSection";
 import ApprovalInput from "@/components/request-form/ApprovalInput";
 import SpecLevelToggle from "@/components/request-form/SpecLevelToggle";
 import UserDetailsInput from "@/components/request-form/UserDetailsInput";
-import { fetchUsers } from "@/api/users";
 import { getAccessoryCategoriesForUser, type AccessoryOptionChoice } from "@/api/accessories";
 import { apiFetch } from "@/api/client";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -175,6 +177,7 @@ export default function AccessoryRequestFormPage() {
         method: "POST",
         body: payload,
       });
+      void invalidateWorkflow();
 
       navigate("/success", {
         state: {
@@ -200,7 +203,7 @@ export default function AccessoryRequestFormPage() {
   };
 
   useEffect(() => {
-    fetchUsers().then((data) => {
+    queryClient.fetchQuery(usersQuery).then((data) => {
       const formatted = data.map((u) => ({
         id: u.id,
         name: u.name,

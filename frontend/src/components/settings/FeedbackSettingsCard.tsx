@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { feedbackEnabledQuery } from "@/api/queries";
+import { queryClient } from "@/api/queryClient";
 import { Switch } from "@/components/ui/switch";
 import ComboboxField from "@/components/ui/comboboxfield";
 import {
@@ -8,14 +11,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  getFeedbackEnabled,
   setFeedbackEnabled,
   getAllFeedback,
   type FeedbackRow,
   type FeedbackResponse,
 } from "@/api/feedback";
 import CollapsibleSection from "@/components/ui/collapsible-section";
-import { getDevHeaders } from "@/api/client";
+import { apiResponse } from "@/api/client";
 import { Badge } from "@/components/ui/statusbadge";
 
 ///  +-----------------------------------------------------------------+
@@ -245,7 +247,6 @@ function formatDate(iso: string): string {
 
 export default function FeedbackSettingsCard() {
 
-  const [enabled, setEnabled] = useState<boolean | null>(null); // null = loading
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState<FeedbackRow[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);
@@ -289,12 +290,9 @@ export default function FeedbackSettingsCard() {
     currentPage * PAGE_SIZE
   );
 
-  // Load the enabled state on mount.
-  useEffect(() => {
-    getFeedbackEnabled()
-      .then((r) => setEnabled(r.enabled))
-      .catch(() => setEnabled(false));
-  }, []);
+  // Shared with the footer link and the Feedback page.
+  const { data: enabledData, isPending: enabledPending, isError: enabledFailed } = useQuery(feedbackEnabledQuery);
+  const enabled: boolean | null = enabledPending ? null : enabledFailed ? false : !!enabledData;
 
   // Load feedback rows whenever the feature is enabled.
   useEffect(() => {
@@ -326,7 +324,7 @@ export default function FeedbackSettingsCard() {
     setError(null);
     try {
       const res = await setFeedbackEnabled(next);
-      setEnabled(res.enabled);
+      queryClient.setQueryData(feedbackEnabledQuery.queryKey, res.enabled);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update setting");
     } finally {
@@ -334,17 +332,13 @@ export default function FeedbackSettingsCard() {
     }
   }
 
-  // CSV export — raw fetch (not apiFetch) because we want the CSV bytes, not
-  // parsed JSON. Carries the dev identity header in development; production
-  // relies on the forward-auth session. Triggers a client-side download.
+  // CSV export: apiResponse rather than apiFetch, because we want the CSV
+  // bytes, not parsed JSON. Triggers a client-side download.
   async function handleExport() {
     setExporting(true);
     setError(null);
     try {
-      const res = await fetch("/api/feedback/export", {
-        headers: getDevHeaders(),   // canonical dev headers (empty in prod)
-      });
-      if (!res.ok) throw new Error("Export failed");
+      const res = await apiResponse("/api/feedback/export");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

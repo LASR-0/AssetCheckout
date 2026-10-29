@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { accessorySettingsQuery, allAccessoryCategoriesQuery, allAssetCategoriesQuery } from "@/api/queries";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { getAllAssetCategories } from "@/api/categories";
 import InfoHint from "@/components/ui/infohint";
 import {
   getUnreachableHoldings,
@@ -15,10 +16,6 @@ import {
   getAccessoryAssetMap,
   setAccessoryCategoriesForAssetCategory,
 } from "@/api/settings";
-import {
-  getAllAccessoryCategories,
-  getAccessorySettings,
-} from "@/api/accessories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import type { AssetCategory } from "@/types/categoriesType";
 import type {
@@ -73,10 +70,10 @@ export default function AccessoryAssetMap({ refreshKey = 0 }: Props) {
           initialMap,
           unreachableRes,
         ] = await Promise.all([
-            getAllAssetCategories(),
+            queryClient.fetchQuery(allAssetCategoriesQuery),
             getRequestableCategoryIds(),
-            getAllAccessoryCategories(),
-            getAccessorySettings(),
+            queryClient.fetchQuery(allAccessoryCategoriesQuery),
+            queryClient.fetchQuery(accessorySettingsQuery),
             getAccessoryAssetMap(),
             // Diagnostic only — never let it fail the editor.
             getUnreachableHoldings().catch(() => null),

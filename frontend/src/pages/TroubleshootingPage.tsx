@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { troubleshootingConfigQuery, troubleshootingSubjectsQuery } from "@/api/queries";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
 import SubjectPicker from "@/components/troubleshooting/SubjectPicker";
 import SymptomCategories from "@/components/troubleshooting/SymptomCategories";
 import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape";
-import {
-  getSubjectCategories,
-  getTroubleshootingConfig,
-  getTroubleshootingSubjects,
-} from "@/api/troubleshooting";
+import { getSubjectCategories } from "@/api/troubleshooting";
 import { troubleshootingSubjectPath } from "@/lib/troubleshootingRoutes";
 import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import { useRestoredState, useViewState } from "@/hooks/useViewState";
@@ -100,13 +98,13 @@ export default function TroubleshootingPage() {
   // support number must not stop the symptoms rendering, so it fails quietly
   // and the escape blocks simply don't appear.
   useEffect(() => {
-    getTroubleshootingConfig()
+    queryClient.fetchQuery(troubleshootingConfigQuery)
       .then(setConfig)
       .catch(() => setConfig(null));
   }, []);
 
   useEffect(() => {
-    getTroubleshootingSubjects()
+    queryClient.fetchQuery(troubleshootingSubjectsQuery)
       .then(setSubjects)
       .catch(() => setSubjects([]));
   }, []);

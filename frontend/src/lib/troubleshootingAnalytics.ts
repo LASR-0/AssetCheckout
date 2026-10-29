@@ -1,4 +1,4 @@
-import { getDevHeaders } from "@/api/client";
+import { apiFetch } from "@/api/client";
 
 ///  +-----------------------------------------------------------------+
 ///  |              TROUBLESHOOTING EVENT TRACKING                     |
@@ -76,10 +76,9 @@ export type TroubleshootingEvent =
  */
 export function trackTroubleshooting(event: TroubleshootingEvent): void {
   try {
-    void fetch("/api/troubleshooting/events", {
+    void apiFetch<void>("/api/troubleshooting/events", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...getDevHeaders() },
-      body: JSON.stringify({ ...event, sessionId: sessionId() }),
+      body: { ...event, sessionId: sessionId() },
       keepalive: true,
     }).catch(() => {
       // Swallowed deliberately — see the header note.

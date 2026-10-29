@@ -1,10 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  getDevUserName,
-  setDevUserName,
-  getDevUserEmail,
-  setDevUserEmail,
-} from "@/hooks/useAuth";
+import { getDevUserName, getDevUserEmail, setDevUser } from "@/hooks/useAuth";
 
 export default function DevAuthToggle() {
   const [currentName, setCurrentName] = useState<string>("");
@@ -18,8 +13,7 @@ export default function DevAuthToggle() {
   }, []);
 
   const apply = (name: string, email: string) => {
-    setDevUserName(name);
-    setDevUserEmail(email);
+    setDevUser(name, email);
     setCurrentName(name);
     setCurrentEmail(email);
     setCustomName("");

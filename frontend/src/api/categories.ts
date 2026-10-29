@@ -1,22 +1,17 @@
+import { apiFetch } from "@/api/client";
 import type { CategoryModel, AssetCategory } from "@/types/categoriesType";
- 
-export async function getModelsForCategory(categoryId: number): Promise<CategoryModel[]> {
-  const res = await fetch(`/api/asset-categories/${categoryId}/models`);
-  if (!res.ok) throw new Error(`Failed to fetch models for category ${categoryId}`);
-  const data = await res.json();
+
+export async function getModelsForCategory(categoryId: number, signal?: AbortSignal): Promise<CategoryModel[]> {
+  const data = await apiFetch<{ models?: CategoryModel[] }>(`/api/asset-categories/${categoryId}/models`, { signal });
   return data.models ?? [];
 }
 
-export async function getAssetCategories(): Promise<AssetCategory[]> {
-  const res = await fetch("/api/asset-categories");
-  if (!res.ok) throw new Error("Failed to fetch asset categories");
-  const data = await res.json();
+export async function getAssetCategories(signal?: AbortSignal): Promise<AssetCategory[]> {
+  const data = await apiFetch<{ categories: AssetCategory[] }>("/api/asset-categories", { signal });
   return data.categories;
 }
 
-export async function getAllAssetCategories(): Promise<AssetCategory[]> {
-  const res = await fetch("/api/asset-categories/all");
-  if (!res.ok) throw new Error("Failed to fetch all categories");
-  const data = await res.json();
+export async function getAllAssetCategories(signal?: AbortSignal): Promise<AssetCategory[]> {
+  const data = await apiFetch<{ categories: AssetCategory[] }>("/api/asset-categories/all", { signal });
   return data.categories;
 }

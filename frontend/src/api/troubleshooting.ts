@@ -1,4 +1,5 @@
-import { apiFetch, getDevHeaders } from "@/api/client";
+import { apiFetch, ApiError, type ApiFetchOptions } from "@/api/client";
+import { invalidate } from "@/api/queryClient";
 import type {
   ArticleBody,
   ContentHealth,
@@ -130,15 +131,13 @@ export async function setTroubleshootingAnalyticsEnabled(
 //  surfaces `error`, so these use a wrapper that keeps them.
 
 /** An error from the admin API that names specific problems. */
-export class ContentApiError extends Error {
-  status: number;
+export class ContentApiError extends ApiError {
   issues: ContentIssue[];
 
-  constructor(message: string, status: number, issues: ContentIssue[] = []) {
-    super(message);
+  constructor(err: ApiError) {
+    super(err.message, err.status, err.body);
     this.name = "ContentApiError";
-    this.status = status;
-    this.issues = issues;
+    this.issues = Array.isArray(err.body?.details) ? (err.body.details as ContentIssue[]) : [];
   }
 }
 
@@ -151,34 +150,16 @@ const ADMIN = "/api/troubleshooting/admin";
  * under which subject; collapsing that to a single message would make the
  * error true and useless.
  */
-async function adminFetch<T>(
-  path: string,
-  init: Omit<RequestInit, "body"> & { body?: unknown } = {}
-): Promise<T> {
-  const { body, ...rest } = init;
-
-  const res = await fetch(path, {
-    ...rest,
-    headers: {
-      Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...getDevHeaders(),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-
-  const text = await res.text();
-  const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-
-  if (!res.ok) {
-    throw new ContentApiError(
-      (parsed.error as string) || `${res.status} ${res.statusText}`,
-      res.status,
-      (parsed.details as ContentIssue[]) ?? []
-    );
+async function adminFetch<T>(path: string, init: ApiFetchOptions = {}): Promise<T> {
+  let result: T;
+  try {
+    result = ((await apiFetch<T>(path, init)) ?? {}) as T;
+  } catch (err) {
+    throw err instanceof ApiError ? new ContentApiError(err) : err;
   }
-
-  return parsed as T;
+  // Any edit can change what readers see: the subject tiles, the config.
+  if (init.method && init.method !== "GET") await invalidate(["troubleshooting"]);
+  return result;
 }
 
 export async function getEditableSubject(subjectKey: string): Promise<EditableCategory[]> {

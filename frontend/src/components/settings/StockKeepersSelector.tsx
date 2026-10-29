@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { queryClient } from "@/api/queryClient";
+import { locationsQuery, usersQuery } from "@/api/queries";
 import {
   Popover,
   PopoverContent,
@@ -6,8 +8,6 @@ import {
 } from "@/components/ui/popover";
 import InfoHint from "@/components/ui/infohint";
 import UserSelect, { type User } from "@/components/request-form/UserSelect";
-import { getLocations } from "@/api/snipe";
-import { fetchUsers } from "@/api/users";
 import { getStockKeepers, setStockKeepersForLocation } from "@/api/settings";
 import type { SnipeNamedRecord } from "@/types/snipeTypes";
 import type {
@@ -52,8 +52,8 @@ export default function StockKeepersSelector() {
         setLoading(true);
         setError(null);
         const [locationsRes, usersRes, keepersRes] = await Promise.all([
-          getLocations(),
-          fetchUsers(),
+          queryClient.fetchQuery(locationsQuery),
+          queryClient.fetchQuery(usersQuery),
           getStockKeepers(),
         ]);
         if (cancelled) return;

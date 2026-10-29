@@ -5,10 +5,11 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogFooter,
 } from "@/components/dialogs/ResponsiveDialogWrapper";
+import { queryClient } from "@/api/queryClient";
+import { locationsQuery } from "@/api/queries";
 import { useEffect, useState, useRef } from "react";
 import ComboboxField from "@/components/ui/comboboxfield";
 import type { Request } from "@/types/requestType";
-import { getLocations } from "@/api/snipe";
 import type { SnipeNamedRecord } from "@/types/snipeTypes";
 import { reviewSelfProcured } from "@/api/selfProcurement";
 import { formatQuoteAmount } from "@/api/quotes";
@@ -61,7 +62,7 @@ export default function ReviewSelfProcuredDialog({
     let cancelled = false;
     (async () => {
       try {
-        const locs = await getLocations();
+        const locs = await queryClient.fetchQuery(locationsQuery);
         if (!cancelled) setLocations(locs);
       } catch (err) {
         console.error("Failed to load locations for self-procured review", err);
