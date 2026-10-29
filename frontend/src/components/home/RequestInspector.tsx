@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -52,8 +53,12 @@ function facts(row: Row): Fact[] {
  * Read-only apart from the requester's own next step, which is the same
  * action as the "Needs you" card. Everything else lives in the request log.
  */
-export default function RequestInspector({ row, viewer, busy, onClose, onAct }: Props) {
+export default function RequestInspector({ row: current, viewer, busy, onClose, onAct }: Props) {
   const { data: siteColours } = useQuery(siteColoursQuery);
+  // The last request shown, so the panel still has it while it slides out.
+  const [last, setLast] = useState(current);
+  if (current && current !== last) setLast(current);
+  const row = current ?? last;
   if (!row) return null;
 
   const { r, route } = row;
@@ -66,7 +71,7 @@ export default function RequestInspector({ row, viewer, busy, onClose, onAct }: 
   const site = r.userLocationName?.trim();
 
   return (
-    <Inspector open onClose={onClose} label={`Request #${r.id}`} backLabel="Home">
+    <Inspector open={!!current} onClose={onClose} label={`Request #${r.id}`} backLabel="Home">
       <InspectorHeader
         code={`#${r.id}`}
         title={requestTitle(r)}

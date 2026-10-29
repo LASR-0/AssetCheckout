@@ -9,14 +9,15 @@ import { Textarea } from "@/components/ui/textarea"
 
 // The frame is the field here: it carries the border and the focus ring
 // (on focus-within), and the control inside is bare. Heights match Input's
-// md / lg so an input group sits in a row of plain inputs without a seam.
+// md / lg so an input group sits in a row of plain inputs without a seam
+// (placeholder size included: see fieldVariants).
 const inputGroupVariants = cva(
   "group/input-group relative flex w-full min-w-0 items-center border border-strong bg-sheet transition-[border-color,box-shadow] outline-none focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--brand-sub)] has-disabled:bg-subtle has-disabled:text-dis has-[[data-slot][aria-invalid=true]]:border-stop has-[>textarea]:h-auto has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col in-data-[slot=combobox-content]:focus-within:shadow-none",
   {
     variants: {
       size: {
         md: "h-9 rounded-8 fs-13.5",
-        lg: "h-11 rounded-9 fs-15",
+        lg: "h-11 rounded-9 fs-15 [&_input::placeholder]:fs-13",
       },
     },
     defaultVariants: { size: "md" },

@@ -20,15 +20,16 @@ import { prefetchFromLink } from "@/api/prefetch";
 ///  |                         THE TOP BAR                             |
 ///  +-----------------------------------------------------------------+
 //
-//  Two bars, swapped at the phone breakpoint, as in the designs.
+//  Two bars, swapped at the bar breakpoint (1080 design px): the full bar
+//  needs that much even without its icons.
 //
-//  DESKTOP (64 design px). The brand, then the requester's four pages, then
+//  DESKTOP (72 design px). The brand, then the requester's four pages, then
 //  a tray holding the operator pair (Requests and Stock) with their count
 //  badges, then the utilities: the tour, light/dark, Settings. Below the nav
 //  breakpoint the items drop their icons and the tour its label, so the bar
 //  still fits on one line.
 //
-//  PHONE (52). The brand and a menu button. The menu lists everything the
+//  PHONE AND TABLET (52). The brand and a menu button. The menu lists everything the
 //  desktop bar does; a dot on the button says something is waiting.
 //
 //  STOCK IS LOCKED, NOT HIDDEN, for anyone who neither keeps stock nor is an
@@ -96,11 +97,11 @@ function Brand({ compact }: { compact?: boolean }) {
   if (logo) {
     return (
       <Link to="/" className="flex items-center gap-2.5 rounded-8 outline-offset-4">
-        <img src={logo} alt={COMPANY ?? ""} className={compact ? "h-5 w-auto" : "h-5.5 w-auto"} />
+        <img src={logo} alt={COMPANY ?? ""} className={compact ? "h-5 w-auto" : "h-6.5 w-auto"} />
         <span
           className={cn(
             "whitespace-nowrap",
-            compact ? "font-head fs-14 font-medium tracking-head" : "fs-14 font-semibold"
+            compact ? "font-head fs-14 font-medium tracking-head" : "fs-15 font-semibold"
           )}
         >
           Checkout Central
@@ -120,10 +121,10 @@ function Brand({ compact }: { compact?: boolean }) {
 
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-8 outline-offset-4">
-      <BrandMark className="size-6.5 rounded-7 fs-13" />
+      <BrandMark className="size-7.5 rounded-8 fs-14" />
       <span className="flex flex-col leading-[1.15] whitespace-nowrap">
-        {COMPANY && <span className="fs-11 text-mut">{COMPANY}</span>}
-        <span className="fs-14 font-semibold">Checkout Central</span>
+        {COMPANY && <span className="fs-12 text-mut">{COMPANY}</span>}
+        <span className="fs-15 font-semibold">Checkout Central</span>
       </span>
     </Link>
   );
@@ -132,26 +133,26 @@ function Brand({ compact }: { compact?: boolean }) {
 // ---- desktop ------------------------------------------------------------
 
 const PAGE_ITEM =
-  "flex items-center gap-1.5 rounded-8 px-2.5 py-1.5 transition-colors hover:bg-hover hover:text-tx";
+  "flex items-center gap-1.75 rounded-9 px-3 py-2 transition-colors hover:bg-hover hover:text-tx";
 const PAGE_ITEM_ON = "bg-track font-medium text-tx shadow-[0_0_0_1px_var(--line)] hover:bg-track";
 
-const OPS_ITEM = "flex items-center gap-1.75 rounded-7 px-2.5 py-1 transition-colors hover:text-tx";
+const OPS_ITEM = "flex items-center gap-2 rounded-8 px-3 py-1.5 transition-colors hover:text-tx";
 const OPS_ITEM_ON = "bg-sheet font-medium text-tx shadow-[0_0_0_1px_var(--line)]";
 
 const UTILITY =
-  "grid size-8.5 place-items-center rounded-8 transition-colors hover:bg-hover hover:text-tx";
+  "grid size-9.5 place-items-center rounded-9 transition-colors hover:bg-hover hover:text-tx";
 
 /** The nav's icons step aside below the nav breakpoint. */
 function NavIcon({ name }: { name: string }) {
-  return <Icon name={name} size={17} weight={300} className="hidden nav:inline-block" />;
+  return <Icon name={name} size={18.5} weight={300} className="hidden nav:inline-block" />;
 }
 
 function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
   return (
-    <div className="hidden h-16 min-w-0 items-center gap-3.5 border-b border-line bg-sheet pr-4 pl-5 phone:flex nav:gap-7">
+    <div className="hidden h-18 min-w-0 items-center gap-4 border-b border-line bg-sheet pr-5 pl-6 bar:flex nav:gap-8">
       <Brand />
 
-      <nav aria-label="Main" className="flex min-w-0 items-center gap-0.5 fs-13.5 whitespace-nowrap text-tx3">
+      <nav aria-label="Main" className="flex min-w-0 items-center gap-1.5 fs-14.5 whitespace-nowrap text-tx3">
         {PAGES.map((p) => (
           <NavLink
             key={p.to}
@@ -164,9 +165,9 @@ function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
           </NavLink>
         ))}
 
-        <span aria-hidden className="mx-2.5 h-5 w-px bg-line" />
+        <span aria-hidden className="mx-2 h-5.5 w-px bg-line" />
 
-        <div className="flex gap-0.5 rounded-10 bg-track p-0.75">
+        <div className="flex gap-1 rounded-11 bg-track p-1">
           <NavLink
             to="/requests"
             data-tour="nav-requests"
@@ -180,7 +181,7 @@ function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
         </div>
       </nav>
 
-      <div className="ml-auto flex items-center gap-1 text-tx3">
+      <div className="ml-auto flex items-center gap-1.5 text-tx3">
         {nav.tour && (
           <button
             type="button"
@@ -188,9 +189,9 @@ function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
             disabled={nav.tour.running}
             aria-label="Show me around this page"
             data-tour="nav-tour"
-            className="flex items-center gap-1.5 rounded-8 px-2.5 py-1.5 fs-13 whitespace-nowrap transition-colors hover:bg-hover hover:text-tx disabled:opacity-50 disabled:hover:bg-transparent"
+            className="flex items-center gap-1.75 rounded-9 px-3 py-2 fs-14 whitespace-nowrap transition-colors hover:bg-hover hover:text-tx disabled:opacity-50 disabled:hover:bg-transparent"
           >
-            <Icon name="tour" size={18} weight={300} />
+            <Icon name="tour" size={19.5} weight={300} />
             <span className="hidden nav:inline">Show me around</span>
           </button>
         )}
@@ -202,7 +203,7 @@ function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
           data-tour="nav-theme"
           className={UTILITY}
         >
-          {nav.themeKnown && <Icon name={nav.dark ? "light_mode" : "dark_mode"} size={19} weight={300} />}
+          {nav.themeKnown && <Icon name={nav.dark ? "light_mode" : "dark_mode"} size={20.5} weight={300} />}
         </button>
         <NavLink
           to="/settings"
@@ -210,7 +211,7 @@ function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
           data-tour="nav-settings"
           className={({ isActive }) => cn(UTILITY, isActive && "bg-track text-tx shadow-[0_0_0_1px_var(--line)]")}
         >
-          <Icon name="settings" size={19} weight={300} />
+          <Icon name="settings" size={20.5} weight={300} />
         </NavLink>
       </div>
     </div>
@@ -228,7 +229,7 @@ function StockItem({ nav }: { nav: ReturnType<typeof useNav> }) {
             tabIndex={0}
             className={cn(OPS_ITEM, "cursor-not-allowed text-dis hover:text-dis")}
           >
-            <Icon name="lock" size={17} weight={300} />
+            <Icon name="lock" size={18.5} weight={300} />
             Stock
           </span>
         </TooltipTrigger>
@@ -287,7 +288,7 @@ function PhoneBar({ nav }: { nav: ReturnType<typeof useNav> }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <div className="relative flex h-13 flex-none items-center gap-2.5 border-b border-line bg-sheet pr-1 pl-4 phone:hidden">
+        <div className="relative flex h-13 flex-none items-center gap-2.5 border-b border-line bg-sheet pr-1 pl-4 bar:hidden">
           <Brand compact />
           <PopoverTrigger asChild>
             <button

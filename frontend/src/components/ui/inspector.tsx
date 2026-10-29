@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -14,10 +14,17 @@ import { Icon } from "@/components/ui/icon";
 //  sticky back bar in place of the close button.
 //
 //  Escape closes it. Focus moves into it when it opens so a keyboard user
-//  lands on what they just selected.
+//  lands on what they just selected. Floating, it slides in and back out, so
+//  the caller keeps rendering its content (with `open` false) while it goes.
 //
-//  It sits below the nav (top = the nav's 64 design px). Pages that dock it
+//  It sits between the top bar (52 design px while the phone bar shows, 72
+//  once the full bar does) and the footer, and casts its shadow to the left
+//  only: clipped at the top, so it doesn't smudge the bar's bottom edge. Pages that dock it
 //  beside a list instead of floating it pass `docked`.
+//
+//  Floating, its content renders 10% larger than the page's: it is portaled
+//  out of the page column, so it misses the page's wide-screen growth, and
+//  at 1:1 it read as small beside the list it was opened from.
 ///  +-----------------------------------------------------------------+
 
 type InspectorProps = {
@@ -43,6 +50,16 @@ export function Inspector({
   children,
 }: InspectorProps) {
   const ref = useRef<HTMLElement>(null);
+  // Mounted: true from opening until the slide-out finishes.
+  const [present, setPresent] = useState(open);
+  if (open && !present) setPresent(true);
+
+  useEffect(() => {
+    if (open || !present) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t = window.setTimeout(() => setPresent(false), docked || reduce ? 0 : 200);
+    return () => window.clearTimeout(t);
+  }, [open, present, docked]);
 
   useEffect(() => {
     if (!open) return;
@@ -56,18 +73,20 @@ export function Inspector({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!present) return null;
 
   const panel = (
     <aside
       ref={ref}
       tabIndex={-1}
       aria-label={label}
+      aria-hidden={!open || undefined}
       className={cn(
         "overflow-auto bg-canvas outline-none",
         docked
           ? "h-full border-l border-line"
-          : "fixed inset-0 z-45 animate-insp-in phone:inset-auto phone:top-16 phone:right-0 phone:bottom-0 phone:w-[min(30rem,100vw)] phone:border-l phone:border-line phone:shadow-[-4px_0_12px_var(--shade)] motion-reduce:animate-none",
+          : "fixed inset-0 z-45 phone:inset-auto phone:top-13 phone:right-0 phone:bottom-12 phone:w-[min(33rem,100vw)] phone:border-l phone:border-line phone:shadow-[-4px_0_12px_var(--shade)] phone:[clip-path:inset(0_0_0_-1.5rem)] bar:top-18 motion-reduce:animate-none",
+        !docked && (open ? "animate-insp-in" : "pointer-events-none animate-insp-out"),
         className
       )}
     >
@@ -83,7 +102,7 @@ export function Inspector({
           </button>
         </div>
       )}
-      <div className="flex flex-col gap-3 p-3 phone:p-4">{children}</div>
+      <div className={cn("flex flex-col gap-3 p-3 phone:p-4", !docked && "phone:[zoom:1.1]")}>{children}</div>
     </aside>
   );
 

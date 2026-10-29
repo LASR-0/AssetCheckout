@@ -14,6 +14,10 @@ import { BrandMark } from "@/components/ui/brand-mark";
 //  sheet with the content, and a footer row (help on the left, actions on
 //  the right). Centred on desktop; a bottom sheet below the phone breakpoint.
 //
+//  On desktop the frame and everything in it render at 1.25×: it is portaled
+//  out of the page column, and at 1:1 it read as smaller than the page.
+//  The width prop is the 1:1 width.
+//
 //  One Radix Dialog for both layouts, so focus trapping, Escape and the
 //  scroll lock behave the same on a phone as on a desktop.
 //
@@ -53,7 +57,7 @@ export function Modal({ open, onOpenChange, label, children, width = 560, classN
             style={{ maxWidth: `${width / 16}rem` }}
             className={cn(
               "pointer-events-auto flex max-h-full w-full flex-col rounded-t-16 border border-line bg-tray px-1 pt-1 pb-4 shadow-modal outline-none",
-              "data-[state=open]:animate-sheet-up phone:rounded-16 phone:pb-1 phone:data-[state=open]:animate-pop-in motion-reduce:animate-none",
+              "data-[state=open]:animate-sheet-up phone:rounded-16 phone:pb-1 phone:[zoom:1.25] phone:data-[state=open]:animate-pop-in motion-reduce:animate-none",
               "max-phone:max-w-none!",
               className
             )}

@@ -47,7 +47,8 @@ export const buttonVariants = cva(
 
 // The two field densities in the designs: `md` (36 design px, 13.5px text)
 // on operator pages and `lg` (44, 15px) on requester forms and every mobile
-// layout. Shared with Textarea and the select/combobox triggers so a row of
+// layout. An `lg` placeholder drops to 13px, the size of the label above the
+// field, so a hint never reads louder than the question it answers. Shared with Textarea and the select/combobox triggers so a row of
 // mixed controls lines up.
 export const fieldVariants = cva(
   "w-full min-w-0 border border-strong bg-sheet font-sans text-tx transition-[border-color,box-shadow] outline-none placeholder:text-placeholder focus-visible:border-brand focus-visible:shadow-[0_0_0_3px_var(--brand-sub)] disabled:cursor-not-allowed disabled:bg-subtle disabled:text-dis aria-invalid:border-stop aria-invalid:focus-visible:shadow-[0_0_0_3px_var(--stop-bg)]",
@@ -55,7 +56,7 @@ export const fieldVariants = cva(
     variants: {
       size: {
         md: "rounded-8 px-2.5 fs-13.5",
-        lg: "rounded-9 px-3 fs-15",
+        lg: "rounded-9 px-3 fs-15 placeholder:fs-13",
       },
     },
     defaultVariants: { size: "md" },

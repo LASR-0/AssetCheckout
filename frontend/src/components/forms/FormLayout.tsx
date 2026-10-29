@@ -28,6 +28,11 @@ import { goToSection } from "./helpers";
 //
 //  Errors wait for the first Send, then show both where they are and as a
 //  list beside the button; each list entry jumps to its section.
+//
+//  The foot of the page is deliberately roomy (and the phone's submit bar
+//  sits well below the last section): the last section is a person search,
+//  and its results open downward, so the page has to be able to scroll far
+//  enough to show them. See PersonPicker.
 ///  +-----------------------------------------------------------------+
 
 export type FormKind = "asset" | "accessory" | "loan";
@@ -81,7 +86,7 @@ export function FormLayout({
 
   return (
     // No bottom padding on phones: the submit bar is the page's last thing.
-    <Page max={1320} className={cn("px-3 pt-5 phone:px-8 phone:pt-7 phone:pb-40", route ? "pb-0" : "pb-10")}>
+    <Page max={1320} className={cn("px-3 pt-5 phone:px-8 phone:pt-7 phone:pb-72", route ? "pb-0" : "pb-10")}>
       <div className="flex flex-col gap-3.5 phone:gap-4">
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <div className="min-w-0 flex-[1_1_20rem]">
@@ -167,7 +172,7 @@ export function FormLayout({
 
       {/* Phone: the submit bar stays at the bottom of the screen. */}
       {route && (
-        <div className="sticky bottom-0 z-10 -mx-3 mt-4 flex flex-col gap-2 border-t border-line bg-sheet px-3 pt-2.5 pb-3.5 shadow-[0_-0.5rem_1.25rem_var(--shade)] phone:hidden">
+        <div className="sticky bottom-0 z-10 -mx-3 mt-40 flex flex-col gap-2 border-t border-line bg-sheet px-3 pt-2.5 pb-3.5 shadow-[0_-0.5rem_1.25rem_var(--shade)] phone:hidden">
           <div className="flex min-w-0 items-center gap-2.5">
             <RouteDotsPreview steps={route} />
             <span className="min-w-0 flex-1 truncate fs-12.5 text-tx2">{next ? `Next: ${next.title}` : ""}</span>

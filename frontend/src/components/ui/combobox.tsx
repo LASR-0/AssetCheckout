@@ -104,6 +104,10 @@ const stopWheelPropagation = (event: WheelEvent) => event.stopPropagation()
 //
 //  `align` stays "shift" and `fallbackAxisSide` stays "none": the popup is
 //  anchor-width and belongs directly above or below its input, never beside it.
+//
+//  `alwaysBelow` is the opt-out, for a caller that makes room under the input
+//  itself (the forms' PersonPicker scrolls the page as it opens). Without
+//  that, it brings the sliver back.
 ///  +-----------------------------------------------------------------+
 
 const COLLISION_AVOIDANCE = {
@@ -111,6 +115,8 @@ const COLLISION_AVOIDANCE = {
   align: "shift",
   fallbackAxisSide: "none",
 } as const
+
+const ALWAYS_BELOW = { ...COLLISION_AVOIDANCE, side: "none" } as const
 
 /** A rect large enough that it never binds, so Floating UI's own root boundary
  *  — the viewport — is what actually confines the popup. Client coordinates, and
@@ -211,12 +217,16 @@ function ComboboxContent({
   alignOffset = 0,
   anchor,
   collisionBoundary,
+  alwaysBelow = false,
   ...props
 }: ComboboxPrimitive.Popup.Props &
   Pick<
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor" | "collisionBoundary"
-  >) {
+  > & {
+    /** Never flip above the input. See COLLISION_AVOIDANCE. */
+    alwaysBelow?: boolean
+  }) {
   const stopWheelRef = useStopWheel()
 
   return (
@@ -230,7 +240,7 @@ function ComboboxContent({
         // See UNBOUNDED above — the default would confine the popup to
         // whatever scrollable box the input happens to sit in.
         collisionBoundary={collisionBoundary ?? UNBOUNDED}
-        collisionAvoidance={COLLISION_AVOIDANCE}
+        collisionAvoidance={alwaysBelow ? ALWAYS_BELOW : COLLISION_AVOIDANCE}
         className="isolate z-50"
       >
         <ComboboxPrimitive.Popup

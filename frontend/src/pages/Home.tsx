@@ -34,11 +34,12 @@ import { cn } from "@/lib/utils";
 //  requests up to, and what do I have. Asking for something comes last,
 //  because by the time somebody wants to, they know where it is.
 //
-//  TWO COLUMNS from 1160 design px: the person's requests on the left; the
-//  counts and what they hold beside them, held in view while the left side
-//  scrolls (only when that column fits on screen, so a long holdings list
-//  never puts its own end out of reach). Below that one column, in reading
-//  order, with the counts beside the greeting.
+//  The greeting runs across the top with the counts beside it. Under it, TWO
+//  COLUMNS from 1160 design px: the person's requests on the left, what they
+//  hold on the right. That column scrolls with the greeting and then holds in
+//  view while the left side carries on, as the forms' side panels do (only
+//  when it fits on screen, so a long holdings list never puts its own end out
+//  of reach). Below 1160, one column in reading order.
 //
 //  Acting from here is limited to the requester's own next step (collect
 //  it, confirm it arrived, enter what they bought). Everything else opens in
@@ -137,14 +138,14 @@ export default function Home() {
 
   return (
     <Page max={1240} className="px-3 pt-5 pb-45 phone:px-8 phone:pt-7 phone:pb-35">
-      <div className="grid grid-cols-1 [grid-template-areas:'head'_'needs'_'flight'_'have'_'ask'] min-[58rem]:grid-cols-[minmax(0,1fr)_25rem] min-[58rem]:grid-rows-[auto_auto_auto_1fr] min-[58rem]:gap-x-6 min-[58rem]:[grid-template-areas:'head_side'_'needs_side'_'flight_side'_'ask_side']">
+      <div className="grid grid-cols-1 [grid-template-areas:'head'_'needs'_'flight'_'have'_'ask'] min-[58rem]:grid-cols-[minmax(0,1fr)_25rem] min-[58rem]:grid-rows-[auto_auto_auto_1fr] min-[58rem]:gap-x-6 min-[58rem]:[grid-template-areas:'head_head'_'needs_side'_'flight_side'_'ask_side']">
         <div className={`${AREA} flex flex-wrap items-end justify-between gap-x-8 gap-y-4.5 [grid-area:head]`}>
           <Greeting name={home.auth.name} intro={intro} />
           <CountTiles
             name={home.auth.name}
             loading={home.loadingRequests}
             counts={home.counts}
-            className="flex-[1_1_100%] phone:flex-[0_1_26.25rem] min-[58rem]:hidden"
+            className="flex-[1_1_100%] phone:flex-[0_1_26.25rem]"
           />
         </div>
 
@@ -184,12 +185,6 @@ export default function Home() {
             sideFits && "min-[58rem]:sticky min-[58rem]:top-7"
           )}
         >
-          <CountTiles
-            name={home.auth.name}
-            loading={home.loadingRequests}
-            counts={home.counts}
-            className="hidden pb-5 min-[58rem]:grid"
-          />
           <div className={`${AREA} [grid-area:have]`}>
             <WhatYouHave
               holdings={home.holdings}

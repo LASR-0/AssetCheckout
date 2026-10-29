@@ -197,9 +197,12 @@
      queries resolve rem against the browser default, not the 80% root, so
      36rem here is 576px: Home and the forms' 720 design px. */
   --breakpoint-phone: 36rem;
-  /* The nav's 1060 design px: below it the items drop their icons and the
+  /* The full top bar's 1080 design px: below it the bar folds into the
+     phone bar and its menu, because even without icons it no longer fits. */
+  --breakpoint-bar: 54rem;
+  /* The nav's 1340 design px: below it the items drop their icons and the
      tour button its label, so everything fits on one bar. */
-  --breakpoint-nav: 53rem;
+  --breakpoint-nav: 67rem;
   /* The Requests log's 1100 design px: below it the inspector covers the list. */
   --breakpoint-desk: 55rem;
 
@@ -229,6 +232,8 @@
 
   /* The inspector sliding in from the right edge. */
   --animate-insp-in: insp-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* And back out; it holds the end frame until the panel unmounts. */
+  --animate-insp-out: insp-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
   --animate-toast-in: toast-in 0.16s ease-out;
   /* Popovers, menus and tooltips appearing. */
   --animate-pop-in: pop-in 0.12s ease-out;
@@ -239,6 +244,10 @@
   @keyframes insp-in {
     from { transform: translateX(100%); }
     to { transform: none; }
+  }
+  @keyframes insp-out {
+    from { transform: none; }
+    to { transform: translateX(100%); }
   }
   @keyframes sheet-up {
     from { transform: translateY(100%); }
