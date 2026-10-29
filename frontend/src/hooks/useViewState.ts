@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { scrollRoot } from "@/lib/scrollRoot";
 
 ///  +-----------------------------------------------------------------+
 ///  |            VIEW STATE ACROSS BACK NAVIGATION                    |
@@ -132,26 +133,33 @@ export function useViewState<T>(
   const serialised = JSON.stringify(state);
 
   useEffect(() => {
-    write(window.scrollY);
+    write(scrollRoot()?.scrollTop ?? 0);
   }, [write, serialised]);
 
   // Keep the scroll position current as the page moves. Coalesced to one
   // write per frame — scroll fires far more often than storage should be
   // touched, and the last value in a frame is the only one that matters.
-  useEffect(() => {
+  //
+  // A LAYOUT effect so the listener is gone before the shell resets the
+  // scroller for the next page (AppShell). The scroller outlives the page,
+  // and a passive cleanup runs late enough to hear that reset and save 0
+  // over the position Back is meant to return to.
+  useLayoutEffect(() => {
+    const root = scrollRoot();
+    if (!root) return;
     let frame = 0;
 
     const onScroll = () => {
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        write(window.scrollY);
+        write(root.scrollTop);
       });
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
+    root.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      root.removeEventListener("scroll", onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
   }, [write]);
@@ -171,13 +179,13 @@ export function useViewState<T>(
     const target = pendingScroll.current;
     if (!ready || target == null || done.current) return;
 
-    window.scrollTo(0, target);
+    scrollRoot()?.scrollTo(0, target);
 
     // Again on the next frame. Layout can settle a beat after the effect — a
     // font swapping, an image resolving — and if the first call already
     // landed the second is a no-op.
     const frame = requestAnimationFrame(() => {
-      window.scrollTo(0, target);
+      scrollRoot()?.scrollTo(0, target);
       done.current = true;
       pendingScroll.current = null;
     });

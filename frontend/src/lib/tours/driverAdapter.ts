@@ -1,6 +1,7 @@
 import { driver, type Driver } from "driver.js";
 import { resolveSteps } from "./resolveSteps";
 import type { ResolvedStep, TourStepSpec } from "./types";
+import { scrollRoot } from "@/lib/scrollRoot";
 
 ///  +-----------------------------------------------------------------+
 ///  |            THE ONLY FILE THAT KNOWS ABOUT driver.js             |
@@ -12,7 +13,7 @@ import type { ResolvedStep, TourStepSpec } from "./types";
 //  ELEMENTS, NOT SELECTORS. driver.js accepts either, but a selector is
 //  resolved with querySelector, which takes the first match in document
 //  order — and the navbar renders every link twice, once in the desktop nav
-//  and once in the burger panel that is always mounted. Below `md` the first
+//  and once in the phone menu. Below the phone breakpoint the first
 //  match is the hidden desktop copy, so the highlight would land on a node
 //  with no box. pickVisible chooses among the matches instead.
 //
@@ -21,8 +22,11 @@ import type { ResolvedStep, TourStepSpec } from "./types";
 //  two popovers, one of which can never be closed.
 ///  +-----------------------------------------------------------------+
 
-/** Clearance for the fixed navbar — the same 6rem `scroll-mt-24` buys. */
-const NAV_OFFSET = 96;
+/** Breathing room between a highlighted element and the top of the page. */
+const TOP_CLEARANCE = 16;
+
+/** The phone breakpoint (tokens.css), where popovers move above or below. */
+const DESKTOP_QUERY = "(min-width: 36rem)";
 
 let active: Driver | null = null;
 
@@ -119,7 +123,7 @@ export function stopTour(): void {
 export function startTour({ steps, onDone }: StartOptions): boolean {
   stopTour();
 
-  const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+  const isDesktop = window.matchMedia(DESKTOP_QUERY).matches;
   const resolved = resolveSteps(steps, (a) => pickVisible(a) !== null, { isDesktop });
 
   if (resolved.length === 0) return false;
@@ -138,7 +142,8 @@ export function startTour({ steps, onDone }: StartOptions): boolean {
     // resolution and display, skip rather than show an unattached popover.
     skipMissingElement: true,
     animate: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    overlayOpacity: 0.6,
+    // The scrim colour carries its own alpha (tokens.css), matching modals.
+    overlayOpacity: 1,
     nextBtnText: "Next",
     prevBtnText: "Back",
     doneBtnText: "Got it",
@@ -148,12 +153,14 @@ export function startTour({ steps, onDone }: StartOptions): boolean {
 
       scrollIntoViewX(element);
 
-      // Nudge out from under the fixed navbar, which driver's own scrolling
-      // does not account for, then reposition — the popover was placed
-      // against the pre-scroll rectangle.
-      const rect = element.getBoundingClientRect();
-      if (rect.top < NAV_OFFSET) {
-        window.scrollBy({ top: rect.top - NAV_OFFSET, behavior: "auto" });
+      // driver scrolls the element just into view, which can leave it
+      // flush against the top of the page under the bar. Give it room,
+      // then reposition — the popover was placed against the pre-scroll
+      // rectangle.
+      const root = scrollRoot();
+      if (root && root.contains(element)) {
+        const gap = element.getBoundingClientRect().top - root.getBoundingClientRect().top;
+        if (gap < TOP_CLEARANCE) root.scrollBy({ top: gap - TOP_CLEARANCE, behavior: "auto" });
       }
 
       instance.refresh();

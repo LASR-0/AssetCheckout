@@ -4,8 +4,8 @@
  * Run `pnpm run icons` to regenerate after adding or removing an icon.
  * icon-font.test.ts fails the suite if this drifts from what the source uses.
  *
- * Contains 210 of the 4,284 Material Symbols glyphs, which is the
- * difference between 205 KB and 3.98 MB.
+ * Contains 211 of the 4,284 Material Symbols glyphs, which is the
+ * difference between 206 KB and 3.98 MB.
  */
 
 @font-face {

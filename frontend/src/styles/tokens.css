@@ -197,6 +197,9 @@
      queries resolve rem against the browser default, not the 80% root, so
      36rem here is 576px: Home and the forms' 720 design px. */
   --breakpoint-phone: 36rem;
+  /* The nav's 1060 design px: below it the items drop their icons and the
+     tour button its label, so everything fits on one bar. */
+  --breakpoint-nav: 53rem;
   /* The Requests log's 1100 design px: below it the inspector covers the list. */
   --breakpoint-desk: 55rem;
 

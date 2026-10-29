@@ -1,67 +1,17 @@
-import { Link } from "react-router-dom";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { StatusPage } from "@/components/shell/StatusPage";
 
 export default function NoAccessPage() {
-  // Optional admin-provided watermark image. When set in the frontend .env as
-  // VITE_CATCH_ALL_WATERMARK_LIGHT / _DARK, render it in place of the fallback icon.
-  const watermarkLight = import.meta.env.VITE_NO_ACCESS_WATERMARK_LIGHT;
-  const watermarkDark = import.meta.env.VITE_NO_ACCESS_WATERMARK_DARK;
-
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
-  const watermark =
-    resolvedTheme === "dark" ? watermarkDark : watermarkLight;
-
   return (
-    <main className="min-h-screen bg-landing-bg flex flex-col items-center justify-center text-on-background gap-4 px-6">
-      {mounted &&
-        (watermark ? (
-          <img
-            src={watermark}
-            alt=""
-            className="h-64 md:h-124 w-auto"
-          />
-        ) : (
-
-          <div className="flex items-center justify-center gap-2">
-            <span className="!text-[120px] md:!text-[250px] font-bold text-not-found-text/50 leading-none">
-              4
-            </span>
-            <span className="material-symbols-outlined !text-[110px] md:!text-[230px] text-not-found-text leading-none">
-              block
-            </span>
-            <span className="!text-[120px] md:!text-[250px] font-bold text-not-found-text/50 leading-none">
-              3
-            </span>
-          </div>
-        ))}
-
-      <h1 className="text-3xl md:text-5xl mt-[-20px] font-mono text-not-found-text font-bold text-center">
-        Unauthorised Access
-      </h1>
-
-      <p className="text-info-light text-center max-w-md">
-        You don't have permission to view this page. If you believe this is a
-        mistake, contact IT to be added as an admin or assigned as a manager
-        on at least one request.
-      </p>
-
-      <Link
-        to="/"
-        className="mt-2 px-8 py-2 text-md rounded-full font-bold not-found hover:brightness-110 hover:shadow-md text-white hover:cursor-pointer inline-flex items-center gap-2"
-      >
-        Back to home
-        <span
-          className="material-symbols-outlined !text-2xl leading-none"
-          style={{ fontVariationSettings: `'FILL' 1` }}
-        >
-          reply
-        </span>
-      </Link>
-    </main>
+    <StatusPage
+      icon="lock"
+      title="You don't have access to this yet"
+      watermark={{
+        light: import.meta.env.VITE_NO_ACCESS_WATERMARK_LIGHT,
+        dark: import.meta.env.VITE_NO_ACCESS_WATERMARK_DARK,
+      }}
+    >
+      Access comes with taking part: having a request of your own, or approving someone else's. If you think
+      you should have it already, contact IT and they can add you as an admin or as a manager.
+    </StatusPage>
   );
 }

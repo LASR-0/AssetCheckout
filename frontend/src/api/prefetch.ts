@@ -1,5 +1,6 @@
 import type { FocusEvent, MouseEvent } from "react";
 import { queryClient } from "@/api/queryClient";
+import { PAGE_FOR_PATH } from "@/routes";
 import {
   accessoryCategoriesForMeQuery,
   assetCategoriesQuery,
@@ -18,8 +19,8 @@ import {
 //
 //  Hovering or focusing a link is a strong hint of where somebody is going,
 //  and usually a couple of hundred milliseconds ahead of the click. Starting
-//  that page's queries then means it often renders with its data already
-//  in hand. A prefetch of anything still fresh is a no-op, so hovering back
+//  that page's code and queries then means it often renders with both
+//  already in hand. A prefetch of anything still fresh is a no-op, so hovering back
 //  and forth costs nothing.
 ///  +-----------------------------------------------------------------+
 
@@ -34,7 +35,9 @@ const ROUTE_QUERIES = {
 } as const;
 
 export function prefetchRoute(path: string): void {
-  // Everything here is the signed-in person's; nobody signed in, no hint.
+  // The page's code first: it is the same for everyone.
+  void PAGE_FOR_PATH[path]?.().catch(() => {});
+  // Everything below is the signed-in person's; nobody signed in, no hint.
   if (!queryClient.getQueryData(identityQuery.queryKey)?.name) return;
   const queries = ROUTE_QUERIES[path as keyof typeof ROUTE_QUERIES];
   // Each recipe has its own data type, which a loop over a mixed list
