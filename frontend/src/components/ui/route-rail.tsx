@@ -123,10 +123,17 @@ type RouteChainProps = {
   holder?: string;
   /** Under a future station: who will hold it, e.g. "Perth stock keeper". */
   futureSub?: (station: Station) => string | null;
+  /** Under the current station: what signs it off. `mine` when that's the
+   *  viewer ("Your move · Approve"), else a quiet note ("Signs with …"). */
+  sign?: { text: string; mine: boolean } | null;
+  /** `sm` for Home's inspector; `md`, with rules between stations, for the
+   *  request log's docket. */
+  size?: "sm" | "md";
   className?: string;
 };
 
-export function RouteChain({ route, holder, futureSub, className }: RouteChainProps) {
+export function RouteChain({ route, holder, futureSub, sign, size = "sm", className }: RouteChainProps) {
+  const md = size === "md";
   // A rejected route stops at the cut: the stations after it never happen.
   const shown = route.rejected ? route.stations.slice(0, route.current + 1) : route.stations;
   const last = shown.length - 1;
@@ -157,7 +164,8 @@ export function RouteChain({ route, holder, futureSub, className }: RouteChainPr
           <li key={s.key + i} className="grid grid-cols-[1.375rem_minmax(0,1fr)_auto] gap-x-3">
             <div className="flex flex-col items-center" aria-hidden>
               <span
-                className={cn("w-0", i === 0 ? "min-h-3" : "min-h-2.5 flex-1 border-l-[1.5px]")}
+                // md pins the dot level with the title; sm centres it in the row.
+                className={cn("w-0", md ? "h-3.25 flex-none" : i === 0 ? "min-h-3" : "min-h-2.5 flex-1", i > 0 && "border-l-[1.5px]")}
                 style={
                   i === 0
                     ? undefined
@@ -168,7 +176,7 @@ export function RouteChain({ route, holder, futureSub, className }: RouteChainPr
                 }
               />
               {phase === "done" && (
-                <Icon name="check_circle" size={15.5} fill className="leading-[1.125rem] text-tx2" />
+                <Icon name="check_circle" size={md ? 18 : 15.5} fill className="leading-[1.125rem] text-tx2" />
               )}
               {phase === "current" && (
                 <span className="my-px size-4 rounded-full border-[2.5px] border-prog bg-prog-bg" />
@@ -179,7 +187,7 @@ export function RouteChain({ route, holder, futureSub, className }: RouteChainPr
               {phase === "cut" && (
                 <Icon
                   name={route.blocked ? "link_off" : "cancel"}
-                  size={15.5}
+                  size={md ? 18 : 15.5}
                   fill={!route.blocked}
                   className="leading-[1.125rem] text-stop"
                 />
@@ -189,22 +197,34 @@ export function RouteChain({ route, holder, futureSub, className }: RouteChainPr
                 style={i === last ? undefined : { borderLeftColor: nextReached ? "var(--tx2)" : "var(--strong)" }}
               />
             </div>
-            <div className="min-w-0 py-3">
+            <div className={cn("min-w-0", md ? "py-2.75" : "py-3", md && i > 0 && "border-t border-line2")}>
               <div
                 className={cn(
-                  "fs-12.5",
+                  md ? "fs-13.5" : "fs-12.5",
                   phase === "current" || phase === "cut" ? "font-semibold" : "font-medium",
-                  phase === "future" ? "text-mut" : phase === "cut" ? "text-stop" : "text-tx"
+                  phase === "future" ? (md ? "font-normal text-tx3" : "text-mut") : phase === "cut" ? "text-stop" : phase === "current" && md ? "text-prog" : "text-tx"
                 )}
               >
                 {s.label}
                 {phase === "current" && <span className="sr-only"> (current step)</span>}
               </div>
-              {sub && <div className="mt-0.5 fs-11.5 text-mut">{sub}</div>}
+              {sub && <div className={cn("mt-0.5 text-mut", md ? "fs-12.5" : "fs-11.5")}>{sub}</div>}
+              {phase === "current" && sign && (
+                <div
+                  className={
+                    sign.mine
+                      ? "mt-2.5 inline-flex rounded-7 bg-brand-sub px-2.5 py-1.25 fs-12.5 leading-[1.35] font-semibold text-brand-tx"
+                      : "mt-2.25 border-t border-dashed border-strong pt-1.5 fs-12 text-mut"
+                  }
+                >
+                  {sign.text}
+                </div>
+              )}
             </div>
             <div
               className={cn(
-                "py-3.25 fs-11 whitespace-nowrap",
+                "whitespace-nowrap",
+                md ? cn("py-3 fs-12", i > 0 && "border-t border-line2") : "py-3.25 fs-11",
                 date === "now" ? (phase === "cut" ? "font-medium text-stop" : "font-medium text-prog") : "text-mut"
               )}
             >

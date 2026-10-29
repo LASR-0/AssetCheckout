@@ -15,6 +15,9 @@ import type { TourDefinition } from "./types";
 //  two steps would be a tour they have to sit through to reach the new part.
 //  Split, the checklist gives them only the part they have not had.
 //
+//  THE DOCKET is where a request is worked: its step opens there in place of
+//  a dialog. The tour points at it rather than explaining each step.
+//
 //  THE APPROVE STEP DOES NOT ASSUME A PENDING ROW. A cleared queue is the
 //  normal state of an approver's day, not an edge case, so the fallback is
 //  the column header — which is present whenever the column is — and it is
@@ -29,16 +32,16 @@ export const requestsTour: TourDefinition = {
       anchors: ['[data-tour="requests-table"]'],
       title: "Every request you can see",
       description:
-        "Yours, and anything waiting on you. Arriving from an email or the home page pins it to that one row — clear the pin to see the rest.",
-      side: "top",
+        "Yours, and anything waiting on you. Each row says whose move it is; when it's yours, the button there takes it. Arriving from an email pins the list to that one request.",
+      side: "right",
       required: true,
     },
     {
-      id: "search",
-      anchors: ['[data-tour="requests-search"]'],
-      title: "Finding one",
+      id: "views",
+      anchors: ['[data-tour="requests-views"]', '[data-tour="requests-table"]'],
+      title: "Views",
       description:
-        "Searches names, categories and models. Not request numbers — use the link in the email for those, it opens straight to the row.",
+        "Needs you is what you can act on now. In progress is everything still open, Done and Rejected are how requests close.",
       side: "bottom",
       align: "start",
       required: true,
@@ -47,16 +50,25 @@ export const requestsTour: TourDefinition = {
       id: "filter",
       anchors: ['[data-tour="requests-filter"]', '[data-tour="requests-search"]'],
       title: "Narrowing it down",
-      description:
-        "Filter by stage — still in progress, finished, turned down, or waiting at any particular point.",
+      description: "Pick one stage, such as Shipped or Overdue, within whichever view you're on.",
       side: "bottom",
     },
     {
-      id: "page-size",
-      anchors: ['[data-tour="requests-page-size"]'],
-      title: "How much at once",
-      description: "Show more rows per page if you're scanning a long list.",
+      id: "search",
+      anchors: ['[data-tour="requests-search"]'],
+      title: "Finding one",
+      description: "Searches people, items, sites and request numbers. Press / to jump here from anywhere on the page.",
       side: "bottom",
+      align: "end",
+      required: true,
+    },
+    {
+      id: "docket",
+      anchors: ['[data-tour="requests-docket"]'],
+      title: "The docket",
+      description:
+        "The request you've picked: whose move it is, its chain of custody, and the details. Your next step happens right here. On a keyboard, j and k move between rows.",
+      side: "left",
     },
   ],
 };
@@ -73,18 +85,18 @@ export const requestsManagerTour: TourDefinition = {
       ],
       title: "Requests waiting on you",
       description:
-        "You've been named as the approver on these. Approve sends it to IT to fulfil; the requester is emailed either way.",
+        "You've been named as the approver on these. Approve opens it with a confirm; it then goes to IT to fulfil, and the requester is emailed either way.",
       side: "left",
       required: true,
       copyByAnchor: {
         '[data-tour="requests-actions-header"]': {
           title: "Approving requests",
           description:
-            "Nothing is waiting on you right now. When something is, Approve and Reject appear in this column — and you'll get an email as well.",
+            "Nothing is waiting on you right now. When something is, it shows here and its docket offers Approve and Reject. You'll get an email as well.",
         },
         '[data-tour="requests-row-actions"]': {
           description:
-            "Actions you can take on a row live here. When you're named as approver on a request, Approve and Reject appear among them.",
+            "Your move on a row is a button here. When you're named as approver on a request, its docket offers Approve and Reject.",
         },
       },
     },
@@ -100,7 +112,7 @@ export const requestsManagerTour: TourDefinition = {
       anchors: ['[data-tour="requests-reject"]'],
       title: "Turning one down",
       description:
-        "Reject asks you for a reason, and the reason is what the requester reads — so it's worth a sentence.",
+        "Reject is beside Approve in the docket. Give a reason: it's what the requester reads, so it's worth a sentence.",
       side: "left",
     },
   ],

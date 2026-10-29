@@ -14,7 +14,7 @@ const RequestFormPage = lazy(pages.assets);
 const AccessoryRequestFormPage = lazy(pages.accessories);
 const LoanFormPage = lazy(pages.loan);
 const SuccessRedirect = lazy(pages.success);
-const RequestTablePage = lazy(pages.requests);
+const RequestsPage = lazy(pages.requests);
 const StockPage = lazy(pages.stock);
 const SettingsPage = lazy(pages.settings);
 const FeedbackPage = lazy(pages.feedback);
@@ -66,7 +66,7 @@ function App() {
                 path="/requests"
                 element={
                   <ProtectedRoute requireRole={false}>
-                    <RequestTablePage />
+                    <RequestsPage />
                   </ProtectedRoute>
                 }
               />
