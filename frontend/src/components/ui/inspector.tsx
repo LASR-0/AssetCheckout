@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ComponentProps, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -57,7 +58,7 @@ export function Inspector({
 
   if (!open) return null;
 
-  return (
+  const panel = (
     <aside
       ref={ref}
       tabIndex={-1}
@@ -85,6 +86,12 @@ export function Inspector({
       <div className="flex flex-col gap-3 p-3 phone:p-4">{children}</div>
     </aside>
   );
+
+  // A floating panel goes to the document root. Fixed positioning resolves
+  // against the nearest ancestor with `zoom` (the page column grows on wide
+  // screens, see shell/Page), so rendered in place it slid down from under
+  // the bar and grew with the page. Docked, it belongs in the page's flow.
+  return docked ? panel : createPortal(panel, document.body);
 }
 
 type InspectorHeaderProps = Omit<ComponentProps<"div">, "title"> & {

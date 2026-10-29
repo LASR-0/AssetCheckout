@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Page } from "@/components/shell/Page";
 import { useToast } from "@/components/ui/toast-context";
 import { useTourReady } from "@/components/tour/TourProvider";
 import EnterSelfProcuredDetailsDialog from "@/components/dialogs/EnterSelfProcuredDetailsDialog";
-import HomeHead from "@/components/home/HomeHead";
+import { CountTiles, Greeting } from "@/components/home/HomeHead";
 import NeedsYou from "@/components/home/NeedsYou";
 import InFlight from "@/components/home/InFlight";
 import Finished from "@/components/home/Finished";
@@ -22,6 +22,8 @@ import { markRequestSeen } from "@/api/requests";
 import { notifySeenCleared } from "@/hooks/useActionCounts";
 import { needsMyAction } from "@/lib/permissions";
 import type { Request } from "@/types/requestType";
+import { scrollRoot } from "@/lib/scrollRoot";
+import { cn } from "@/lib/utils";
 
 ///  +-----------------------------------------------------------------+
 ///  |                            HOME                                 |
@@ -32,8 +34,11 @@ import type { Request } from "@/types/requestType";
 //  requests up to, and what do I have. Asking for something comes last,
 //  because by the time somebody wants to, they know where it is.
 //
-//  TWO COLUMNS from 1160 design px: the person's requests on the left, what
-//  they hold beside them. Below that one column, in reading order.
+//  TWO COLUMNS from 1160 design px: the person's requests on the left; the
+//  counts and what they hold beside them, held in view while the left side
+//  scrolls (only when that column fits on screen, so a long holdings list
+//  never puts its own end out of reach). Below that one column, in reading
+//  order, with the counts beside the greeting.
 //
 //  Acting from here is limited to the requester's own next step (collect
 //  it, confirm it arrived, enter what they bought). Everything else opens in
@@ -41,6 +46,23 @@ import type { Request } from "@/types/requestType";
 ///  +-----------------------------------------------------------------+
 
 const AREA = "min-w-0 pb-4 phone:pb-5";
+
+/** Whether an element, plus breathing room, fits in the page's scroller. */
+function useFitsInView<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [fits, setFits] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    const root = scrollRoot();
+    if (!el || !root) return;
+    const check = () => setFits(el.getBoundingClientRect().height + 64 <= root.clientHeight);
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, fits };
+}
 
 export default function Home() {
   const home = useHome();
@@ -53,6 +75,7 @@ export default function Home() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [purchasing, setPurchasing] = useState<Request | null>(null);
 
+  const { ref: sideRef, fits: sideFits } = useFitsInView<HTMLDivElement>();
   const assets = heldAssets(home.holdings.data);
   const accessories = heldAccessories(home.holdings.data);
 
@@ -113,10 +136,18 @@ export default function Home() {
   const hasNeedsArea = home.needs.length > 0 || home.approvals > 0;
 
   return (
-    <Page max={1240} className="flex flex-col gap-4 px-3 pt-5 pb-45 phone:gap-5 phone:px-8 phone:pt-7 phone:pb-35">
-      <HomeHead name={home.auth.name} loading={home.loadingRequests} counts={home.counts} intro={intro} />
+    <Page max={1240} className="px-3 pt-5 pb-45 phone:px-8 phone:pt-7 phone:pb-35">
+      <div className="grid grid-cols-1 [grid-template-areas:'head'_'needs'_'flight'_'have'_'ask'] min-[58rem]:grid-cols-[minmax(0,1fr)_25rem] min-[58rem]:grid-rows-[auto_auto_auto_1fr] min-[58rem]:gap-x-6 min-[58rem]:[grid-template-areas:'head_side'_'needs_side'_'flight_side'_'ask_side']">
+        <div className={`${AREA} flex flex-wrap items-end justify-between gap-x-8 gap-y-4.5 [grid-area:head]`}>
+          <Greeting name={home.auth.name} intro={intro} />
+          <CountTiles
+            name={home.auth.name}
+            loading={home.loadingRequests}
+            counts={home.counts}
+            className="flex-[1_1_100%] phone:flex-[0_1_26.25rem] min-[58rem]:hidden"
+          />
+        </div>
 
-      <div className="grid grid-cols-1 [grid-template-areas:'needs'_'flight'_'have'_'ask'] min-[58rem]:grid-cols-[minmax(0,1fr)_25rem] min-[58rem]:grid-rows-[auto_auto_auto_1fr] min-[58rem]:gap-x-6 min-[58rem]:[grid-template-areas:'needs_have'_'flight_have'_'ask_have'_'._have']">
         {hasNeedsArea && (
           <div className={`${AREA} [grid-area:needs]`}>
             <NeedsYou needs={home.needs} approvals={home.approvals} busyId={busyId} onOpen={open} onAct={act} />
@@ -134,14 +165,6 @@ export default function Home() {
           <Finished rows={home.finished} name={home.auth.name} onOpen={open} />
         </div>
 
-        <div className={`${AREA} [grid-area:have]`}>
-          <WhatYouHave
-            holdings={home.holdings}
-            onReport={(item) => setFlow({ step: "choose", item })}
-            onReportMissing={() => setFlow({ step: "missing" })}
-          />
-        </div>
-
         <div className={`${AREA} [grid-area:ask]`}>
           <AskForSomething
             assetCategories={home.assetCategories}
@@ -150,6 +173,30 @@ export default function Home() {
             accessories={accessories}
             onSeeAll={(subject) => setFlow({ step: "list", subject })}
           />
+        </div>
+
+        {/* The right-hand column on wide screens. Below that it dissolves
+            (display: contents) and "What you have" takes its own row. */}
+        <div
+          ref={sideRef}
+          className={cn(
+            "contents min-[58rem]:block min-[58rem]:self-start min-[58rem]:[grid-area:side]",
+            sideFits && "min-[58rem]:sticky min-[58rem]:top-7"
+          )}
+        >
+          <CountTiles
+            name={home.auth.name}
+            loading={home.loadingRequests}
+            counts={home.counts}
+            className="hidden pb-5 min-[58rem]:grid"
+          />
+          <div className={`${AREA} [grid-area:have]`}>
+            <WhatYouHave
+              holdings={home.holdings}
+              onReport={(item) => setFlow({ step: "choose", item })}
+              onReportMissing={() => setFlow({ step: "missing" })}
+            />
+          </div>
         </div>
       </div>
 
