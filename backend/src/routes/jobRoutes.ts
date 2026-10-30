@@ -4,7 +4,7 @@ import { prisma } from "../db/prisma.js";
 import { enqueue } from "../jobs/jobQueue.js";
 import { JobType as JobTypeEnum } from "../../generated/prisma_client/client.js";
 import type { JobType, JobStatus } from "../../generated/prisma_client/client.js";
-import { maxAttemptsFor, DRY_RUN_JOBS } from "../jobs/policy.js";
+import { maxAttemptsFor, DRY_RUN_JOBS, MAX_DELETE_JOBS } from "../jobs/policy.js";
 import { getSetting, setSetting } from "../services/settings.js";
 import { SCHEDULE_KEYS } from "../jobs/scheduler.js";
 import nodeCron from "node-cron";
@@ -296,6 +296,66 @@ router.post("/dry-run", async (req: Request, res: Response, next: NextFunction) 
 
     await setSetting(settingKey, dryRun ? "true" : "false", getActorEmail(req));
     res.json({ jobType, dryRun });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                  LATEST RUN PER JOB                             |
+///  +-----------------------------------------------------------------+
+//
+//  The settings board's "last run" and "running" for every job in one call.
+//  A page of history can't answer it: the prices refresh runs every ten
+//  minutes and would push every other job off the first page.
+
+router.get("/latest", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const rows = await Promise.all(
+      JOB_TYPES.map((type) => prisma.backgroundJob.findFirst({ where: { type }, orderBy: { createdAt: "desc" } }))
+    );
+    res.json({ jobs: rows.filter(Boolean) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |                  MAX DELETES PER RUN                            |
+///  +-----------------------------------------------------------------+
+//
+//  How many records one live run of a deleting job may remove. The settings
+//  page asks for LIVE before raising it; this route only checks the number.
+
+router.get("/max-deletes", async (req, res, next) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const entries = await Promise.all(
+      Object.entries(MAX_DELETE_JOBS).map(async ([jobType, cfg]) => {
+        const n = Number(await getSetting(cfg!.key));
+        return [jobType, Number.isInteger(n) && n > 0 ? n : cfg!.fallback] as const;
+      })
+    );
+    res.json({ limits: Object.fromEntries(entries) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/max-deletes", async (req, res, next) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const { jobType, max } = (req.body ?? {}) as { jobType?: string; max?: unknown };
+    const cfg = jobType ? MAX_DELETE_JOBS[jobType as JobType] : undefined;
+    if (!cfg) {
+      return res.status(400).json({ error: `Job type has no delete limit: ${jobType}` });
+    }
+    if (typeof max !== "number" || !Number.isInteger(max) || max < 1 || max > 1000) {
+      return res.status(400).json({ error: "max must be a whole number from 1 to 1000" });
+    }
+    await setSetting(cfg.key, String(max), getActorEmail(req));
+    res.json({ jobType, max });
   } catch (err) {
     next(err);
   }

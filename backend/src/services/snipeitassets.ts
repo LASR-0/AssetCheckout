@@ -208,6 +208,30 @@ export async function refreshPricesCache(): Promise<number> {
   return rows.length;
 }
 
+/**
+ * Per model: how many assets are free to hand out, and how many of those
+ * carry a Tier value — the two numbers that decide whether a model works as
+ * a standard. From the cached /hardware list, so the settings page can show
+ * them for every model in a category without a Snipe call per model.
+ *
+ * "Free" uses the same test as getAvailableAssetFromModel: Ready to Deploy
+ * and assigned to nobody.
+ */
+export async function getModelAvailability(): Promise<Map<number, { available: number; withTier: number }>> {
+  const rows = (await getCachedHardware()) as Asset[];
+  const out = new Map<number, { available: number; withTier: number }>();
+  for (const asset of rows) {
+    const modelId = (asset as { model?: { id?: number } }).model?.id;
+    if (typeof modelId !== "number") continue;
+    if (asset.status_label?.name !== "Ready to Deploy" || asset.assigned_to !== null) continue;
+    const entry = out.get(modelId) ?? { available: 0, withTier: 0 };
+    entry.available++;
+    if (assetMatchesTier(asset, { mode: "any" })) entry.withTier++;
+    out.set(modelId, entry);
+  }
+  return out;
+}
+
 ///  +-----------------------------------------------------------------+
 ///  |                       CHECKOUT FLOW                             |
 ///  +-----------------------------------------------------------------+

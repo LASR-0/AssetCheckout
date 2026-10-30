@@ -1572,10 +1572,33 @@ export async function getLoanReminderOffsets(): Promise<number[]> {
     getSetting("loan_reminder_days_4"),
   ]);
   const parsed = raws.map((raw, i) => {
-    const n = Number((raw ?? "").trim());
+    // Unset is the default, not 0: Number("") is 0, which would quietly move
+    // the first rung to the due date itself.
+    if (raw == null || raw.trim() === "") return defaults[i];
+    const n = Number(raw.trim());
     return Number.isInteger(n) ? n : defaults[i];
   });
   return parsed.sort((a, b) => a - b);
+}
+
+/**
+ * Save the four rungs, in order. Refused unless they climb strictly — the
+ * job walks them as stages, and two rungs on the same day would send the
+ * same reminder twice or skip the polite one.
+ */
+export async function setLoanReminderOffsets(offsets: number[], actorEmail?: string): Promise<void> {
+  if (
+    offsets.length !== 4 ||
+    !offsets.every((n) => Number.isInteger(n) && n >= -30 && n <= 90) ||
+    !offsets.every((n, i) => i === 0 || n > offsets[i - 1])
+  ) {
+    throw Object.assign(new Error("Reminder days must be four whole numbers from -30 to 90, each later than the last"), {
+      status: 400,
+    });
+  }
+  await Promise.all(
+    offsets.map((n, i) => setSetting(`loan_reminder_days_${i + 1}`, String(n), actorEmail))
+  );
 }
 
 /**

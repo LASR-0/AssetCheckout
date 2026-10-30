@@ -72,6 +72,10 @@ export type ArticleStat = {
   opens: number;
   escapes: number;
   deepestStep: number | null;
+  /** The article's length now, for "3.4 of 5". */
+  stepCount: number | null;
+  /** Escapes from inside this article, by control: called, messaged, nothing_worked. */
+  escapesByControl: Record<string, number>;
 };
 
 export type NoMatchSearch = {

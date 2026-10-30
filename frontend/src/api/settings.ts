@@ -185,6 +185,8 @@ export type LoanConfig = {
   devices: LoanDevice[];
   /** Longest window a requester may book, in days. */
   maxLoanDays: number;
+  /** The due-back ladder, days from the due date: four, strictly climbing. */
+  reminderDays: number[];
 };
 
 export async function getLoanConfig(): Promise<LoanConfig> {
@@ -192,6 +194,7 @@ export async function getLoanConfig(): Promise<LoanConfig> {
   return {
     devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
+    reminderDays: data.reminderDays ?? [-1, 0, 3, 7],
   };
 }
 
@@ -205,12 +208,14 @@ export async function setLoanConfig(
     body: {
       ...(config.devices !== undefined ? { devices: config.devices } : {}),
       ...(config.maxLoanDays !== undefined ? { maxLoanDays: config.maxLoanDays } : {}),
+      ...(config.reminderDays !== undefined ? { reminderDays: config.reminderDays } : {}),
     },
   });
   await invalidate(["loans"]);
   return {
     devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
+    reminderDays: data.reminderDays ?? [-1, 0, 3, 7],
   };
 }
 

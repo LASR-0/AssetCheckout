@@ -2,11 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { invalidate } from "@/api/queryClient";
 import { apiFetch } from "@/api/client";
 import { getIdentity } from "@/api/auth";
-import { getAssetCategories, getAllAssetCategories } from "@/api/categories";
+import { getAssetCategories, getAllAssetCategories, getModelsForCategory } from "@/api/categories";
 import { getCompanies, getLocations, getStatuses } from "@/api/snipe";
 import { fetchUsers } from "@/api/users";
 import { getTiers, getPriceAverages } from "@/api/analytics";
-import { getFeedbackEnabled } from "@/api/feedback";
+import { getAllFeedback, getFeedbackEnabled } from "@/api/feedback";
 import { getTourState } from "@/api/tours";
 import { getMyHoldings } from "@/api/holdings";
 import {
@@ -19,14 +19,34 @@ import {
 } from "@/api/accessories";
 import { getLoanDevices } from "@/api/loans";
 import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
+import { getAccessoriesByCategory } from "@/api/accessories";
 import {
   getEditableSubject,
   getSymptom,
+  getTroubleshootingAnalytics,
   getTroubleshootingConfig,
   getTroubleshootingLibrary,
   getTroubleshootingSubjects,
 } from "@/api/troubleshooting";
-import { getLoanConfig, getSiteColours, getStockKeepers } from "@/api/settings";
+import {
+  getAccessoryAssetMap,
+  getLoanConfig,
+  getRequestableCategoryIds,
+  getSiteColours,
+  getSkeletonStatusId,
+  getStandardModels,
+  getStockKeepers,
+} from "@/api/settings";
+import {
+  getDryRunStates,
+  getJobSchedules,
+  getLatestJobs,
+  getMaxDeletes,
+  getReminderThresholds,
+  listJobs,
+  type ListJobsParams,
+} from "@/api/jobs";
+import { getCapexLogEnabled, getSharepointSyncEnabled } from "@/api/sharepoint";
 import type { Request } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
@@ -326,3 +346,106 @@ export const editableSubjectQuery = (subjectKey: string) =>
     queryKey: ["troubleshooting", "admin", "subject", subjectKey],
     queryFn: () => getEditableSubject(subjectKey),
   });
+
+// ---- settings (admin) -----------------------------------------------------
+//
+// Each setter in api/settings, api/accessories and api/jobs returns the saved
+// value; the settings page writes it into these with setQueryData rather
+// than refetching, so a saved change is on screen as soon as it's saved.
+
+export const requestableAssetIdsQuery = queryOptions({
+  queryKey: ["settings", "requestable-assets"],
+  queryFn: () => getRequestableCategoryIds(),
+});
+
+export const standardModelsQuery = queryOptions({
+  queryKey: ["settings", "standard-models"],
+  queryFn: () => getStandardModels(),
+});
+
+export const skeletonStatusQuery = queryOptions({
+  queryKey: ["settings", "skeleton-status"],
+  queryFn: () => getSkeletonStatusId(),
+});
+
+export const accessoryAssetMapQuery = queryOptions({
+  queryKey: ["settings", "accessory-asset-map"],
+  queryFn: () => getAccessoryAssetMap(),
+});
+
+/** A category's models, with how many are free to hand out (and with a Tier). */
+export const categoryModelsQuery = (categoryId: number) =>
+  queryOptions({
+    queryKey: ["settings", "category-models", categoryId],
+    queryFn: ({ signal }) => getModelsForCategory(categoryId, signal),
+    staleTime: REFERENCE,
+  });
+
+/** One accessory category's records, per site, for the option and loan pickers. */
+export const accessoriesInCategoryQuery = (categoryId: number) =>
+  queryOptions({
+    queryKey: ["settings", "accessories-in", categoryId],
+    queryFn: () => getAccessoriesByCategory(categoryId),
+    staleTime: REFERENCE,
+  });
+
+export const jobSchedulesQuery = queryOptions({
+  queryKey: ["jobs", "schedules"],
+  queryFn: async () => (await getJobSchedules()).schedules,
+});
+
+export const dryRunStatesQuery = queryOptions({
+  queryKey: ["jobs", "dry-run"],
+  queryFn: async () => (await getDryRunStates()).states,
+});
+
+export const maxDeletesQuery = queryOptions({
+  queryKey: ["jobs", "max-deletes"],
+  queryFn: () => getMaxDeletes(),
+});
+
+export const shipReminderQuery = queryOptions({
+  queryKey: ["jobs", "ship-reminders"],
+  queryFn: () => getReminderThresholds(),
+});
+
+/** Each job's latest run. Polled while the Jobs page is open, so a run started
+ *  here shows as running and then finishes on its own. */
+export const latestJobsQuery = queryOptions({
+  queryKey: ["jobs", "latest"],
+  queryFn: () => getLatestJobs(),
+});
+
+export const jobHistoryQuery = (params: ListJobsParams) =>
+  queryOptions({
+    queryKey: ["jobs", "history", params],
+    queryFn: () => listJobs(params),
+  });
+
+export const sharepointSyncQuery = queryOptions({
+  queryKey: ["settings", "sharepoint-sync"],
+  queryFn: async () => (await getSharepointSyncEnabled()).enabled,
+});
+
+export const capexLogQuery = queryOptions({
+  queryKey: ["settings", "capex-log"],
+  queryFn: async () => (await getCapexLogEnabled()).enabled,
+});
+
+export const feedbackListQuery = queryOptions({
+  queryKey: ["feedback", "all"],
+  queryFn: async () => (await getAllFeedback()).feedback,
+});
+
+/** The library's usage over the last N days, and whether it's being recorded. */
+export const troubleshootingAnalyticsQuery = (days: number) =>
+  queryOptions({
+    queryKey: ["troubleshooting", "analytics", days],
+    queryFn: () => getTroubleshootingAnalytics(days),
+  });
+
+/** Who keeps each site, with the server's per-site cap: the settings table. */
+export const stockKeepersFullQuery = queryOptions({
+  queryKey: ["settings", "stock-keepers", "full"],
+  queryFn: () => getStockKeepers(),
+});

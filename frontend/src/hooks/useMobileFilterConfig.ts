@@ -32,7 +32,7 @@ function parseConfig(data: unknown): MobileNumberConfig {
   };
 }
 
-const mobileFilterQuery = queryOptions({
+export const mobileFilterQuery = queryOptions({
   queryKey: ["settings", "mobile-filter"],
   queryFn: async () => parseConfig(await apiFetch("/api/settings/mobile-filter")),
   staleTime: SESSION,

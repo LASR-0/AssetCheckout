@@ -83,6 +83,7 @@ function App() {
                 }
               />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/:section" element={<SettingsPage />} />
               <Route path="/feedback" element={
                 <ProtectedRoute requireRole={false}><FeedbackPage /></ProtectedRoute>
               } />

@@ -3,6 +3,7 @@ import {
   getAllAssetCategories,
   getRequestableAssetCategories,
   getAllModelsByCategory,
+  getModelAvailability,
 } from "../services/snipeitassets.js";
 
 const router = Router();
@@ -33,7 +34,20 @@ router.get("/asset-categories/:id/models", async (req: Request, res: Response, n
     }
 
     const models = await getAllModelsByCategory(id);
-    const cleaned = models.map((m) => ({ id: m.id, name: m.name }));
+    // Availability from the cached hardware list: decoration for the
+    // standard-models picker, so a failure leaves it off rather than
+    // failing the list.
+    const availability = await getModelAvailability().catch(() => null);
+    const cleaned = models.map((m) => ({
+      id: m.id,
+      name: m.name,
+      ...(availability
+        ? {
+            available: availability.get(m.id)?.available ?? 0,
+            availableWithTier: availability.get(m.id)?.withTier ?? 0,
+          }
+        : {}),
+    }));
     res.json({ models: cleaned });
   } catch (err) {
     next(err);

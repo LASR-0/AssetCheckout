@@ -18,6 +18,8 @@ import {
   type StockKeeperEntry,
   getLoanDevices,
   getLoanMaxDays,
+  getLoanReminderOffsets,
+  setLoanReminderOffsets,
   setLoanMaxDays,
   getSiteColours,
   setSiteColour,
@@ -411,11 +413,12 @@ router.put("/site-colours", async (req: Request, res: Response, next: NextFuncti
 
 router.get("/loans", async (_req, res, next) => {
   try {
-    const [devices, maxLoanDays] = await Promise.all([
+    const [devices, maxLoanDays, reminderDays] = await Promise.all([
       getLoanDevices(),
       getLoanMaxDays(),
+      getLoanReminderOffsets(),
     ]);
-    res.json({ devices, maxLoanDays });
+    res.json({ devices, maxLoanDays, reminderDays });
   } catch (err) {
     next(err);
   }
@@ -425,7 +428,7 @@ router.put("/loans", async (req, res, next) => {
   try {
     if (!requireAdmin(req, res)) return;
 
-    const { devices, maxLoanDays } = req.body ?? {};
+    const { devices, maxLoanDays, reminderDays } = req.body ?? {};
 
     // An empty list is a real value here — it turns loans off. Absent means
     // "leave the list alone", so the max-days field can be saved on its own.
@@ -438,6 +441,9 @@ router.put("/loans", async (req, res, next) => {
     ) {
       return res.status(400).json({ error: "maxLoanDays must be a positive integer" });
     }
+    if (reminderDays !== undefined && !Array.isArray(reminderDays)) {
+      return res.status(400).json({ error: "reminderDays must be an array" });
+    }
 
     const actor = getActorEmail(req);
     if (devices !== undefined) {
@@ -446,13 +452,21 @@ router.put("/loans", async (req, res, next) => {
     if (maxLoanDays !== undefined) {
       await setLoanMaxDays(maxLoanDays, actor);
     }
+    if (reminderDays !== undefined) {
+      try {
+        await setLoanReminderOffsets(reminderDays, actor);
+      } catch (err) {
+        return res.status(400).json({ error: (err as Error).message });
+      }
+    }
 
     // Echo the authoritative config back, as every other setter here does.
-    const [savedDevices, savedMaxLoanDays] = await Promise.all([
+    const [savedDevices, savedMaxLoanDays, savedReminderDays] = await Promise.all([
       getLoanDevices(),
       getLoanMaxDays(),
+      getLoanReminderOffsets(),
     ]);
-    res.json({ devices: savedDevices, maxLoanDays: savedMaxLoanDays });
+    res.json({ devices: savedDevices, maxLoanDays: savedMaxLoanDays, reminderDays: savedReminderDays });
   } catch (err) {
     next(err);
   }

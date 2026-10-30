@@ -85,6 +85,10 @@ export type ArticleStat = {
   escapes: number;
   /** Furthest step reached, averaged over visits that reached any step. */
   deepestStep: number | null;
+  /** How many steps the article has now, for "3.4 of 5". Null once it's gone. */
+  stepCount: number | null;
+  /** Escapes taken from inside this article, by control (called, messaged, …). */
+  escapesByControl: Record<string, number>;
 };
 
 export type NoMatchSearch = {
@@ -145,6 +149,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
       sessions: Set<string>;
       /** Furthest step this session got to, per session. */
       deepestBySession: Map<string, number>;
+      controls: Map<string, number>;
     }
   >();
 
@@ -167,6 +172,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
             opens: 0,
             sessions: new Set(),
             deepestBySession: new Map(),
+            controls: new Map(),
           })
           .get(articleKey)!)
       : null;
@@ -196,6 +202,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
         sessionsWithEscape.add(event.sessionId);
         const control = event.detail ?? "unknown";
         escapeControls.set(control, (escapeControls.get(control) ?? 0) + 1);
+        if (article) article.controls.set(control, (article.controls.get(control) ?? 0) + 1);
         break;
       }
 
@@ -242,6 +249,8 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
           deepestStep: depths.length
             ? Math.round((depths.reduce((n, d) => n + d, 0) / depths.length) * 10) / 10
             : null,
+          stepCount: troubleshootingRepository.getArticle(a.subjectKey, a.symptomId)?.steps.length ?? null,
+          escapesByControl: Object.fromEntries(a.controls),
         };
       })
       .filter((a) => a.opens > 0)

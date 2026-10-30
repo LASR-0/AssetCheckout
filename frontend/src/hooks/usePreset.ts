@@ -182,5 +182,5 @@ export function usePreset() {
     applyPreset(preset);
   }, [preset]);
 
-  return { preset, isExplicit, setPreset, clearPreset, setOrgDefault };
+  return { preset, isExplicit, setPreset, clearPreset, setOrgDefault, orgDefault: cachedDefault() };
 }
