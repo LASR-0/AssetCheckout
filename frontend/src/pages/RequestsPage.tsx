@@ -10,6 +10,7 @@ import { requestsQuery } from "@/api/queries";
 import { markRequestSeen } from "@/api/requests";
 import { notifySeenCleared } from "@/hooks/useActionCounts";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useSettledSearch } from "@/hooks/useSettledSearch";
 import { needsMyAction } from "@/lib/permissions";
 import { STAGE_META } from "@/lib/route";
 import { LogToolbar } from "@/components/requests/LogToolbar";
@@ -77,6 +78,8 @@ export default function RequestsPage() {
   });
   const [site, setSite] = useState(() => params.get("site") ?? ANY);
   const [q, setQ] = useState(() => params.get("q") ?? "");
+  // The list follows the search once typing pauses (see useSettledSearch).
+  const query = useSettledSearch(q);
   const [pin, setPin] = useState<number | null>(() => {
     const n = Number(params.get("requestId"));
     return Number.isInteger(n) && n > 0 ? n : null;
@@ -110,7 +113,7 @@ export default function RequestsPage() {
   }, [viewChoice, stage, site, q, pin, params, setParams]);
 
   const list = useMemo(() => {
-    const words = q.trim();
+    const words = query.trim();
     const out = log.rows.filter(
       (x) =>
         (pin == null || x.r.id === pin) &&
@@ -121,7 +124,7 @@ export default function RequestsPage() {
     );
     out.sort((a, b) => (newestFirst ? b.r.createdAt.localeCompare(a.r.createdAt) : a.r.createdAt.localeCompare(b.r.createdAt)));
     return out;
-  }, [log.rows, pin, view, keep, stage, site, q, newestFirst]);
+  }, [log.rows, pin, view, keep, stage, site, query, newestFirst]);
 
   // On a desk the docket is never empty while there's a list to show.
   const shownId = sel ?? (desk ? list[0]?.r.id ?? null : null);
@@ -199,7 +202,7 @@ export default function RequestsPage() {
   }
 
   const exceptions = viewer.role === "ADMIN" ? log.rows.filter(isException).length : 0;
-  const filtered = q.trim() !== "" || stage !== ANY || site !== ANY;
+  const filtered = query.trim() !== "" || stage !== ANY || site !== ANY;
   const empty =
     view === "needs" && !filtered && pin == null
       ? { title: "Nothing needs you", text: "You're all caught up.", onShowAll: showAll }
@@ -286,7 +289,7 @@ export default function RequestsPage() {
             <div role={desk ? "table" : undefined} aria-label="Requests" className={cn(desk && "min-h-0 flex-1 overflow-auto")}>
               <RequestList
                 rows={list}
-                contentKey={[view, stage, site, q.trim(), pin, newestFirst].join("|")}
+                contentKey={[view, stage, site, query.trim(), pin, newestFirst].join("|")}
                 selected={desk ? shownId : null}
                 flash={flash}
                 loading={log.loading}

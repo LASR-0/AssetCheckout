@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { stockAccessoriesQuery, stockAssetsQuery } from "@/api/queries";
+import { useSettledSearch } from "@/hooks/useSettledSearch";
 import { iconForCategory } from "@/lib/categoryIcon";
 import type { LocationAccessory, LocationAsset } from "@/types/snipeTypes";
 import {
@@ -236,8 +237,14 @@ export function Ledger({ site, me, phone, fill }: Props) {
     setPage(0);
   }
 
-  const assetRows = useMemo(() => sortAssets(applyFilters(assets, af, undefined, me), assetSort, desc), [assets, af, me, assetSort, desc]);
-  const accRows = useMemo(() => sortAccessories(applyAccessoryFilters(accs, cf), accSort, desc), [accs, cf, accSort, desc]);
+  // The box shows what's typed; the table follows once typing pauses.
+  const assetSearch = useSettledSearch(af.search);
+  const accSearch = useSettledSearch(cf.search);
+  const afS = useMemo(() => ({ ...af, search: assetSearch }), [af, assetSearch]);
+  const cfS = useMemo(() => ({ ...cf, search: accSearch }), [cf, accSearch]);
+
+  const assetRows = useMemo(() => sortAssets(applyFilters(assets, afS, undefined, me), assetSort, desc), [assets, afS, me, assetSort, desc]);
+  const accRows = useMemo(() => sortAccessories(applyAccessoryFilters(accs, cfS), accSort, desc), [accs, cfS, accSort, desc]);
   const total = isA ? assetRows.length : accRows.length;
   const pages = Math.max(1, Math.ceil(total / size));
   const safe = Math.min(page, pages - 1);
@@ -265,16 +272,16 @@ export function Ledger({ site, me, phone, fill }: Props) {
     ...values.map((v) => ({ v, label: `${v} (${counts.get(v) ?? 0})` })),
   ];
   const assetCats = distinct(assets, (a) => a.categoryName);
-  const assetCatCounts = countsExcluding(assets, af, "category", (a) => a.categoryName);
+  const assetCatCounts = countsExcluding(assets, afS, "category", (a) => a.categoryName);
   const statuses = distinct(assets, (a) => a.statusLabel);
-  const statusCounts = countsExcluding(assets, af, "status", (a) => a.statusLabel);
-  const ageBase = applyFilters(assets, af, "age", me);
-  const assignBase = applyFilters(assets, af, "assign", me);
+  const statusCounts = countsExcluding(assets, afS, "status", (a) => a.statusLabel);
+  const ageBase = applyFilters(assets, afS, "age", me);
+  const assignBase = applyFilters(assets, afS, "assign", me);
   const accCats = distinct(accs, (a) => a.categoryName);
-  const accCatBase = applyAccessoryFilters(accs, cf, "category");
+  const accCatBase = applyAccessoryFilters(accs, cfS, "category");
   const accCatCounts = new Map<string, number>();
   for (const a of accCatBase) if (a.categoryName) accCatCounts.set(a.categoryName, (accCatCounts.get(a.categoryName) ?? 0) + 1);
-  const availBase = applyAccessoryFilters(accs, cf, "avail");
+  const availBase = applyAccessoryFilters(accs, cfS, "avail");
 
   const ASSIGN: { k: AssignFilter; label: string; test: (a: LocationAsset) => boolean }[] = [
     { k: "ALL", label: "Everything", test: () => true },
@@ -489,7 +496,7 @@ export function Ledger({ site, me, phone, fill }: Props) {
                 </div>
               )}
 
-              <div key={[mode, safe, size, JSON.stringify(isA ? af : cf), isA ? assetSort : accSort, desc].join("|")} role="rowgroup">
+              <div key={[mode, safe, size, JSON.stringify(isA ? afS : cfS), isA ? assetSort : accSort, desc].join("|")} role="rowgroup">
               {total === 0 ? (
                 <div className="flex flex-col items-center gap-1.5 px-5 py-10 text-center">
                   <div className="fs-14 font-medium">No {isA ? "assets" : "accessories"} match these filters</div>
