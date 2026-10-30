@@ -38,7 +38,7 @@ export function StartStep({ row, onCancel, onDone }: StepProps) {
     <>
       <StepError>{error}</StepError>
       {/* The calendar's days share its width, so it needs one of its own. */}
-      <div className="w-full max-w-78 rounded-11 border border-line bg-sheet">
+      <div className="mx-auto w-full max-w-78 rounded-11 border border-line bg-sheet">
         <Calendar
           className="p-3"
           mode="single"
@@ -49,7 +49,7 @@ export function StartStep({ row, onCancel, onDone }: StepProps) {
           defaultMonth={day ?? today}
         />
       </div>
-      <StepNote>{day ? `Reminders hold until ${formatStartLong(toDateString(day))}.` : "No start date: reminders run as normal."}</StepNote>
+      <StepNote className="text-center">{day ? `Reminders hold until ${formatStartLong(toDateString(day))}.` : "No start date: reminders run as normal."}</StepNote>
       <StepFoot
         pending={pending}
         onCancel={onCancel}
