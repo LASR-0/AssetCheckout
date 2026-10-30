@@ -37,7 +37,8 @@ export function StartStep({ row, onCancel, onDone }: StepProps) {
   return (
     <>
       <StepError>{error}</StepError>
-      <div className="self-start rounded-11 border border-line bg-sheet">
+      {/* The calendar's days share its width, so it needs one of its own. */}
+      <div className="w-full max-w-78 rounded-11 border border-line bg-sheet">
         <Calendar
           className="p-3"
           mode="single"
