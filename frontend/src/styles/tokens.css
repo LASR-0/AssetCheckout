@@ -83,6 +83,8 @@
 
     /* Shadow colour for floating layers only. */
     --shade: rgba(31, 28, 24, 0.14);
+    /* Troubleshooting's softer lift: the hero band, the edit bar, a step card. */
+    --soft: rgba(31, 28, 24, 0.08);
     /* Behind modals. The same in both modes, by the design. */
     --scrim: rgba(20, 18, 16, 0.45);
   }
@@ -133,6 +135,7 @@
     --id4: #C99A6E;
 
     --shade: rgba(0, 0, 0, 0.45);
+    --soft: rgba(0, 0, 0, 0.4);
     --scrim: rgba(20, 18, 16, 0.45);
   }
 
@@ -261,6 +264,10 @@
   --shadow-pop: 0 0.5rem 1.5rem var(--shade);
   --shadow-menu: 0 0.75rem 1.75rem var(--shade);
   --shadow-modal: 0 1.5rem 4rem var(--shade);
+  /* Troubleshooting lifts a few in-page surfaces, softly. */
+  --shadow-band: 0 0.25rem 1rem var(--soft);
+  --shadow-bar: 0 0.375rem 1.125rem var(--soft);
+  --shadow-card: 0 1px 2px var(--soft);
 
   --tracking-label: 0.06em;
   --tracking-head: -0.02em;

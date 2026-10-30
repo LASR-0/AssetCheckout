@@ -24,6 +24,7 @@ import type { Server } from "http";
 const getRequestableAssetCategories = vi.fn();
 const getRequestableAccessoryCategories = vi.fn();
 const createEvent = vi.fn();
+const groupEvents = vi.fn(async (): Promise<unknown[]> => []);
 
 // The routes reach the analytics service, which reaches Prisma. None of that
 // is under test here, and a real client would need a database.
@@ -32,6 +33,7 @@ vi.mock("../db/prisma.js", () => ({
     troubleshootingEvent: {
       create: (args: unknown) => createEvent(args),
       findMany: async () => [],
+      groupBy: () => groupEvents(),
       deleteMany: async () => ({ count: 0 }),
     },
     setting: { findUnique: async () => null, upsert: async () => ({}) },
@@ -320,5 +322,77 @@ describe("GET /analytics", () => {
   it("requires an admin", async () => {
     const res = await fetch(`${baseUrl}/analytics`);
     expect(res.status).toBe(403);
+  });
+});
+
+describe("GET /library", () => {
+  it("serves every subject's listed taxonomy in one response", async () => {
+    const { status, body } = await get("/library");
+
+    expect(status).toBe(200);
+    const one = await get(`/subjects/${writtenPhone.subjectKey}`);
+    expect(body.taxonomy[writtenPhone.subjectKey]).toEqual(one.body.categories);
+  });
+
+  it("offers only written articles as most looked up, one per symptom", async () => {
+    groupEvents.mockResolvedValueOnce([
+      { subjectKey: draft.subjectKey, symptomId: draft.symptomId, _count: { _all: 40 } },
+      { subjectKey: writtenPhone.subjectKey, symptomId: writtenPhone.symptomId, _count: { _all: 9 } },
+      { subjectKey: "tablet", symptomId: writtenPhone.symptomId, _count: { _all: 8 } },
+      { subjectKey: "phone", symptomId: "no-such-symptom", _count: { _all: 7 } },
+    ]);
+
+    const { body } = await get("/library");
+
+    expect(body.popular).toEqual([
+      { subjectKey: writtenPhone.subjectKey, symptomId: writtenPhone.symptomId },
+    ]);
+  });
+});
+
+describe("POST /support-message", () => {
+  // The message links back to the app, and the route builds that link from
+  // the deployment's own address.
+  beforeAll(() => {
+    process.env.APP_BASE_URL ??= "https://checkout.example.test";
+  });
+
+  const post = (body: unknown) =>
+    fetch(`${baseUrl}/support-message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("404s when messaging isn't set up", async () => {
+    const res = await post({ query: "bluetooth" });
+    expect(res.status).toBe(404);
+  });
+
+  it("composes a message from the search, with no steps", async () => {
+    process.env.SUPPORT_TEAMS_CHANNEL_URL = "https://teams.microsoft.com/l/channel/abc/it";
+    try {
+      const res = await post({ query: "bluetooth", subjectKey: "laptop", notes: "Since Monday" });
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.steps).toEqual([]);
+      expect(body.subject).toBe("Help with “bluetooth”");
+      expect(body.text).toContain("Since Monday");
+      expect(body.text).toContain("/troubleshooting/laptop");
+    } finally {
+      delete process.env.SUPPORT_TEAMS_CHANNEL_URL;
+    }
+  });
+
+  it("ignores a subject that doesn't exist", async () => {
+    process.env.SUPPORT_TEAMS_CHANNEL_URL = "https://teams.microsoft.com/l/channel/abc/it";
+    try {
+      const body = await (await post({ subjectKey: "toaster" })).json();
+      expect(body.subject).toBe("Help with a problem");
+      expect(body.text).not.toContain("toaster");
+    } finally {
+      delete process.env.SUPPORT_TEAMS_CHANNEL_URL;
+    }
   });
 });

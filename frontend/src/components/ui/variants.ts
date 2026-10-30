@@ -1,4 +1,5 @@
-import { cva } from "class-variance-authority"
+import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils"
 
 // One solid primary per view: `primary` (ink) by default, `brand` where the
 // design calls for the brand colour instead. `secondary` is a sheet with a
@@ -44,6 +45,12 @@ export const buttonVariants = cva(
     },
   }
 )
+
+/** The button style as a class string, with a caller's overrides merged
+ *  (cva on its own only appends them, so the stylesheet order would pick). */
+export function btn({ className, ...o }: VariantProps<typeof buttonVariants> & { className?: string } = {}) {
+  return cn(buttonVariants(o), className)
+}
 
 // The two field densities in the designs: `md` (36 design px, 13.5px text)
 // on operator pages and `lg` (44, 15px) on requester forms and every mobile

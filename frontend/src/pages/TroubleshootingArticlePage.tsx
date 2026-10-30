@@ -1,970 +1,391 @@
-import { useEffect, useRef, useState } from "react";
-import { queryClient } from "@/api/queryClient";
-import { troubleshootingConfigQuery } from "@/api/queries";
-import { Link, useLocation, useParams } from "react-router-dom";
-import { useTheme } from "next-themes";
-import TroubleshootingLayout, { Eyebrow } from "@/components/troubleshooting/TroubleshootingLayout";
-import { SupportEscapeSection } from "@/components/troubleshooting/SupportEscape";
-import SymptomLink from "@/components/troubleshooting/SymptomLink";
-import { Callout } from "@/components/ui/callout";
-import { Badge } from "@/components/ui/statusbadge";
-import { getSymptom, createArticleDraft } from "@/api/troubleshooting";
-import FigureLightbox from "@/components/troubleshooting/FigureLightbox";
-import RichText from "@/components/troubleshooting/RichText";
-import { orderedBlocks } from "@/lib/troubleshootingBlocks";
-import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
-import { useViewState } from "@/hooks/useViewState";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Page } from "@/components/shell/Page";
+import { Icon } from "@/components/ui/icon";
+import { SegmentedControl } from "@/components/ui/segmented";
+import { btn } from "@/components/ui/variants";
+import { symptomQuery } from "@/api/queries";
+import { createArticleDraft } from "@/api/troubleshooting";
 import { useAuth } from "@/hooks/useAuth";
 import { useArticleEditor } from "@/hooks/useArticleEditor";
-import EditModeBar from "@/components/troubleshooting/edit/EditModeBar";
-import EditableText from "@/components/troubleshooting/edit/EditableText";
-import RichTextField from "@/components/troubleshooting/edit/RichTextField";
-import StepEditor from "@/components/troubleshooting/edit/StepEditor";
 import { useSubjectBackNav } from "@/hooks/useSubjectBackNav";
+import { useViewState } from "@/hooks/useViewState";
+import { trackTroubleshooting } from "@/lib/troubleshootingAnalytics";
 import {
-  stepAnchorId,
-  troubleshootingIndexPath,
   START_EDITING,
+  troubleshootingSubjectPath,
   type TroubleshootingLinkState,
 } from "@/lib/troubleshootingRoutes";
-import type {
-  Figure,
-  FigureImage,
-  Step,
-  SymptomResponse,
-  TroubleshootingConfig,
-} from "@/types/troubleshootingType";
+import RichText from "@/components/troubleshooting/RichText";
+import { useLibrary } from "@/components/troubleshooting/useLibrary";
+import { AllSteps, Guided, Others, type Stage } from "@/components/troubleshooting/ArticleParts";
+import { ArticleEditor, Confirm, EditBar, type EditState, type Part } from "@/components/troubleshooting/ArticleEditor";
+import { EditButton, EmptyCard } from "@/components/troubleshooting/IndexParts";
+import { EscapeButtons, MessageDialog } from "@/components/troubleshooting/support";
+
 
 ///  +-----------------------------------------------------------------+
-///  |                    TROUBLESHOOTING ARTICLE                      |
+///  |                    TROUBLESHOOTING: AN ARTICLE                  |
 ///  +-----------------------------------------------------------------+
 //
-//  One symptom's steps, at its own URL. The URL is the point: IT sending
-//  somebody a direct link to the right article is a large part of what this
-//  feature is for, so the symptom is a route parameter rather than component
-//  state.
+//  One symptom's steps at its own URL, because IT sending somebody a direct
+//  link is much of what this is for. Read Guided (one step at a time) or as
+//  All steps; the choice is remembered per browser.
 //
-//  The sidebar switches to step navigation in here rather than staying on
-//  page navigation: the index's section anchors don't exist on this page.
+//  AN UNWRITTEN SYMPTOM IS A DESTINATION, not a 404: the symptom being known
+//  is itself worth saying, and the way to IT is right there.
 //
-//  Steps are observed as they scroll into view, but ONLY to record how far
-//  people get. The escape hatch carries no context by decision — someone who
-//  has exhausted these steps has a problem past what surface-level
-//  troubleshooting covers, so which step they stopped at doesn't travel
-//  usefully to whoever picks up the phone. It is still worth knowing in
-//  aggregate, which is what the tracking is for and all it is for.
+//  ADMINS EDIT IN PLACE. Edit mode is off until asked for, so an admin reads
+//  exactly what readers read, unless they arrived from the list editor's
+//  "Edit article" (START_EDITING), which has already asked.
+//
+//  The editor loads for any admin on the page, not only once editing: the
+//  public endpoint can't see an article that's never been published, and
+//  that is exactly the one that needs a "Continue the draft".
 ///  +-----------------------------------------------------------------+
 
-/** Shown for a symptom that is listed but not yet written. A placeholder
- *  rather than a 404: the symptom being KNOWN is itself information, and the
- *  escape block below is what the person actually needs. */
-function DraftNotice() {
-  return (
-    <div className="rounded-lg border border-outline bg-surface-container-low/20 p-6">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="material-symbols-outlined !text-[20px] text-info-light">
-          edit_note
-        </span>
-        <strong className="text-base font-bold">Steps haven&apos;t been written yet</strong>
-      </div>
-      <p className="max-w-[62ch] text-sm text-info-light">
-        This symptom is one we know about, but the written steps for it aren&apos;t
-        ready. Contact IT support below and mention the symptom name — it also tells
-        us this is one worth writing up next.
-      </p>
-    </div>
-  );
-}
+type Mode = "Guided" | "All steps";
+const MODE_KEY = "troubleshooting-article-mode";
 
-/**
- * A step's figure: none, one or several screenshots above a required caption.
- *
- * The caption renders either way and carries the accessible description, so
- * the pictures are all `alt=""` — the two would say the same thing, and a
- * screen reader announcing a caption once per image is worse than once.
- *
- * Bordered and boxed rather than bare so a screenshot of a window doesn't
- * bleed into the page around it; screenshots of UI have no natural edge.
- *
- * A cap rather than a percentage, because a percentage is relative to the
- * column and would scale a narrow screenshot and a wide one by different
- * amounts.
- */
-const FIGURE_IMAGE = "max-w-full self-start rounded-lg border border-outline";
-
-// Three widths, chosen by the figure rather than measured from the file. A
-// tray flyout is legible small and dominates the step at full size; a Task
-// Manager window is unreadable at flyout width; and a whole-screen capture is
-// unreadable at either, because the control being pointed at is a small part
-// of a 1400px-wide picture. Full class literals, not built by concatenation,
-// so Tailwind can see them.
-//
-// `full` fills the column rather than naming a number. Every capture using it
-// is at least 1129px wide against a column of roughly 790px, so it is still
-// being scaled DOWN — the size is a ceiling on how small to draw it, never a
-// licence to upscale a small image into a blurry one.
-const FIGURE_WIDTH = {
-  flyout: "sm:max-w-[17rem]",
-  window: "sm:max-w-[34rem]",
-  full: "sm:max-w-full",
-} as const;
-
-// The same three sizes when a figure holds a sequence, so the whole row takes
-// about as much room as one picture would and the step below stays in view.
-// Phone screenshots are portrait and very tall, which is why the paired
-// flyout width is well under half — two full-height iPhone captures at 17rem
-// each would be a 1200px wall in the middle of a five-step article.
-const FIGURE_WIDTH_PAIRED = {
-  flyout: "max-w-[9rem] sm:max-w-[11rem]",
-  window: "sm:max-w-[17rem]",
-  full: "sm:max-w-[24rem]",
-} as const;
-
-/**
- * One picture in a figure, in whichever theme is on screen.
- *
- * Read from next-themes rather than swapped with a `dark:` utility. This app
- * has a `.dark` class but has never wired Tailwind's `dark:` variant to it —
- * under Tailwind v4 that variant defaults to prefers-color-scheme, so
- * `dark:hidden` follows the OPERATING SYSTEM and ignores the in-app toggle
- * entirely. Theming here works through CSS custom properties instead (the
- * tokens take different values inside `.dark`), which is why nothing else in
- * the app needed the variant.
- *
- * resolvedTheme rather than theme, so "system" resolves to what is actually
- * on screen. It is undefined until the provider mounts; the light image shows
- * until then, which is what a reader on the default theme sees anyway.
- */
-function FigureShot({ image, className }: { image: FigureImage; className: string }) {
-  const { resolvedTheme } = useTheme();
-  const [expanded, setExpanded] = useState(false);
-  const src = `/troubleshooting/${
-    resolvedTheme === "dark" && image.srcDark ? image.srcDark : image.src
-  }`;
-
-  return (
-    <>
-      {/* A button rather than a click handler on the image: this is a real
-          action, and it should be reachable by keyboard and announced as
-          something you can press. */}
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        aria-label="Show this screenshot full size"
-        className="cursor-zoom-in appearance-none border-0 bg-transparent p-0 text-left"
-      >
-        <img
-          src={src}
-          // Empty alt on purpose: the figcaption below carries the same words,
-          // and a screen reader would otherwise announce them once per
-          // picture. The caption is the accessible description — see
-          // schema.ts, where it is required and the images are not.
-          alt=""
-          className={className}
-          loading="lazy"
-        />
-      </button>
-
-      {expanded && <FigureLightbox src={src} onClose={() => setExpanded(false)} />}
-    </>
-  );
-}
-
-function StepFigure({ figure }: { figure: Figure }) {
-  const images = figure.images ?? [];
-
-  // A pair renders side by side and each picture takes half the room, so the
-  // two together occupy what one would have. That is the point of a pair —
-  // the route and the destination read as one illustration, not as two
-  // figures stacked up pushing the next step off the screen.
-  //
-  // `flex-wrap` rather than a fixed two-column grid: on a narrow screen a
-  // phone screenshot cut to half width is unreadable, so they stack instead.
-  const many = images.length > 1;
-
-  // A PAIR AT FULL SIZE STACKS INSTEAD. "Full" means the picture needs the
-  // whole column to be readable — a whole-screen capture — so putting two of
-  // them side by side halves the one thing the size was asked for. Every
-  // other size pairs horizontally, where two half-width shots still read as
-  // one illustration.
-  const size = figure.size ?? "flyout";
-  const stacked = many && size === "full";
-
-  const width = stacked
-    ? FIGURE_WIDTH.full
-    : many
-      ? FIGURE_WIDTH_PAIRED[size]
-      : FIGURE_WIDTH[size];
-
-  return (
-    <figure className="flex flex-col gap-2">
-      {images.length > 0 && (
-        <div
-          className={
-            stacked
-              ? "flex flex-col items-start gap-3"
-              : "flex flex-wrap items-start gap-3"
-          }
-        >
-          {images.map((image) => (
-            <FigureShot
-              key={image.src}
-              image={image}
-              className={`${FIGURE_IMAGE} ${width}`}
-            />
-          ))}
-        </div>
-      )}
-      <figcaption className="flex items-center gap-2 text-[13px] text-info-light">
-        <span className="material-symbols-outlined !text-[16px]">image</span>
-        {figure.caption}
-      </figcaption>
-    </figure>
-  );
-}
-
-/**
- * The host a step's link lands on, for showing beside its label.
- *
- * Host only, never the path: these are Teams deep links carrying chat ids,
- * GUIDs and an encoded context blob, and the whole point is to replace that
- * with the one word a reader can act on. "teams.microsoft.com" answers
- * "where am I about to go"; the rest answers nothing.
- *
- * Null on anything unparseable rather than throwing. The schema validates
- * these on write (see linkSchema), so this is close to unreachable — but the
- * link still works if the hint can't be derived, and losing a whole step
- * because a decoration failed would be the wrong trade.
- */
-function linkHost(url: string): string | null {
+function readMode(): Mode {
   try {
-    return new URL(url).hostname.replace(/^www\./, "");
+    return localStorage.getItem(MODE_KEY) === "All steps" ? "All steps" : "Guided";
   } catch {
-    return null;
+    return "Guided";
   }
 }
 
-function StepBlock({
-  step,
-  index,
-  subjectKey,
-  symptomId,
-}: {
-  step: Step;
-  index: number;
-  subjectKey: string;
-  symptomId: string;
-}) {
-  const ref = useRef<HTMLElement | null>(null);
-
-  // "Steps reached" — how far into an article people get before giving up.
-  //
-  // Fired once per step, the first time it comes into view, and then the
-  // observer disconnects: re-scrolling past step 2 is not a second attempt at
-  // it, and counting it as one would inflate exactly the shallow steps that
-  // are least interesting.
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
-        trackTroubleshooting({
-          type: "STEP_REACHED",
-          subjectKey,
-          symptomId,
-          stepNumber: index + 1,
-        });
-        observer.disconnect();
-      },
-      // Half the step visible, so a step clipped at the bottom of the
-      // viewport on the way past doesn't count as reached.
-      { threshold: 0.5 }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [subjectKey, symptomId, index]);
-
-  return (
-    // scroll-mt clears the fixed navbar, so a step linked from the sidebar
-    // lands with its heading visible rather than tucked underneath it.
-    <section
-      ref={ref}
-      id={stepAnchorId(index)}
-      className="grid scroll-mt-24 grid-cols-[2rem_minmax(0,1fr)] gap-4 border-b border-outline/40 py-6 last:border-b-0"
-    >
-      <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-        {index + 1}
-      </span>
-      <div className="flex min-w-0 flex-col gap-3">
-        <h3 className="text-base font-bold">{step.title}</h3>
-        <p className="max-w-[68ch] text-[15px] leading-relaxed text-info-light">
-          <RichText text={step.body} />
-        </p>
-
-        {/* Driven by `orderedBlocks` rather than written out in a fixed
-            order, so that reordering blocks in the editor changes what a
-            reader actually sees. It returns what the step HAS, sorted by the
-            hint — a stale hint can reorder, never hide. */}
-        {orderedBlocks(step).map((kind) => {
-          switch (kind) {
-            case "note":
-              return (
-                <Callout key="note" variant="note">
-                  <RichText text={step.note!} />
-                </Callout>
-              );
-            case "warn":
-              return (
-                <Callout key="warn" variant="warn">
-                  <RichText text={step.warn!} />
-                </Callout>
-              );
-            case "figure":
-              return <StepFigure key="figure" figure={step.figure!} />;
-            case "link":
-              // Opened in a new tab: these leave the library entirely — a
-              // Teams chat, a service portal — and a reader part-way through
-              // a set of steps should come back to find their place intact.
-              //
-              // AND THE HOST IS NAMED ON THE BUTTON. It is already a real
-              // anchor, so the status bar shows the target on hover, but the
-              // targets here are Teams deep links: a chat id, two GUIDs and
-              // an encoded context blob, sometimes with a pre-written message
-              // trailing it. Nobody reads that and concludes "this opens
-              // Teams". The label says what the link does and the host says
-              // where it lands, which together are the two things somebody
-              // wants before they leave a page mid-repair.
-              return (
-                <a
-                  key="link"
-                  href={step.link!.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-block-link/40 bg-block-link/5 px-3.5 py-2 text-sm font-semibold text-block-link transition-colors hover:bg-block-link/10"
-                >
-                  <span className="material-symbols-outlined !text-[18px]">
-                    open_in_new
-                  </span>
-                  {step.link!.label}
-                  {linkHost(step.link!.url) && (
-                    <span className="font-normal opacity-70">
-                      · {linkHost(step.link!.url)}
-                    </span>
-                  )}
-                </a>
-              );
-            case "branch":
-              // The exit for when this step reveals the real problem is a
-              // different symptom. Branches may point at another device, so
-              // the target's own key wins when it carries one.
-              return (
-                <SymptomLink
-                  key="branch"
-                  variant="branch"
-                  subjectKey={step.branch!.targetSubjectKey ?? subjectKey}
-                  symptomId={step.branch!.targetSymptomId}
-                  label={step.branch!.label}
-                />
-              );
-          }
-        })}
-      </div>
-    </section>
-  );
+export default function TroubleshootingArticlePage() {
+  const { subjectKey = "", symptomId = "" } = useParams<{ subjectKey: string; symptomId: string }>();
+  // Keyed, so a branch to another article starts it at step 1 rather than
+  // carrying the last one's progress and edit state across.
+  return <Article key={`${subjectKey}/${symptomId}`} subjectKey={subjectKey} symptomId={symptomId} />;
 }
 
-export default function TroubleshootingArticlePage() {
-  const { subjectKey, symptomId } = useParams<{ subjectKey: string; symptomId: string }>();
+function Article({ subjectKey, symptomId }: { subjectKey: string; symptomId: string }) {
   const location = useLocation();
-
-  // Returns to the symptom list as the reader left it when they arrived from
-  // it, and behaves as an ordinary link when they didn't.
-  const backToSymptoms = useSubjectBackNav(subjectKey);
-
-  // Edit mode is OFF by default, so an admin reads the page exactly as a user
-  // does until they ask to change it. The button is a courtesy — the real
-  // guard is server-side, and every admin route 403s without it.
-  //
-  // UNLESS THEY ARRIVED FROM THE LIST EDITOR, which sets START_EDITING. They
-  // pressed "Edit article" there; landing on the reading view and asking them
-  // to press Edit again answers a question they have already answered.
-  //
-  // Read once, in the initialiser, rather than in an effect: an effect would
-  // paint the reading view first and then swap it, which is a visible flash of
-  // the wrong thing on every arrival.
-  //
-  // AND DELIBERATELY NOT GATED ON isAdmin HERE. `role` arrives from a fetch,
-  // so it is null on the first render — which is the only render an initialiser
-  // ever sees. Checking it here meant this was always false and the flag never
-  // did anything.
-  //
-  // It is safe to leave out because `editing` alone renders nothing: every
-  // editable field is behind `editing && editor.working`, and `editor.working`
-  // is null unless useArticleEditor was enabled — which takes isAdmin. So a
-  // forged history state gets the ordinary reading view with slightly
-  // different padding, and the server remains the actual guard.
-  const { role } = useAuth();
-  const isAdmin = role === "ADMIN";
-  const [editing, setEditing] = useState(() =>
-    Boolean((location.state as TroubleshootingLinkState | null)?.[START_EDITING])
-  );
-
-  // Loaded for ANY admin viewing the page, not only once editing has started.
-  //
-  // The public endpoint returns nothing for an article that has never been
-  // published, so deciding the Edit button from it hid the button on exactly
-  // the articles that most needed it — an admin could create an article and
-  // then have no way to open it. This is the only thing that knows an
-  // unpublished article exists.
+  const navigate = useNavigate();
+  const backTo = useSubjectBackNav(subjectKey);
+  const isAdmin = useAuth().role === "ADMIN";
+  const lib = useLibrary();
+  const symptom = useQuery(symptomQuery(subjectKey, symptomId));
   const editor = useArticleEditor(subjectKey, symptomId, isAdmin);
+
+  const [mode, setMode] = useState<Mode>(readMode);
+  const [step, setStep] = useState(0);
+  const [stage, setStage] = useState<Stage>("step");
+  const [editing, setEditing] = useState(() => Boolean((location.state as TroubleshootingLinkState | null)?.[START_EDITING]));
+  const [preview, setPreview] = useState(false);
+  const [part, setPart] = useState<Part>("details");
   const [starting, setStarting] = useState(false);
+  const [confirm, setConfirm] = useState<"publish" | "discard" | null>(null);
+  const [message, setMessage] = useState<number[] | null>(null);
 
-  const [config, setConfig] = useState<TroubleshootingConfig | null>(null);
-  const [data, setData] = useState<SymptomResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  // "Articles opened", Drafts included: a gap opened often is the next one
+  // worth writing.
   useEffect(() => {
-    queryClient.fetchQuery(troubleshootingConfigQuery)
-      .then(setConfig)
-      .catch(() => setConfig(null));
-  }, []);
-
-  useEffect(() => {
-    if (!subjectKey || !symptomId) return;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    getSymptom(subjectKey, symptomId)
-      .then((res) => {
-        if (!cancelled) setData(res);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message || "Couldn't load this article.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [subjectKey, symptomId]);
-
-  const article = data?.article ?? null;
-
-  // What this page is DISPLAYING, which is not always what readers see.
-  //
-  // Out of edit mode it is the published article, or nothing. In edit mode it
-  // is the working copy — and for an article that has never been published
-  // the working copy is the only copy there is, so gating the body on the
-  // public article left edit mode open with nothing in it.
-  const shown = editing && editor.working ? editor.working : article;
-
-  // "Articles opened" — which articles anyone actually reads.
-  //
-  // Keyed on the route rather than on the fetch, and fired for Drafts too: a
-  // Draft that gets opened repeatedly is the strongest signal there is that
-  // it's the next one worth writing.
-  useEffect(() => {
-    if (!subjectKey || !symptomId) return;
     trackTroubleshooting({ type: "ARTICLE_OPENED", subjectKey, symptomId });
   }, [subjectKey, symptomId]);
 
-  // An article has no state of its own worth keeping — no accordion, no
-  // search — but scroll position matters as much as it does on the index.
-  // Following a branch from step 5 and pressing Back should return you to
-  // step 5, not to the top of an article you had already worked through.
-  //
-  // Ready once the steps have rendered: until then the page is a spinner and
-  // scrolling down it would do nothing.
-  useViewState(
-    "troubleshooting-article",
-    location.key,
-    null,
-    !loading && !error && data !== null
+  // Following a branch from step 5 and pressing Back returns to step 5's
+  // scroll position, not the top.
+  useViewState("troubleshooting-article", location.key, null, symptom.isSuccess);
+
+  const data = symptom.data;
+  const article = data?.article ?? null;
+  const isEditing = editing && isAdmin && !!editor.working;
+  const text = isEditing ? editor.working : article;
+  const config = lib.config;
+
+  const here = useMemo(
+    () => new Set((lib.taxonomy[subjectKey] ?? []).flatMap((c) => c.symptoms.map((s) => s.id))),
+    [lib.taxonomy, subjectKey]
+  );
+  const labelOf = (id: string) => lib.rows.find((r) => r.id === id)?.label ?? null;
+  const alsoUnder = (editor.article?.subjectKeys ?? [])
+    .filter((k) => k !== subjectKey)
+    .map((k) => lib.subjectOf(k)?.label ?? k);
+
+  const editState: EditState = !editor.article?.published
+    ? "draft"
+    : editor.hasDraft
+      ? "changes"
+      : editor.warnings.length
+        ? "notes"
+        : "clean";
+
+  const pickMode = (m: Mode) => {
+    setMode(m);
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch {
+      // A private window: it just won't be remembered.
+    }
+  };
+
+  const go = (s: number, st: Stage) => {
+    setStep(s);
+    setStage(st);
+  };
+
+  function startEditing() {
+    if (editor.article) return setEditing(true);
+    // Nothing written: make the empty draft, then open it.
+    setStarting(true);
+    createArticleDraft(subjectKey, symptomId)
+      .then(() => editor.reload())
+      .then(() => {
+        setPart("details");
+        setEditing(true);
+      })
+      .finally(() => setStarting(false));
+  }
+
+  const escapes = (tried: number[], label = "Message IT") => (
+    <EscapeButtons config={config} context={{ subjectKey, symptomId }} onMessage={() => setMessage(tried)} messageLabel={label} />
   );
 
-  // Inside an article the sidebar is step navigation rather than page
-  // navigation — the index's "Your device / Symptoms" anchors point at
-  // sections that don't exist here, so carrying them over would leave two
-  // dead links in the rail.
-  //
-  // Plain anchors, no scroll-spy: nothing on this page needs to know which
-  // step you're on now that the escape hatch doesn't carry context.
-  const sidebar = (
-    <>
-      <Eyebrow>{article ? "Steps" : "This article"}</Eyebrow>
-
-      {article && (
-        <nav className="flex flex-col gap-0.5">
-          {article.steps.map((step, i) => (
-            <a
-              key={stepAnchorId(i)}
-              href={`#${stepAnchorId(i)}`}
-              className="flex gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] leading-snug text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
-            >
-              <span className="shrink-0 text-info-light">{i + 1}</span>
-              <span className="min-w-0">{step.title}</span>
-            </a>
-          ))}
-        </nav>
-      )}
-
-      <a
-        href="#help"
-        className="rounded-lg px-2.5 py-2 text-[13px] font-semibold text-info-light hover:text-primary transition-colors"
-      >
-        ↳ Still not fixed
-      </a>
-
-      <Link
-        {...backToSymptoms}
-        className="rounded-lg border border-outline px-2.5 py-2 text-center text-[13px] font-semibold text-info-light hover:bg-surface-container-low/30 hover:text-on-background transition-colors"
-      >
-        ← All symptoms
-      </Link>
-    </>
-  );
+  const path = data ? `${data.subject?.label ?? subjectKey} › ${data.category.name}` : "";
+  const n = text?.steps.length ?? 0;
 
   return (
-    <TroubleshootingLayout
-      subjectKey={subjectKey ?? null}
-      subjectLabel={data?.subject.label ?? ""}
-      subjectLabelSingular={data?.subject.labelSingular ?? "device"}
-      breadcrumbTail={data?.symptom.label}
-      config={config}
-      sidebar={sidebar}
-    >
-      {loading && (
-        <div className="flex items-center justify-center gap-3 py-16 text-sm text-info-light">
-          <span className="size-5 animate-spin rounded-full border-2 border-outline border-t-transparent" />
-          Loading article...
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-outline bg-surface p-6">
-          <div className="flex items-center gap-2 text-sm text-error">
-            <span className="material-symbols-outlined !text-[18px]">info</span>
-            {error}
-          </div>
-          <Link
-            to={troubleshootingIndexPath()}
-            className="text-sm font-semibold text-primary hover:underline"
-          >
-            ← Back to troubleshooting
-          </Link>
-        </div>
-      )}
-
-      {editing && isAdmin && editor.working && (
-        <EditModeBar
-          hasDraft={editor.hasDraft}
-          saveState={editor.saveState}
-          publishing={editor.publishing}
-          issues={editor.issues}
-          warnings={editor.warnings}
-          subjectKeys={editor.article?.subjectKeys ?? []}
-          currentSubjectKey={subjectKey ?? ""}
-          published={editor.article?.published !== null}
-          onPublish={() => {
-            void editor.publish().then((ok) => {
-              // Republish means the page's own copy is stale — reload it so
-              // the admin sees what a reader now sees.
-              if (ok) void getSymptom(subjectKey!, symptomId!).then(setData);
-            });
-          }}
-          onDiscard={() => {
-            void editor.discard().then((result) => {
-              // The article was removed, not reverted — there is nothing left
-              // to edit, so drop out of edit mode and refetch. The page then
-              // renders the "not written yet" state, which is the truth.
-              if (result.articleRemoved) {
+    <>
+      {isEditing && (
+        <div className="sticky top-0 z-6 border-b border-brand-line bg-sheet shadow-bar">
+          <Page max={1240} className="px-3.5 py-2.5 desk:px-8 desk:py-3">
+            <EditBar
+              state={editState}
+              saveState={editor.saveState}
+              alsoUnder={alsoUnder}
+              preview={preview}
+              onPreview={(on) => {
+                setPreview(on);
+                go(typeof part === "number" ? part : 0, "step");
+              }}
+              publishing={editor.publishing}
+              issues={editor.issues}
+              warnings={editor.warnings}
+              onDiscardChanges={() => void editor.discard()}
+              onPublish={() => setConfirm("publish")}
+              onDone={() => {
                 setEditing(false);
-                void getSymptom(subjectKey!, symptomId!).then(setData);
-              }
-            });
-          }}
-          onDone={() => setEditing(false)}
-        />
+                setPreview(false);
+                go(0, "step");
+              }}
+            />
+          </Page>
+        </div>
       )}
 
-      {!loading && !error && data && (
-        <article className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3 border-b border-outline/40 pb-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                {...backToSymptoms}
-                className="rounded-lg border border-outline px-2.5 py-1 text-xs font-semibold text-info-light hover:bg-surface-container-low/30 transition-colors"
-              >
-                ← All symptoms
-              </Link>
-              <Badge
-                icon="category"
-                label={data.category.name}
-                bg="bg-primary/10"
-                text="text-primary"
-                size="compact"
-              />
-              {/* Three states, not two. An admin can be looking at a
-                  published article, an article that exists but has never been
-                  published, or a symptom with nothing written at all — and
-                  each needs a different offer. Keyed off the editor rather
-                  than the public article, which cannot see the middle one. */}
-              {isAdmin && !editing && !editor.loading && (
-                <div className="ml-auto flex items-center gap-2">
-                  {!editor.article && (
-                    <span className="text-[11px] text-info-light">Nothing written yet</span>
-                  )}
-                  {editor.article && !editor.article.published && (
-                    <span
-                      className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning"
-                      title="Readers still see the “not written yet” page. It appears when you publish it."
+      <Page max={1240} className="flex flex-col gap-6.5 px-3.5 pt-5 pb-30 desk:px-8 desk:pt-8 desk:pb-40">
+        <div className="flex flex-col gap-3.5">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 fs-12 text-mut">
+            <Link
+              {...backTo}
+              className="flex h-7.5 items-center gap-1 rounded-pill border border-line bg-sheet pr-2.75 pl-1.75 fs-12 font-medium text-tx2 no-underline outline-none hover:border-strong focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              <Icon name="arrow_back" size={15} />
+              Troubleshooting
+            </Link>
+            <span>{path}</span>
+          </div>
+
+          {symptom.isError ? (
+            <EmptyCard
+              title="We couldn't find that article"
+              actions={
+                <Link to={troubleshootingSubjectPath(subjectKey)} className={btn({ size: "md", className: "no-underline" })}>
+                  Back to troubleshooting
+                </Link>
+              }
+            >
+              The link may be old, or the article may have been removed. Search the library for the problem instead.
+            </EmptyCard>
+          ) : !data ? (
+            <p className="m-0 py-6 fs-13 text-mut">Loading the article…</p>
+          ) : (
+            <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3.5">
+              <div className="flex min-w-0 flex-[1_1_26.25rem] flex-col gap-2.5">
+                <h1 className="m-0 max-w-150 font-head fs-22 leading-[1.2] font-medium tracking-[-0.02em] text-balance desk:fs-29">{data.symptom.label}</h1>
+                {text && (
+                  <>
+                    <p className="m-0 max-w-[66ch] fs-14 leading-[1.6] text-pretty text-tx3">
+                      <RichText text={text.summary} />
+                    </p>
+                    <div className="flex flex-wrap gap-x-4.5 gap-y-1.5 fs-12 text-tx3">
+                      {text.timeEstimate && <Meta icon="schedule">{text.timeEstimate}</Meta>}
+                      {text.appliesTo && <Meta icon="devices">{text.appliesTo}</Meta>}
+                      <Meta icon="format_list_numbered">
+                        {n} {n === 1 ? "step" : "steps"}
+                      </Meta>
+                      {/* Stamped on publish, so a whitespace fix doesn't bump the date a reader trusts. */}
+                      {article?.updated && (
+                        <Meta icon="update">
+                          Updated {new Date(article.updated).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+                        </Meta>
+                      )}
+                    </div>
+                  </>
+                )}
+                {isEditing && !preview && (
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 fs-12 text-mut">
+                    <Icon name="info" size={14} />
+                    The title is the symptom&rsquo;s wording.
+                    <button
+                      type="button"
+                      onClick={() => navigate(troubleshootingSubjectPath(subjectKey), { state: { [START_EDITING]: true } })}
+                      className="cursor-pointer border-0 bg-transparent p-0 font-sans fs-12 font-medium text-brand-tx underline underline-offset-2"
                     >
-                      Not published yet
-                    </span>
+                      Reword it in the list
+                    </button>
+                  </div>
+                )}
+              </div>
+              {article && !isEditing && (
+                <div data-tour="ts-article-modes" className="flex flex-wrap items-center gap-2">
+                  <SegmentedControl
+                    label="How to read it"
+                    size="md"
+                    value={mode}
+                    onValueChange={pickMode}
+                    options={[
+                      { value: "Guided", label: "One step at a time", icon: "route" },
+                      { value: "All steps", label: "All steps", icon: "view_agenda" },
+                    ]}
+                  />
+                  {isAdmin && editor.article && (
+                    <EditButton onClick={startEditing} className="h-9.5 rounded-10">
+                      Edit
+                    </EditButton>
                   )}
-
-                  <button
-                    type="button"
-                    disabled={starting}
-                    onClick={() => {
-                      if (editor.article) {
-                        setEditing(true);
-                        return;
-                      }
-
-                      // No article at all: create the empty one first, then
-                      // open it. Two clicks for one intention would be a
-                      // worse version of the same thing.
-                      setStarting(true);
-                      createArticleDraft(subjectKey!, symptomId!)
-                        .then(() => editor.reload())
-                        .then(() => setEditing(true))
-                        .catch((err: Error) => setError(err.message))
-                        .finally(() => setStarting(false));
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed transition-colors"
-                  >
-                    <span className="material-symbols-outlined !text-[16px]">edit</span>
-                    {editor.article ? "Edit" : starting ? "Starting…" : "Write this article"}
-                  </button>
                 </div>
               )}
             </div>
+          )}
+        </div>
 
-            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
-              {data.symptom.label}
-            </h2>
+        {data && text && isEditing && !preview && (
+          <ArticleEditor
+            editor={editor}
+            subjectKey={subjectKey}
+            symptomId={symptomId}
+            part={part}
+            onPart={setPart}
+            rows={lib.rows}
+            here={here}
+            labelOf={labelOf}
+            onDiscardArticle={editor.article?.published ? null : () => setConfirm("discard")}
+          />
+        )}
 
-            {shown && (
-              <>
-                {editing && editor.working ? (
-                  <RichTextField
-                    value={editor.working.summary}
-                    onChange={(summary) =>
-                      editor.update((body) => ({ ...body, summary }))
-                    }
-                    ariaLabel="Article summary"
-                    className="max-w-[66ch] text-[15px] text-info-light"
-                    tone="muted"
-                  />
-                ) : (
-                  <p className="max-w-[66ch] text-[15px] text-info-light">
-                    <RichText text={shown.summary} />
-                  </p>
-                )}
-                <div
-                  className={`flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-info-light ${
-                    editing ? "items-start" : "items-center"
-                  }`}
-                >
-                  <span
-                    className={`flex gap-1.5 ${editing ? "items-start" : "items-center"}`}
-                  >
-                    <span
-                      className={`material-symbols-outlined !text-[16px] ${editing ? "pt-1" : ""}`}
-                    >
-                      schedule
-                    </span>
-                    {editing && editor.working ? (
-                      <EditableText
-                        value={editor.working.timeEstimate}
-                        onChange={(timeEstimate) =>
-                          editor.update((body) => ({ ...body, timeEstimate }))
-                        }
-                        ariaLabel="Time estimate"
-                        className="w-[13rem] text-[13px]"
-                        placeholder="About 10 minutes"
-                        tone="muted"
-                      />
-                    ) : (
-                      shown.timeEstimate
-                    )}
-                  </span>
+        {data && text && (!isEditing || preview) && (mode === "Guided" || preview) && (
+          <Guided
+            text={text}
+            subjectKey={subjectKey}
+            symptomId={symptomId}
+            labelOf={labelOf}
+            step={step}
+            stage={preview ? "step" : stage}
+            onGo={go}
+            preview={preview}
+            stickLow={preview}
+            onMessage={config?.supportChannelConfigured ? setMessage : null}
+            escapes={(tried) => escapes(tried, "Message IT on Teams")}
+            backTo={backTo}
+          />
+        )}
 
-                  {/* Stays on the same row as the time estimate, and is sized
-                      by its own text — NOT `flex-1`. A flex-1 wrapper claims
-                      the whole remaining row whatever the field inside it
-                      measures, which pushed the updated date onto a line of
-                      its own and left it looking stranded. `max-w-full` is
-                      what stops the growth at the container edge.
-                      The value is usually a sentence ("Windows laptops and
-                      desktops on the KSB domain"), so the field wraps inside
-                      itself and grows downward rather than pushing the row
-                      wider. The label is held to one line so the field starts
-                      in the same place on every article. */}
-                  <span
-                    className={`flex min-w-0 max-w-full gap-1.5 ${
-                      editing ? "items-start" : "items-center"
-                    }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined !text-[16px] ${editing ? "pt-1" : ""}`}
-                    >
-                      devices
-                    </span>
-                    <span className={`whitespace-nowrap ${editing ? "pt-1" : ""}`}>
-                      Applies to
-                    </span>{" "}
-                    {editing && editor.working ? (
-                      <EditableText
-                        value={editor.working.appliesTo}
-                        onChange={(appliesTo) =>
-                          editor.update((body) => ({ ...body, appliesTo }))
-                        }
-                        ariaLabel="Applies to"
-                        className="text-[13px]"
-                        placeholder="iOS 16 and later"
-                        tone="muted"
-                        autoWidth
-                      />
-                    ) : (
-                      shown.appliesTo
-                    )}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined !text-[16px]">update</span>
-                    {/* Stamped on publish, not derived from git — a whitespace
-                        fix must not bump the date a reader trusts. */}
-                    Updated{" "}
-                    {new Date(shown.updated).toLocaleDateString(undefined, {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
+        {data && text && !isEditing && mode === "All steps" && (
+          <AllSteps text={text} subjectKey={subjectKey} symptomId={symptomId} labelOf={labelOf} escapes={escapes([])} />
+        )}
 
-          {!shown && <DraftNotice />}
-
-          {/* Shown to a reader only when there is something to say, but always
-              present while editing — otherwise the only way to add the first
-              prerequisite would be a control that appears once one exists. */}
-          {editing && editor.working ? (
-            <section className="rounded-lg border border-outline bg-surface p-5">
-              <strong className="mb-2 block text-sm font-bold">Before you start</strong>
-              <p className="mb-3 text-[13px] text-info-light">
-                What they need in hand before step 1 — a cable, a password, ten
-                minutes. Leave it empty if there is nothing.
-              </p>
-              <ul className="flex flex-col gap-2">
-                {editor.working.before.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span aria-hidden className="pt-1.5 text-info-light">
-                      —
-                    </span>
-                    <EditableText
-                      value={item}
-                      onChange={(value) =>
-                        editor.update((body) => ({
-                          ...body,
-                          before: body.before.map((b, j) => (j === i ? value : b)),
-                        }))
-                      }
-                      ariaLabel={`Prerequisite ${i + 1}`}
-                      className="text-sm"
-                      placeholder="Something they need before starting"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        editor.update((body) => ({
-                          ...body,
-                          before: body.before.filter((_, j) => j !== i),
-                        }))
-                      }
-                      aria-label={`Remove prerequisite ${i + 1}`}
-                      className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md text-info-light transition-colors hover:bg-error-background hover:text-error hover:cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined !text-[16px]">close</span>
+        {data && !text && (
+          <div className="max-w-190">
+            <EmptyCard
+              dashed
+              title="IT hasn't written steps for this yet"
+              actions={
+                <>
+                  {isAdmin && !editor.loading && (
+                    <button type="button" disabled={starting} onClick={startEditing} className={btn({ variant: "brand", size: "lg", className: "h-10 fs-12.5" })}>
+                      <Icon name="edit" size={16} />
+                      {starting ? "Starting…" : editor.article ? "Continue the draft" : "Write this article"}
                     </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() =>
-                  editor.update((body) => ({ ...body, before: [...body.before, ""] }))
-                }
-                className="mt-3 rounded-md border border-dashed border-outline px-2.5 py-1.5 text-xs font-semibold text-info-light transition-colors hover:bg-surface-container-low/40 hover:cursor-pointer"
-              >
-                + Add a prerequisite
-              </button>
-            </section>
-          ) : (
-            shown &&
-            shown.before.length > 0 && (
-              <section className="rounded-lg border border-outline bg-surface p-5">
-                <strong className="mb-2 block text-sm font-bold">Before you start</strong>
-                <ul className="flex flex-col gap-1.5">
-                  {shown.before.map((item) => (
-                    <li key={item} className="flex gap-2 text-sm text-info-light">
-                      <span aria-hidden className="text-info-light">
-                        —
-                      </span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )
-          )}
+                  )}
+                  {escapes([])}
+                </>
+              }
+            >
+              They can still help, and knowing people are looking for it moves it up their list.
+              {isAdmin && !editor.loading && (
+                <span className="mt-2 block fs-11.5 text-mut">
+                  {editor.article ? "There's an unpublished draft." : "Creates a draft. Nobody sees it until you publish."}
+                </span>
+              )}
+            </EmptyCard>
+          </div>
+        )}
 
-          {editing && editor.working ? (
-            <div className="flex flex-col gap-[5px]">
-              {editor.working.steps.map((step, i) => (
-                <StepEditor
-                  key={i}
-                  step={step}
-                  index={i}
-                  total={editor.working!.steps.length}
-                  subjectKey={subjectKey!}
-                  symptomId={symptomId!}
-                  symptoms={[data.symptom, ...data.siblings]}
-                  onChange={(next) =>
-                    editor.update((body) => ({
-                      ...body,
-                      steps: body.steps.map((s, j) => (j === i ? next : s)),
-                    }))
-                  }
-                  onMove={(direction) =>
-                    editor.update((body) => {
-                      const target = i + direction;
-                      if (target < 0 || target >= body.steps.length) return body;
-                      const steps = [...body.steps];
-                      [steps[i], steps[target]] = [steps[target], steps[i]];
-                      return { ...body, steps };
-                    })
-                  }
-                  onRemove={() =>
-                    editor.update((body) => ({
-                      ...body,
-                      // The schema requires at least one step, so the last one
-                      // cannot be deleted — an article with no steps is a
-                      // draft, not an article.
-                      steps:
-                        body.steps.length > 1
-                          ? body.steps.filter((_, j) => j !== i)
-                          : body.steps,
-                    }))
-                  }
-                />
-              ))}
+        {data && !isEditing && article?.source && (
+          <p className="m-0 flex items-center gap-1.5 fs-12 text-mut">
+            <Icon name="link" size={15} />
+            Adapted from{" "}
+            <a href={article.source.url} target="_blank" rel="noreferrer noopener" className="font-medium text-brand-tx">
+              {article.source.name}
+            </a>
+          </p>
+        )}
 
-              <button
-                type="button"
-                onClick={() =>
-                  editor.update((body) => ({
-                    ...body,
-                    steps: [...body.steps, { title: "", body: "" }],
-                  }))
-                }
-                className="mt-4 self-start rounded-lg border border-dashed border-outline px-3 py-2 text-sm font-semibold text-info-light hover:bg-surface-container-low/30 hover:cursor-pointer transition-colors"
-              >
-                + Add step
-              </button>
-            </div>
-          ) : shown ? (
-            <div className="flex flex-col">
-              {shown.steps.map((step, i) => (
-                <StepBlock
-                  key={stepAnchorId(i)}
-                  step={step}
-                  index={i}
-                  subjectKey={subjectKey!}
-                  symptomId={symptomId!}
-                />
-              ))}
-            </div>
-          ) : null}
+        {data && !isEditing && <Others category={data.category.name} subjectKey={subjectKey} siblings={data.siblings} />}
+      </Page>
 
-          {/* Where the steps came from, when they came from a manufacturer.
-              Most of the library is rewritten from Apple's and Samsung's own
-              documentation, because people will not leave this site to go and
-              read a vendor page — so we bring the content to them.
-
-              BELOW THE STEPS, NOT ABOVE THEM, and deliberately quiet. The
-              reader is here to fix a phone, and a citation at the top is an
-              invitation to go and read the other page instead, which is the
-              exact behaviour this library exists to remove. It sits at the
-              end for the person who wants to check our working, and for a
-              reviewer who needs to know which page to re-check when Apple
-              moves a setting. */}
-          {shown?.source && (
-            <p className="flex items-center gap-1.5 text-[13px] text-info-light">
-              <span className="material-symbols-outlined !text-[16px]">link</span>
-              Adapted from{" "}
-              <a
-                href={shown.source.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="font-semibold text-primary hover:underline"
-              >
-                {shown.source.name}
-              </a>
-            </p>
-          )}
-
-          {/* Siblings from the same category, offered once the steps have run
-              out. Drafts are included deliberately — the same reasoning as
-              listing them on the index: a symptom we know about but haven't
-              written up is still worth showing, and hiding it here would make
-              the category look thinner than it is. */}
-          {data.siblings.length > 0 && (
-            <section className="flex flex-col gap-3 pt-2">
-              <Eyebrow>Other symptoms in {data.category.name}</Eyebrow>
-              <div className="flex flex-wrap gap-2">
-                {data.siblings.map((sibling) => (
-                  <SymptomLink
-                    key={sibling.id}
-                    variant="chip"
-                    subjectKey={subjectKey!}
-                    symptomId={sibling.id}
-                    label={sibling.label}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-        </article>
-      )}
-
-      {config && (
-        <SupportEscapeSection
-          config={config}
-          context={{ subjectKey, symptomId }}
+      {config?.supportChannelConfigured && (
+        <MessageDialog
+          open={message !== null}
+          onOpenChange={(open) => !open && setMessage(null)}
+          target={{ kind: "article", subjectKey, symptomId, tried: message ?? [] }}
+          channelName={config.supportChannelName}
         />
       )}
-    </TroubleshootingLayout>
+
+      <Confirm
+        open={confirm === "publish"}
+        title="Publish this article?"
+        okLabel={editor.publishing ? "Publishing…" : "Publish"}
+        busy={editor.publishing}
+        onClose={() => setConfirm(null)}
+        onOk={() => {
+          void editor.publish().then((ok) => ok && setConfirm(null));
+        }}
+      >
+        Readers see it straight away{alsoUnder.length ? `, here and under ${alsoUnder.join(", ")}` : ""}.
+      </Confirm>
+
+      <Confirm
+        open={confirm === "discard"}
+        title="Discard this article?"
+        okLabel="Discard article"
+        danger
+        onClose={() => setConfirm(null)}
+        onOk={() => {
+          void editor.discard().then((r) => {
+            setConfirm(null);
+            if (r.articleRemoved) setEditing(false);
+          });
+        }}
+      >
+        Its text is removed. The symptom stays in the list with nothing written for it, and readers see that IT hasn&rsquo;t written steps yet.
+      </Confirm>
+    </>
+  );
+}
+
+function Meta({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      <Icon name={icon} size={15} className="text-mut" />
+      {children}
+    </span>
   );
 }

@@ -77,3 +77,52 @@ export function isTabletCategory(name: string): boolean {
   const lower = name.toLowerCase();
   return ["tablet", "ipad"].some((kw) => lower.includes(kw));
 }
+/**
+ * A troubleshooting category's icon.
+ *
+ * Categories were written with a unicode glyph ("⚡", "▣") before the pages
+ * moved to Material Symbols, and new ones store a symbol name instead. A
+ * symbol name is used as it is; a known glyph maps to the symbol it was
+ * standing in for; anything else falls back rather than rendering a stray
+ * character beside a set of icons.
+ */
+const GLYPH_ICONS: Record<string, string> = {
+  "⚡": "bolt",
+  "▣": "monitor",
+  "◈": "wifi",
+  "◱": "speed",
+  "⚿": "key",
+  "⎙": "print",
+  "◒": "volume_up",
+  "↻": "sync",
+  "⌕": "search",
+  "◇": "share",
+  "◉": "sensors",
+  "◫": "view_column",
+  "✉": "mail",
+  "⚙": "settings",
+  "◐": "contrast",
+  "⊞": "grid_view",
+  "⌸": "apps",
+};
+
+export function iconForGlyph(glyph: string): string {
+  if (/^[a-z][a-z0-9_]*$/.test(glyph)) return glyph;
+  return GLYPH_ICONS[glyph] ?? FALLBACK_ICON;
+}
+
+/** What a new category can pick from, as symbol names. */
+export const CATEGORY_ICON_CHOICES = [
+  "monitor",
+  "wifi",
+  "print",
+  "key",
+  "speed",
+  "bolt",
+  "battery_full",
+  "bluetooth",
+  "volume_up",
+  "usb",
+  "security",
+  "sync",
+];

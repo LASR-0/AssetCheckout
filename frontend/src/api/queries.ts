@@ -19,7 +19,13 @@ import {
 } from "@/api/accessories";
 import { getLoanDevices } from "@/api/loans";
 import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
-import { getTroubleshootingConfig, getTroubleshootingSubjects } from "@/api/troubleshooting";
+import {
+  getEditableSubject,
+  getSymptom,
+  getTroubleshootingConfig,
+  getTroubleshootingLibrary,
+  getTroubleshootingSubjects,
+} from "@/api/troubleshooting";
 import { getLoanConfig, getSiteColours, getStockKeepers } from "@/api/settings";
 import type { Request } from "@/types/requestType";
 
@@ -296,3 +302,27 @@ export const troubleshootingSubjectsQuery = queryOptions({
   staleTime: REFERENCE,
   gcTime: PERSISTED_GC,
 });
+
+/** Every subject's listed taxonomy and the "Most looked up" row, for the
+ *  front page's search across the whole library. */
+export const troubleshootingLibraryQuery = queryOptions({
+  queryKey: ["troubleshooting", "library"],
+  queryFn: () => getTroubleshootingLibrary(),
+  staleTime: REFERENCE,
+});
+
+/** One symptom as readers see it: its article (or null), category and
+ *  siblings. */
+export const symptomQuery = (subjectKey: string, symptomId: string) =>
+  queryOptions({
+    queryKey: ["troubleshooting", "symptom", subjectKey, symptomId],
+    queryFn: () => getSymptom(subjectKey, symptomId),
+    staleTime: REFERENCE,
+  });
+
+/** A subject's list as an admin edits it: nothing filtered out. */
+export const editableSubjectQuery = (subjectKey: string) =>
+  queryOptions({
+    queryKey: ["troubleshooting", "admin", "subject", subjectKey],
+    queryFn: () => getEditableSubject(subjectKey),
+  });

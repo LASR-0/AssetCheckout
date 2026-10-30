@@ -18,21 +18,35 @@ export const troubleshootingTour: TourDefinition = {
   id: "troubleshooting",
   steps: [
     {
+      id: "search",
+      anchors: ['[data-tour="ts-search"]'],
+      title: "Describe what's wrong",
+      description:
+        "In your own words. It searches every fix IT has written, whatever the device or app.",
+      side: "bottom",
+    },
+    {
       id: "subject",
       anchors: ['[data-tour="ts-subject"]'],
-      title: "Start with the device",
-      description:
-        "Pick what's giving you trouble. The steps that follow are written for that device specifically.",
-      side: "bottom",
-      required: true,
+      title: "Or browse by device",
+      description: "Pick what's giving you trouble to see every problem IT has written up for it.",
+      side: "right",
     },
     {
       id: "symptoms",
-      anchors: ['[data-tour="ts-symptoms"]', '[data-tour="ts-subject"]'],
+      anchors: ['[data-tour="ts-symptoms"]'],
       title: "Then what it's doing",
       description:
         "Grouped by the kind of problem. Each one opens a short set of steps you can work through yourself.",
       side: "top",
+    },
+    {
+      id: "modes",
+      anchors: ['[data-tour="ts-article-modes"]'],
+      title: "One step at a time, or all at once",
+      description:
+        "Guided asks after each step whether it fixed it. All steps shows the whole article to scan ahead.",
+      side: "bottom",
     },
     {
       id: "escape",

@@ -68,20 +68,16 @@ function ToolbarButton({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      className={`inline-flex h-7 shrink-0 items-center justify-center rounded transition-colors hover:cursor-pointer ${
-        wide ? "px-2 text-[11px] font-medium" : "w-7 text-[13px]"
-      } ${
-        active
-          ? "bg-primary/15 text-primary"
-          : "text-info-light hover:bg-surface-container-low/60"
-      }`}
+      className={`inline-flex h-6.5 shrink-0 cursor-pointer items-center justify-center rounded-6 border-0 font-sans outline-none focus-visible:outline-2 focus-visible:outline-brand ${
+        wide ? "px-2 fs-11 font-medium" : "min-w-6.5 px-1.75 fs-12"
+      } ${active ? "bg-brand-sub text-brand-tx" : "bg-transparent text-tx2 hover:bg-hover"}`}
     >
       {children}
     </button>
   );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, hint }: { editor: Editor; hint?: string }) {
   const setLink = () => {
     const existing = editor.getAttributes("link").href as string | undefined;
     const input = window.prompt("Link address (http:// or https://)", existing ?? "https://");
@@ -107,7 +103,7 @@ function Toolbar({ editor }: { editor: Editor }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-outline/60 px-1.5 py-1">
+    <div className="flex flex-wrap items-center gap-1 border-b border-line2 bg-subtle px-1.5 py-1">
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
         active={editor.isActive("bold")}
@@ -123,10 +119,12 @@ function Toolbar({ editor }: { editor: Editor }) {
         <span className="italic font-serif">I</span>
       </ToolbarButton>
       <ToolbarButton onClick={setLink} active={editor.isActive("link")} label="Link">
-        <span className="material-symbols-outlined !text-[16px]">link</span>
+        <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>
+          link
+        </span>
       </ToolbarButton>
 
-      <span className="mx-1 h-4 w-px bg-outline/60" />
+      <span className="mx-1 h-4 w-px bg-line" />
 
       {/* The tokens, spelled out rather than hidden behind a menu. They are
           the reason an author uses this editor differently from any other,
@@ -142,6 +140,8 @@ function Toolbar({ editor }: { editor: Editor }) {
           {token}
         </ToolbarButton>
       ))}
+
+      {hint && <span className="ml-1 hidden fs-11 text-mut desk:inline">{hint}</span>}
     </div>
   );
 }
@@ -152,7 +152,7 @@ export default function RichTextEditorInner({
   ariaLabel,
   placeholder,
   className = "",
-  tone = "primary",
+  hint,
 }: RichTextFieldProps) {
   const editor = useEditor({
     extensions: [
@@ -191,16 +191,10 @@ export default function RichTextEditorInner({
     editor.commands.setContent(toDoc(value), { emitUpdate: false });
   }, [editor, value]);
 
-  const TONES = {
-    primary: "border-dashed border-primary/40 bg-primary/5 focus-within:border-primary",
-    muted:
-      "border-dashed border-outline bg-surface-container-low/30 focus-within:border-info-light",
-  } as const;
-
   return (
-    <div className={`rounded-md border ${TONES[tone]} ${className}`}>
-      {editor && <Toolbar editor={editor} />}
-      <EditorContent editor={editor} className="px-2 py-1" />
+    <div className="overflow-hidden rounded-10 border border-dashed border-brand-line bg-sheet focus-within:border-brand">
+      {editor && <Toolbar editor={editor} hint={hint} />}
+      <EditorContent editor={editor} className={`px-3 py-2.5 text-tx ${className}`} />
     </div>
   );
 }

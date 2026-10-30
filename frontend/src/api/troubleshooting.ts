@@ -12,8 +12,8 @@ import type {
   DeletedSymptom,
   PublishResult,
   UploadedImage,
-  SubjectCategoriesResponse,
   SubjectPickerTile,
+  TroubleshootingLibrary,
   SymptomResponse,
   TroubleshootingConfig,
 } from "@/types/troubleshootingType";
@@ -26,10 +26,9 @@ import type {
 //  not to Snipe — so there is no mutation here and won't be until the
 //  instrumentation in a later increment.
 //
-//  Symptom search is deliberately absent. The taxonomy for one device is a
-//  couple of dozen labels, already in hand once the page loads, so filtering
-//  it client-side is instant and costs no round trip. A server search
-//  endpoint exists on the repository for when the library outgrows that.
+//  Symptom search runs in the browser over the whole library, fetched once
+//  (getTroubleshootingLibrary): a few hundred short labels, so filtering them
+//  is instant and costs no round trip per search.
 ///  +-----------------------------------------------------------------+
 
 export async function getTroubleshootingConfig(): Promise<TroubleshootingConfig> {
@@ -43,12 +42,8 @@ export async function getTroubleshootingSubjects(): Promise<SubjectPickerTile[]>
   return res.subjects;
 }
 
-export async function getSubjectCategories(
-  subjectKey: string
-): Promise<SubjectCategoriesResponse> {
-  return apiFetch<SubjectCategoriesResponse>(
-    `/api/troubleshooting/subjects/${encodeURIComponent(subjectKey)}`
-  );
+export async function getTroubleshootingLibrary(): Promise<TroubleshootingLibrary> {
+  return apiFetch<TroubleshootingLibrary>("/api/troubleshooting/library");
 }
 
 export async function getSymptom(
@@ -150,7 +145,11 @@ const ADMIN = "/api/troubleshooting/admin";
  * under which subject; collapsing that to a single message would make the
  * error true and useless.
  */
-async function adminFetch<T>(path: string, init: ApiFetchOptions = {}): Promise<T> {
+async function adminFetch<T>(
+  path: string,
+  init: ApiFetchOptions = {},
+  { invalidates = true }: { invalidates?: boolean } = {}
+): Promise<T> {
   let result: T;
   try {
     result = ((await apiFetch<T>(path, init)) ?? {}) as T;
@@ -158,7 +157,9 @@ async function adminFetch<T>(path: string, init: ApiFetchOptions = {}): Promise<
     throw err instanceof ApiError ? new ContentApiError(err) : err;
   }
   // Any edit can change what readers see: the subject tiles, the config.
-  if (init.method && init.method !== "GET") await invalidate(["troubleshooting"]);
+  // A draft save is the exception — readers never see a draft, and refetching
+  // the library on every pause in typing would be pure waste.
+  if (invalidates && init.method && init.method !== "GET") await invalidate(["troubleshooting"]);
   return result;
 }
 
@@ -187,7 +188,8 @@ export async function saveArticleDraft(
 ): Promise<{ draftUpdatedAt: string }> {
   return adminFetch(
     `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms/${encodeURIComponent(symptomId)}/draft`,
-    { method: "PUT", body: { body, expectedPublishedAt } }
+    { method: "PUT", body: { body, expectedPublishedAt } },
+    { invalidates: false }
   );
 }
 
@@ -283,7 +285,9 @@ export async function uploadTroubleshootingImage(
         light: { base64: payload.light },
         ...(payload.dark ? { dark: { base64: payload.dark } } : {}),
       },
-    }
+    },
+    // Nothing a reader sees changes until the figure is saved and published.
+    { invalidates: false }
   );
 }
 
@@ -453,4 +457,17 @@ export async function composeSupportMessage(
     // send a JSON-encoded JSON string and the server would reject it.
     { method: "POST", body: input }
   );
+}
+
+/**
+ * Compose a message from the front page, where there is no article: a search
+ * that found nothing, or a subject with nothing written. Same rules as above —
+ * composed on the server, never sent.
+ */
+export async function composeGeneralSupportMessage(input: {
+  query: string;
+  subjectKey: string | null;
+  notes: string;
+}): Promise<SupportMessageDraft> {
+  return apiFetch("/api/troubleshooting/support-message", { method: "POST", body: input });
 }

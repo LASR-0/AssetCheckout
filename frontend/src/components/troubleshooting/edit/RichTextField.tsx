@@ -26,9 +26,10 @@ export type RichTextFieldProps = {
   onChange: (value: string) => void;
   ariaLabel: string;
   placeholder?: string;
+  /** Text size and leading of the writing area. */
   className?: string;
-  /** Matches EditableText: `primary` for prose, `muted` for metadata. */
-  tone?: "primary" | "muted";
+  /** Said in the toolbar strip: what the formatting is for here. */
+  hint?: string;
 };
 
 const RichTextEditorInner = lazy(() => import("./RichTextEditorInner"));

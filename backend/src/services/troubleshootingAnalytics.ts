@@ -266,6 +266,46 @@ function labelFor(subjectKey: string, symptomId: string): string {
   return category?.symptoms.find((s) => s.id === symptomId)?.label ?? symptomId;
 }
 
+/// ── Most looked up ───────────────────────────────────────────────────────
+//
+//  The few articles opened most, for the "Most looked up" row readers see on
+//  the library's front page. Counts only, never who: the row says what other
+//  people found useful, which is the whole of what a reader needs from it.
+//
+//  EMPTY WHEN ANALYTICS ARE OFF. Switching recording off is a promise that
+//  nothing about reading is used, so the row goes with it rather than going
+//  on serving whatever was recorded before the switch.
+//
+//  Over-fetches on purpose: the caller drops hidden and unwritten symptoms,
+//  and a short list after filtering would leave the row looking thin.
+
+export async function popularArticles(
+  limit: number,
+  sinceDays = 90
+): Promise<{ subjectKey: string; symptomId: string; opens: number }[]> {
+  if (!(await analyticsEnabled())) return [];
+
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+  const rows = await prisma.troubleshootingEvent.groupBy({
+    by: ["subjectKey", "symptomId"],
+    where: {
+      type: "ARTICLE_OPENED",
+      createdAt: { gte: since },
+      subjectKey: { not: null },
+      symptomId: { not: null },
+    },
+    _count: { _all: true },
+    orderBy: { _count: { symptomId: "desc" } },
+    take: limit,
+  });
+
+  return rows.map((row) => ({
+    subjectKey: row.subjectKey!,
+    symptomId: row.symptomId!,
+    opens: row._count._all,
+  }));
+}
+
 /// ── Retention ────────────────────────────────────────────────────────────
 
 export async function purgeOldEvents(retentionDays: number): Promise<number> {
