@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { usePreset } from "@/hooks/usePreset";
 import { PRESETS, findPreset } from "@/lib/presets";
+import { palette } from "@/lib/palettes";
 import { Row, Section, Sheet } from "../parts";
 
 ///  +-----------------------------------------------------------------+
@@ -57,7 +58,9 @@ export function Appearance({ staff }: { staff: boolean }) {
           <div role="radiogroup" aria-label="Palette" className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2.5 border-t border-line2 px-4 pt-3.5 pb-4">
             {PRESETS.map((p) => {
               const on = p.id === preset;
-              const bands = dark ? p.bands.dark : p.bands.light;
+              // The real tokens, so a card shows exactly what picking it gives.
+              const t = palette(p.id, dark ? "dark" : "light");
+              const bands = [t.canvas, t.tray, t.sheet, t.tx, t.brand, t.ok, t.prog, t.stop];
               return (
                 <button
                   key={p.id}

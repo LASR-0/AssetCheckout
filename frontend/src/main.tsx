@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './styles/material-symbols.css'
 import './index.css'
 import './styles/presets.css'
+import './styles/palettes.css'
 // Last: the tour overrides driver.js's shipped stylesheet, and both are
 // unlayered, so this has to come after everything it restates.
 import './styles/tour.css'

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { resolvePalette, type Mode } from "@/lib/palettes";
+import { PRESETS } from "@/lib/presets";
 
 ///  +-----------------------------------------------------------------+
 ///  |   EVERY TEXT TOKEN MEETS WCAG AA ON THE GROUNDS IT SITS ON        |
@@ -14,15 +16,6 @@ import { readFileSync } from "node:fs";
 //
 //  As presets are adapted (Phase 8.5) they join the matrix below.
 ///  +-----------------------------------------------------------------+
-
-const css = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
-
-function palette(selector: string): Record<string, string> {
-  const block = new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
-  return Object.fromEntries(
-    [...block.matchAll(/--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})/g)].map((m) => [m[1], m[2]])
-  );
-}
 
 function luminance(hex: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => {
@@ -53,16 +46,23 @@ const PAIRS: [string, string][] = [
 ];
 
 
-const MODES = { light: palette(":root"), dark: palette("\\.dark") };
+const read = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
+const TOKENS = read("./tokens.css");
+const PALETTES = read("./palettes.css");
+const palette = (id: (typeof PRESETS)[number]["id"], mode: Mode) => resolvePalette(TOKENS, PALETTES, id, mode);
 
-describe.each(Object.entries(MODES))("Platinum %s", (_mode, tokens) => {
+const CASES = PRESETS.flatMap((p) => (["light", "dark"] as Mode[]).map((mode) => [`${p.label} ${mode}`, palette(p.id, mode)] as const));
+
+describe.each(CASES)("%s", (_name, tokens) => {
   it.each(PAIRS)("%s on %s is at least 4.5:1", (text, ground) => {
     expect(tokens[text], `--${text} missing`).toBeDefined();
     expect(tokens[ground], `--${ground} missing`).toBeDefined();
     expect(contrast(tokens[text], tokens[ground])).toBeGreaterThanOrEqual(4.5);
   });
+});
 
+describe("Platinum", () => {
   it("defines every themed token in both modes, so the theme fade has both ends", () => {
-    expect(Object.keys(tokens).sort()).toEqual(Object.keys(MODES.light).sort());
+    expect(Object.keys(palette("default", "dark")).sort()).toEqual(Object.keys(palette("default", "light")).sort());
   });
 });
