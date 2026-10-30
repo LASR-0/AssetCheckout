@@ -494,7 +494,7 @@ export function Docket({ row, viewer, intent, onLanded }: Props) {
               {facts.map((f, i) => (
                 <div key={f.k} className={cn("flex justify-between gap-4 py-2.5", i > 0 && "border-t border-line2")}>
                   <dt className="flex-none text-mut">{f.k}</dt>
-                  <dd className={cn("m-0 text-right text-pretty", f.mono && "font-mono fs-12.5")}>{f.v}</dd>
+                  <dd className={cn("m-0 min-w-0 text-right text-pretty", f.mono && "font-mono fs-12.5")}>{f.v}</dd>
                 </div>
               ))}
             </dl>

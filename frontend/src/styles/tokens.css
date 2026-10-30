@@ -136,6 +136,37 @@
     --scrim: rgba(20, 18, 16, 0.45);
   }
 
+  /* SCROLLBARS: a rounded thumb in the line grey, darker under the
+     pointer, with no track and no arrow buttons. Chrome and Safari take the
+     ::-webkit rules; Firefox, which has no such pseudo-elements, gets the
+     standard properties instead. (Chrome supports those too, but setting
+     them would switch its webkit styling off, hence @supports.) */
+  ::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 0.1875rem solid transparent;
+    border-radius: 999px;
+    background: var(--strong) padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--dis);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--strong) transparent;
+    }
+  }
+
   html {
     font-size: 80%;
   }
@@ -143,6 +174,10 @@
   body {
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
+    /* A word too long for its line (a pasted string with no spaces)
+       breaks rather than pushing out of its card. It only touches a word
+       that would overflow, so normal text wraps exactly as before. */
+    overflow-wrap: break-word;
   }
 }
 

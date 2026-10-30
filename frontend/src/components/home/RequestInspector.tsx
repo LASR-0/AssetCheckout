@@ -127,7 +127,7 @@ export default function RequestInspector({ row: current, viewer, busy, onClose, 
               className={cn("flex justify-between gap-4 py-2.75 fs-12", i > 0 && "border-t border-line2")}
             >
               <span className="flex-none text-mut">{f.k}</span>
-              <span className={cn("text-right text-pretty", f.mono ? "font-mono fs-13" : "fs-14")}>{f.v}</span>
+              <span className={cn("min-w-0 text-right text-pretty", f.mono ? "font-mono fs-13" : "fs-14")}>{f.v}</span>
             </div>
           ))}
         </Sheet>
