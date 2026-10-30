@@ -1721,6 +1721,11 @@ export async function getAssetsByLocation(locationId: number): Promise<LocationA
       assigned && typeof assigned === "object" && typeof assigned.name === "string"
         ? assigned.name
         : null;
+    // What kind of holder it is, so the ledger can tell "with a person" from
+    // "checked out to the boardroom". Snipe sends user / location / asset.
+    const kind = assignedTo ? assigned.type : null;
+    const assignedKind: "user" | "location" | "asset" | null =
+      kind === "user" || kind === "location" || kind === "asset" ? kind : assignedTo ? "user" : null;
 
     return {
       id: Number(asset.id),
@@ -1735,6 +1740,7 @@ export async function getAssetsByLocation(locationId: number): Promise<LocationA
       // instance, so reading the meta flag beats matching on label names.
       available: asset.status_label?.status_meta === "deployable",
       assignedTo,
+      assignedKind,
       lastCheckout: asset.last_checkout?.datetime ?? null,
     };
   });

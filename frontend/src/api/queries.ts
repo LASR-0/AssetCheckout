@@ -20,7 +20,7 @@ import {
 import { getLoanDevices } from "@/api/loans";
 import { getAccessoriesAtLocation, getAssetsAtLocation } from "@/api/stock";
 import { getTroubleshootingConfig, getTroubleshootingSubjects } from "@/api/troubleshooting";
-import { getLoanConfig, getSiteColours } from "@/api/settings";
+import { getLoanConfig, getSiteColours, getStockKeepers } from "@/api/settings";
 import type { Request } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
@@ -150,6 +150,14 @@ export const stockAssetsQuery = (locationId: number) =>
     queryFn: () => getAssetsAtLocation(locationId),
     staleTime: WORKFLOW,
   });
+
+/** Who keeps stock where, by location id. Admin-only on the server: Stock
+ *  uses it to say whose site an admin is covering. */
+export const stockKeepersQuery = queryOptions({
+  queryKey: ["settings", "stock-keepers"],
+  queryFn: async () => (await getStockKeepers()).config,
+  staleTime: REFERENCE,
+});
 
 export const stockAccessoriesQuery = (locationId: number) =>
   queryOptions({

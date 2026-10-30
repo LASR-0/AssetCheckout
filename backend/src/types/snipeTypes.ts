@@ -329,8 +329,10 @@ export type LocationAsset = {
   statusLabel: string | null;
   /** True when Snipe considers it available to issue. */
   available: boolean;
-  /** Who currently holds it, when it is checked out to a person. */
+  /** Who holds it, by name, when it is checked out (see assignedKind). */
   assignedTo: string | null;
+  /** Who holds it: a person, a place, or another asset (null on the shelf). */
+  assignedKind: "user" | "location" | "asset" | null;
   /**
    * When it was last checked out, ISO-ish as Snipe returns it, or null if it
    * never has been. Drives the "how long has this been out?" column and the

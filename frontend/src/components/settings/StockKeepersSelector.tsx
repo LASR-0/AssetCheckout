@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { queryClient } from "@/api/queryClient";
-import { locationsQuery, usersQuery } from "@/api/queries";
+import { locationsQuery, stockKeepersQuery, usersQuery } from "@/api/queries";
 import {
   Popover,
   PopoverContent,
@@ -96,6 +96,7 @@ export default function StockKeepersSelector() {
       const saved = await setStockKeepersForLocation(locationId, next, locationName);
       setConfig(saved.config); // adopt authoritative
       setMaxPerLocation(saved.maxPerLocation);
+      queryClient.setQueryData(stockKeepersQuery.queryKey, saved.config);
     } catch (err: any) {
       setConfig(previous); // roll back
       setError(err.message || "Failed to save");
