@@ -43,9 +43,11 @@ import { prefetchFromLink } from "@/api/prefetch";
 
 const LOGO_LIGHT: string | undefined = import.meta.env.VITE_LOGO_PATH_LIGHT;
 const LOGO_DARK: string | undefined = import.meta.env.VITE_LOGO_PATH_DARK;
-const COMPANY: string | undefined = import.meta.env.VITE_COMPANY_NAME;
+const COMPANY: string | undefined = import.meta.env.VITE_COMPANY_NAME?.trim() || undefined;
 
+// Home is a tab as well as the brand: not everyone knows the logo goes home.
 const PAGES = [
+  { to: "/", label: "Home", icon: "home", tour: undefined },
   { to: "/assets", label: "Assets", icon: "laptop_windows", tour: "nav-assets" },
   { to: "/accessories", label: "Accessories", icon: "headphones", tour: "nav-accessories" },
   { to: "/loan", label: "Loan", icon: "event_available", tour: "nav-loan" },
@@ -98,14 +100,11 @@ function Brand({ compact }: { compact?: boolean }) {
     return (
       <Link to="/" className="flex items-center gap-2.5 rounded-8 outline-offset-4">
         <img src={logo} alt={COMPANY ?? ""} className={compact ? "h-5 w-auto" : "h-6.5 w-auto"} />
-        <span
-          className={cn(
-            "whitespace-nowrap",
-            compact ? "font-head fs-14 font-medium tracking-head" : "fs-15 font-semibold"
-          )}
-        >
-          Checkout Central
-        </span>
+        {compact ? (
+          <span className="font-head fs-14 font-medium tracking-head whitespace-nowrap">Checkout Central</span>
+        ) : (
+          <BrandName />
+        )}
       </Link>
     );
   }
@@ -122,11 +121,19 @@ function Brand({ compact }: { compact?: boolean }) {
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-8 outline-offset-4">
       <BrandMark className="size-7.5 rounded-8 fs-14" />
-      <span className="flex flex-col leading-[1.15] whitespace-nowrap">
-        {COMPANY && <span className="fs-12 text-mut">{COMPANY}</span>}
-        <span className="fs-15 font-semibold">Checkout Central</span>
-      </span>
+      <BrandName />
     </Link>
+  );
+}
+
+/** "Checkout Central", with the company's name above it when the
+ *  deployment sets one (VITE_COMPANY_NAME); on its own when it doesn't. */
+function BrandName() {
+  return (
+    <span className="flex flex-col leading-[1.15] whitespace-nowrap">
+      {COMPANY && <span className="fs-12 text-mut">{COMPANY}</span>}
+      <span className="fs-15 font-semibold">Checkout Central</span>
+    </span>
   );
 }
 
@@ -157,6 +164,7 @@ function DesktopBar({ nav }: { nav: ReturnType<typeof useNav> }) {
           <NavLink
             key={p.to}
             to={p.to}
+            end={p.to === "/"}
             data-tour={p.tour}
             className={({ isActive }) => cn(PAGE_ITEM, isActive && PAGE_ITEM_ON)}
           >
@@ -318,7 +326,7 @@ function PhoneBar({ nav }: { nav: ReturnType<typeof useNav> }) {
       >
         <nav aria-label="Main" className="flex flex-col gap-0.5">
           {PAGES.map((p) => (
-            <NavLink key={p.to} to={p.to} onClick={close} className={row}>
+            <NavLink key={p.to} to={p.to} end={p.to === "/"} onClick={close} className={row}>
               {p.label}
             </NavLink>
           ))}
