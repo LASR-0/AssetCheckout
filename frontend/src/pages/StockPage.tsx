@@ -244,7 +244,8 @@ export default function StockPage() {
             />
           </div>
 
-          <div className={cn("min-w-0", !phone && "min-h-0 overflow-auto pb-6")}>
+          {/* The ledger scrolls its own table; only the docket scrolls the column. */}
+          <div className={cn("min-w-0", !phone && "flex min-h-0 flex-col pb-6", !phone && selected && "overflow-auto")}>
             {!phone && selected ? (
               <div>
                 <div className="mb-2.5 flex items-center justify-between">
@@ -257,7 +258,7 @@ export default function StockPage() {
                 {docket(selected)}
               </div>
             ) : (
-              <Ledger key={site.id} site={site} me={viewer.name} phone={phone} />
+              <Ledger key={site.id} site={site} me={viewer.name} phone={phone} fill={!phone} />
             )}
           </div>
         </div>

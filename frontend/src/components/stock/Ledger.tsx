@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { ROW_IN, rowIn } from "@/lib/motion";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented";
@@ -185,9 +186,16 @@ function Box({ children, dashed }: { children: ReactNode; dashed?: boolean }) {
   );
 }
 
-type Props = { site: Site; me: string; phone: boolean };
+type Props = {
+  site: Site;
+  me: string;
+  phone: boolean;
+  /** Fill the column it sits in and scroll its own table, keeping the
+   *  heading, tiles, filters and pager in view (desktop). */
+  fill?: boolean;
+};
 
-export function Ledger({ site, me, phone }: Props) {
+export function Ledger({ site, me, phone, fill }: Props) {
   const [mode, setMode] = useState<Mode>("acc");
   const [af, setAf] = useState<StockFilterState>(EMPTY_FILTERS);
   const [cf, setCf] = useState<AccessoryFilterState>(EMPTY_ACCESSORY_FILTERS);
@@ -279,7 +287,11 @@ export function Ledger({ site, me, phone }: Props) {
   const shownAccs = accRows.slice(from, from + size);
 
   return (
-    <section aria-label="Ledger" data-tour="stock-ledger" className="flex min-w-0 flex-col rounded-14 border border-line bg-sheet">
+    <section
+      aria-label="Ledger"
+      data-tour="stock-ledger"
+      className={cn("flex min-w-0 flex-col overflow-hidden rounded-14 border border-line bg-sheet", fill && "min-h-0")}
+    >
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2.5 px-4 pt-4 pb-3 max-phone:px-3.5 max-phone:pt-3.5 max-phone:pb-2.5">
         <div className="min-w-0 flex-[1_1_16.25rem]">
           <h2 className="m-0 fs-15 font-medium">
@@ -441,10 +453,13 @@ export function Ledger({ site, me, phone }: Props) {
             )}
           </div>
 
-          <div className="min-w-0 overflow-x-auto border-t border-line2">
+          <div className={cn("min-w-0 border-t border-line2", fill ? "min-h-0 flex-1 overflow-auto" : "overflow-x-auto")}>
             <div role="table" aria-label={isA ? "Assets" : "Accessories"} className={cn(!phone && (isA ? "min-w-250" : "min-w-205"))}>
               {!phone && (
-                <div role="row" className={cn("grid h-8.5 items-center gap-x-3.5 border-b border-line2 bg-subtle px-4", isA ? ASSET_COLS : ACC_COLS)}>
+                <div
+                  role="row"
+                  className={cn("sticky top-0 z-1 grid h-8.5 items-center gap-x-3.5 border-b border-line2 bg-subtle px-4", isA ? ASSET_COLS : ACC_COLS)}
+                >
                   {isA
                     ? (
                         [
@@ -474,6 +489,7 @@ export function Ledger({ site, me, phone }: Props) {
                 </div>
               )}
 
+              <div key={[mode, safe, size, JSON.stringify(isA ? af : cf), isA ? assetSort : accSort, desc].join("|")} role="rowgroup">
               {total === 0 ? (
                 <div className="flex flex-col items-center gap-1.5 px-5 py-10 text-center">
                   <div className="fs-14 font-medium">No {isA ? "assets" : "accessories"} match these filters</div>
@@ -483,9 +499,9 @@ export function Ledger({ site, me, phone }: Props) {
                   </Button>
                 </div>
               ) : isA ? (
-                shownAssets.map((a) =>
+                shownAssets.map((a, i) =>
                   phone ? (
-                    <div key={a.id} role="row" className="flex flex-col gap-1.25 border-b border-line2 px-3.5 py-2.75">
+                    <div key={a.id} role="row" style={rowIn(i)} className={cn("flex flex-col gap-1.25 border-b border-line2 px-3.5 py-2.75", ROW_IN)}>
                       <div className="flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate fs-14 font-medium">{a.model ?? a.name ?? "Unknown model"}</span>
                         <StatusPill a={a} />
@@ -498,7 +514,7 @@ export function Ledger({ site, me, phone }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <div key={a.id} role="row" className={cn("grid min-h-11.5 items-center gap-x-3.5 border-b border-line2 px-4 py-1.25", ASSET_COLS)}>
+                    <div key={a.id} role="row" style={rowIn(i)} className={cn("grid min-h-11.5 items-center gap-x-3.5 border-b border-line2 px-4 py-1.25", ASSET_COLS, ROW_IN)}>
                       <span className="font-mono fs-12 whitespace-nowrap text-tx2">{a.assetTag}</span>
                       <span className="flex min-w-0 flex-col gap-px">
                         <span className="truncate fs-13">{a.model ?? a.name ?? "Unknown model"}</span>
@@ -520,9 +536,9 @@ export function Ledger({ site, me, phone }: Props) {
                   )
                 )
               ) : (
-                shownAccs.map((a) =>
+                shownAccs.map((a, i) =>
                   phone ? (
-                    <div key={a.id} role="row" className="flex items-center gap-3 border-b border-line2 px-3.5 py-2.75">
+                    <div key={a.id} role="row" style={rowIn(i)} className={cn("flex items-center gap-3 border-b border-line2 px-3.5 py-2.75", ROW_IN)}>
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="truncate fs-14 font-medium">{a.name}</span>
                         <span className="truncate fs-12.5 text-mut">
@@ -532,7 +548,7 @@ export function Ledger({ site, me, phone }: Props) {
                       <Avail n={a.remaining} />
                     </div>
                   ) : (
-                    <div key={a.id} role="row" className={cn("grid min-h-11.5 items-center gap-x-3.5 border-b border-line2 px-4 py-1.25", ACC_COLS)}>
+                    <div key={a.id} role="row" style={rowIn(i)} className={cn("grid min-h-11.5 items-center gap-x-3.5 border-b border-line2 px-4 py-1.25", ACC_COLS, ROW_IN)}>
                       <span className="flex min-w-0 flex-col gap-px">
                         <span className="truncate fs-13">{a.name}</span>
                         <span className="truncate font-mono fs-11 text-mut">{a.modelNumber ?? "—"}</span>
@@ -550,6 +566,7 @@ export function Ledger({ site, me, phone }: Props) {
                   )
                 )
               )}
+              </div>
             </div>
           </div>
 

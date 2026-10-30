@@ -240,6 +240,12 @@
   /* A modal arriving as a bottom sheet on phones. */
   --animate-sheet-up: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-fade-in: fade-in 0.15s ease-out;
+  /* The phone menu sliding down from under the bar, and back up. */
+  --animate-menu-down: menu-down 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-menu-up: menu-up 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+  /* A table row arriving: rows cascade top-down, each delayed by its index
+     (lib/motion.ts rowIn). */
+  --animate-row-in: row-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   @keyframes insp-in {
     from { transform: translateX(100%); }
@@ -248,6 +254,20 @@
   @keyframes insp-out {
     from { transform: none; }
     to { transform: translateX(100%); }
+  }
+  /* Revealed from the top edge as it moves down. The clip leaves room at the
+     sides and bottom for the menu's shadow. */
+  @keyframes menu-down {
+    from { clip-path: inset(0 -3rem 100% -3rem); transform: translateY(-0.75rem); }
+    to { clip-path: inset(0 -3rem -3rem -3rem); transform: none; }
+  }
+  @keyframes menu-up {
+    from { clip-path: inset(0 -3rem -3rem -3rem); transform: none; }
+    to { clip-path: inset(0 -3rem 100% -3rem); transform: translateY(-0.75rem); }
+  }
+  @keyframes row-in {
+    from { opacity: 0; transform: translateY(-0.375rem); }
+    to { opacity: 1; transform: none; }
   }
   @keyframes sheet-up {
     from { transform: translateY(100%); }

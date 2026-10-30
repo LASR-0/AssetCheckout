@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { cn } from "@/lib/utils";
+import { ROW_IN, rowIn } from "@/lib/motion";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { StateChip } from "@/components/ui/pills";
@@ -33,6 +34,9 @@ export const COLS = "grid-cols-[0.5rem_minmax(0,1fr)_7.25rem_8.25rem_11.5rem_2.7
 
 type Props = {
   rows: LogRow[];
+  /** Changes when what's listed changes (view, filters, sort): the rows
+   *  remount and cascade in again. */
+  contentKey: string;
   selected: number | null;
   /** Briefly tinted green after an action lands. */
   flash: number | null;
@@ -125,7 +129,7 @@ function FlagNote({ row, className }: { row: LogRow; className?: string }) {
   );
 }
 
-function DeskRow({ row, selected, flash, onOpen, onAct }: { row: LogRow; selected: boolean; flash: boolean } & Pick<Props, "onOpen" | "onAct">) {
+function DeskRow({ row, index, selected, flash, onOpen, onAct }: { row: LogRow; index: number; selected: boolean; flash: boolean } & Pick<Props, "onOpen" | "onAct">) {
   const r = row.r;
   return (
     <div
@@ -133,8 +137,10 @@ function DeskRow({ row, selected, flash, onOpen, onAct }: { row: LogRow; selecte
       aria-selected={selected}
       data-id={r.id}
       onClick={() => onOpen(row)}
+      style={rowIn(index)}
       className={cn(
         "relative grid h-14 cursor-pointer items-center gap-x-3 border-b border-line2 pr-3.5 pl-4 transition-colors duration-700 hover:bg-subtle",
+        ROW_IN,
         COLS,
         flash ? "bg-ok-bg" : selected && "bg-brand-sub/60 shadow-[inset_0_0_0_1px_var(--brand-line)] hover:bg-brand-sub/60"
       )}
@@ -184,13 +190,14 @@ function DeskRow({ row, selected, flash, onOpen, onAct }: { row: LogRow; selecte
   );
 }
 
-function PhoneCard({ row, onOpen, onAct }: { row: LogRow } & Pick<Props, "onOpen" | "onAct">) {
+function PhoneCard({ row, index, onOpen, onAct }: { row: LogRow; index: number } & Pick<Props, "onOpen" | "onAct">) {
   const r = row.r;
   return (
     <div
       role="listitem"
       onClick={() => onOpen(row)}
-      className="relative flex cursor-pointer flex-col gap-2.5 overflow-hidden rounded-12 border border-line bg-sheet py-3 pr-3 pl-4 active:bg-subtle"
+      style={rowIn(index)}
+      className={cn("relative flex cursor-pointer flex-col gap-2.5 overflow-hidden rounded-12 border border-line bg-sheet py-3 pr-3 pl-4 active:bg-subtle", ROW_IN)}
     >
       <span aria-hidden className={cn("absolute inset-y-0 left-0 w-0.75", EDGE[kindAccent(r)])} />
       <div className="flex items-start gap-2.5">
@@ -248,7 +255,7 @@ function Skeleton({ phone }: { phone: boolean }) {
   );
 }
 
-export function RequestList({ rows, selected, flash, loading, onOpen, onAct, empty, phone }: Props & { phone: boolean }) {
+export function RequestList({ rows, contentKey, selected, flash, loading, onOpen, onAct, empty, phone }: Props & { phone: boolean }) {
   const [limit, setLimit] = useState(PAGE);
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -293,17 +300,19 @@ export function RequestList({ rows, selected, flash, loading, onOpen, onAct, emp
   return (
     <>
       {phone ? (
-        <div role="list" className="flex flex-col gap-2 pt-0.5 pb-4">
-          {visible.map((row) => (
-            <PhoneCard key={row.r.id} row={row} onOpen={onOpen} onAct={onAct} />
+        <div key={contentKey} role="list" className="flex flex-col gap-2 pt-0.5 pb-4">
+          {visible.map((row, i) => (
+            // Each page of rows cascades from its own start as it's added.
+            <PhoneCard key={row.r.id} row={row} index={i % PAGE} onOpen={onOpen} onAct={onAct} />
           ))}
         </div>
       ) : (
-        <div role="rowgroup">
-          {visible.map((row) => (
+        <div key={contentKey} role="rowgroup">
+          {visible.map((row, i) => (
             <DeskRow
               key={row.r.id}
               row={row}
+              index={i % PAGE}
               selected={row.r.id === selected}
               flash={row.r.id === flash}
               onOpen={onOpen}

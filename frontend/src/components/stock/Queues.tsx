@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { ROW_IN, rowIn } from "@/lib/motion";
 import { Icon } from "@/components/ui/icon";
 import { RouteRail } from "@/components/ui/route-rail";
 import { kindAccent, requestTitle } from "@/lib/requestDisplay";
@@ -58,7 +59,7 @@ function Chip({ tone, icon, fill, children }: { tone: "brand" | "stop" | "neutra
   );
 }
 
-function Row({ row, kind, canAct, pending, flash, selected, phone, onOpen, onAct }: { row: LogRow; kind: Kind } & Omit<Props, "queues" | "flash" | "selected"> & { flash: boolean; selected: boolean }) {
+function Row({ row, index, kind, canAct, pending, flash, selected, phone, onOpen, onAct }: { row: LogRow; index: number; kind: Kind } & Omit<Props, "queues" | "flash" | "selected"> & { flash: boolean; selected: boolean }) {
   const r = row.r;
   const shipping = kind === "hand" && !!r.needsShipping;
   const overdue = kind === "loans" && r.loan ? daysSince(r.loan.endDate) : 0;
@@ -127,8 +128,10 @@ function Row({ row, kind, canAct, pending, flash, selected, phone, onOpen, onAct
       role="listitem"
       data-id={r.id}
       onClick={() => onOpen(row)}
+      style={rowIn(index)}
       className={cn(
         "relative flex cursor-pointer flex-col gap-2.5 border-b border-line2 py-3 pr-3.5 pl-4 transition-colors duration-700 last:border-b-0 hover:bg-subtle",
+        ROW_IN,
         flash ? "bg-ok-bg" : selected && "bg-brand-sub shadow-[inset_0_0_0_1px_var(--brand-line)] hover:bg-brand-sub"
       )}
     >
@@ -219,10 +222,11 @@ export function Queues(props: Props) {
               {rows.length === 0 ? (
                 <p className="m-0 px-3.5 py-4 fs-13 leading-normal text-pretty text-mut">{q.empty}</p>
               ) : (
-                rows.map((row) => (
+                rows.map((row, i) => (
                   <Row
                     key={row.r.id}
                     row={row}
+                    index={i}
                     kind={q.kind}
                     canAct={props.canAct}
                     pending={props.pending}

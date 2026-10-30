@@ -286,6 +286,7 @@ export default function RequestsPage() {
             <div role={desk ? "table" : undefined} aria-label="Requests" className={cn(desk && "min-h-0 flex-1 overflow-auto")}>
               <RequestList
                 rows={list}
+                contentKey={[view, stage, site, q.trim(), pin, newestFirst].join("|")}
                 selected={desk ? shownId : null}
                 flash={flash}
                 loading={log.loading}

@@ -314,7 +314,7 @@ function PhoneBar({ nav }: { nav: ReturnType<typeof useNav> }) {
         align="start"
         sideOffset={0}
         aria-label="Menu"
-        className="w-(--radix-popover-trigger-width) gap-0.5 rounded-none border-0 border-b p-2 fs-15 shadow-[0_0.75rem_1.5rem_var(--shade)] data-[state=open]:animate-none"
+        className="w-(--radix-popover-trigger-width) gap-0.5 rounded-none border-0 border-b p-2 fs-15 shadow-[0_0.75rem_1.5rem_var(--shade)] data-[state=closed]:animate-menu-up data-[state=open]:animate-menu-down motion-reduce:animate-none!"
       >
         <nav aria-label="Main" className="flex flex-col gap-0.5">
           {PAGES.map((p) => (

@@ -59,11 +59,15 @@ function SelectTrigger({
   )
 }
 
+// Centred under its field. The list is never narrower than the field, so a
+// list the same width reads exactly as left-aligned; one that needs more room
+// (a long option in a short filter) spills evenly to both sides rather than
+// hanging off the right. Near a screen edge, Radix shifts it back on screen.
 function SelectContent({
   className,
   children,
   position = "popper",
-  align = "start",
+  align = "center",
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ROW_IN, rowIn } from "@/lib/motion";
 import { Icon } from "@/components/ui/icon";
 import { Tray, Sheet } from "@/components/ui/tray";
 import { StateChip } from "@/components/ui/pills";
@@ -47,7 +48,7 @@ export default function Finished({ rows, name, onOpen }: Props) {
             const meta = stageMeta(route.stage);
             const filed = shortDate(r.createdAt);
             return (
-              <li key={r.id}>
+              <li key={r.id} className={ROW_IN} style={rowIn(i)}>
                 <button
                   type="button"
                   onClick={() => onOpen(row)}

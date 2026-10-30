@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { ROW_IN, rowIn } from "@/lib/motion";
 import { Icon } from "@/components/ui/icon";
 import { Tray, Sheet } from "@/components/ui/tray";
 import { Dot, HolderChip } from "@/components/ui/pills";
@@ -62,11 +63,11 @@ export default function InFlight({ rows, anyRequests, loading, viewer, onOpen }:
           </p>
         ) : (
           <ul className="m-0 list-none divide-y divide-line2 p-0">
-            {rows.map((row) => {
+            {rows.map((row, i) => {
               const { r, route } = row;
               const title = requestTitle(r);
               return (
-                <li key={r.id}>
+                <li key={r.id} className={ROW_IN} style={rowIn(i)}>
                   {/* Desktop: one line, the rail in its own column. */}
                   <button
                     type="button"
