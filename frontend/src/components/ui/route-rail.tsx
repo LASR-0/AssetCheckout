@@ -64,13 +64,12 @@ type RouteRailProps = {
   route: Route;
   /** Hide the current station's label (when the row says it elsewhere). */
   hideLabel?: boolean;
-  /** A fixed width per station (e.g. "0.875rem" on Home's phone cards)
-   *  instead of sharing the available width. */
-  stationWidth?: string;
+  /** Give it a width here (e.g. `w-28`) for a rail that isn't filling a
+   *  column: every rail is the same length, whatever its station count. */
   className?: string;
 };
 
-export function RouteRail({ route, hideLabel, stationWidth, className }: RouteRailProps) {
+export function RouteRail({ route, hideLabel, className }: RouteRailProps) {
   const n = route.stations.length;
   const cur = Math.min(route.current, n - 1);
   const showLabel = !hideLabel && !route.finished;
@@ -80,7 +79,16 @@ export function RouteRail({ route, hideLabel, stationWidth, className }: RouteRa
       aria-label={describe(route)}
       className={cn("grid min-w-0 items-center gap-y-1.5", className)}
       style={{
-        gridTemplateColumns: `repeat(${n}, ${stationWidth ?? "minmax(0, 1fr)"})`,
+        // The end stations get half a cell, so the first dot sits on the
+        // rail's left edge and the last on its right, at any station count:
+        // a three-stop correction and a seven-stop request start and finish
+        // in the same place, with the stops between spread evenly.
+        gridTemplateColumns:
+          n < 2
+            ? "minmax(0, 1fr)"
+            : n === 2
+              ? "repeat(2, minmax(0, 1fr))"
+              : `minmax(0, 0.5fr) repeat(${n - 2}, minmax(0, 1fr)) minmax(0, 0.5fr)`,
         gridTemplateRows: showLabel ? "0.75rem auto" : "0.75rem",
       }}
     >
@@ -89,15 +97,9 @@ export function RouteRail({ route, hideLabel, stationWidth, className }: RouteRa
         const faded = !!route.rejected && i > route.current;
         return (
           <span key={s.key + i} className="flex h-3 min-w-0 items-center">
-            <span
-              className={cn("h-0 min-w-0.5 flex-1", i === 0 && "invisible")}
-              style={i === 0 ? undefined : segmentStyle(route, i)}
-            />
+            {i > 0 && <span className="h-0 min-w-0.5 flex-1" style={segmentStyle(route, i)} />}
             <span className={cn("shrink-0 rounded-full", DOT[phase], faded && "opacity-45")} />
-            <span
-              className={cn("h-0 min-w-0.5 flex-1", i === n - 1 && "invisible")}
-              style={i === n - 1 ? undefined : segmentStyle(route, i + 1)}
-            />
+            {i < n - 1 && <span className="h-0 min-w-0.5 flex-1" style={segmentStyle(route, i + 1)} />}
           </span>
         );
       })}

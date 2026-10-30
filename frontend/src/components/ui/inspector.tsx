@@ -61,9 +61,15 @@ export function Inspector({
     return () => window.clearTimeout(t);
   }, [open, present, docked]);
 
+  // Focus moves into the panel when it opens, and only then. Tying this to
+  // the effect below re-ran it on every render a parent made with a fresh
+  // onClose, pulling focus out of whatever field was being typed in.
+  useEffect(() => {
+    if (open) ref.current?.focus({ preventScroll: true });
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    ref.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       // A menu or modal opened from inside the inspector handles its own
       // Escape first; only an unclaimed one closes the panel.

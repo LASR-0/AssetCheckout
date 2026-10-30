@@ -179,7 +179,10 @@ export function Jobs() {
   }
 
   const [open, setOpen] = useState<JobType | null>(null);
-  const openRow = rows.find((r) => r.def.type === open);
+  // Kept while the panel slides out, so it still has something to show.
+  const [last, setLast] = useState(open);
+  if (open != null && open !== last) setLast(open);
+  const openRow = rows.find((r) => r.def.type === (open ?? last));
 
   const runButton = (r: Row, wide?: boolean) => {
     if (!r.def.runnable) return <span className="w-26 text-center fs-10.5 text-mut">{r.def.once ? "" : "Scheduled only"}</span>;
@@ -403,6 +406,7 @@ export function Jobs() {
       {openRow && (
         <JobPanel
           key={openRow.def.type}
+          open={open != null}
           r={openRow}
           now={now}
           lastText={lastText(openRow)}
@@ -711,7 +715,7 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 
 type Draft = { spec: ScheduleSpec | null; dry: boolean; max: string; th: { d1: string; d2: string; d3: string } };
 
-function JobPanel({ r, now, lastText, runButton, onClose }: { r: Row; now: Date; lastText: string; runButton: React.ReactNode; onClose: () => void }) {
+function JobPanel({ open, r, now, lastText, runButton, onClose }: { open: boolean; r: Row; now: Date; lastText: string; runButton: React.ReactNode; onClose: () => void }) {
   const client = useQueryClient();
   const dryQ = useQuery(dryRunStatesQuery);
   const maxQ = useQuery({ ...maxDeletesQuery, enabled: !!r.def.deletes });
@@ -777,7 +781,7 @@ function JobPanel({ r, now, lastText, runButton, onClose }: { r: Row; now: Date;
 
   return (
     <Panel
-      open
+      open={open}
       onClose={onClose}
       backLabel="Jobs"
       kicker={r.def.once ? "Background job · run by hand" : "Background job"}

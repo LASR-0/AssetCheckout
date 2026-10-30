@@ -116,8 +116,12 @@ export function Assets() {
   }
 
   const down = cats.isError;
-  const openModels = open != null ? modelsOf(open) : [];
-  const openPick = open != null ? current(open) : null;
+  // Kept while the panel slides out, so it still has something to show.
+  const [last, setLast] = useState(open);
+  if (open != null && open !== last) setLast(open);
+  const shown = open ?? last;
+  const openModels = shown != null ? modelsOf(shown) : [];
+  const openPick = shown != null ? current(shown) : null;
 
   return (
     <>
@@ -238,14 +242,14 @@ export function Assets() {
         </Sheet>
       </Section>
 
-      {open != null && openPick && (
+      {shown != null && openPick && (
         <Panel
-          open
+          open={open != null}
           onClose={() => setOpen(null)}
           backLabel="Assets"
           kicker="Standard models"
-          title={nameOf(open)}
-          chip={draftChip(state, dirtyIds.includes(open))}
+          title={nameOf(shown)}
+          chip={draftChip(state, dirtyIds.includes(shown))}
           notices={
             <>
               {state === "failed" && (
@@ -269,7 +273,7 @@ export function Assets() {
             note="Tried first"
             models={openModels}
             value={openPick.primary}
-            onPick={(id) => setPick(open, "primary", id)}
+            onPick={(id) => setPick(shown, "primary", id)}
           />
           <ModelPicks
             label="Backup"
@@ -277,7 +281,7 @@ export function Assets() {
             models={openModels}
             value={openPick.backup}
             disabledId={openPick.primary}
-            onPick={(id) => setPick(open, "backup", id)}
+            onPick={(id) => setPick(shown, "backup", id)}
             none="Standard requests stop at the primary"
           />
         </Panel>

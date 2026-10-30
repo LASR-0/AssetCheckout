@@ -136,6 +136,10 @@ export function Accessories() {
     }
   }
 
+  // Kept while the panel slides out, so it still has something to show.
+  const [last, setLast] = useState(open);
+  if (open != null && open !== last) setLast(open);
+  const shown = open ?? last;
   const reqCats = p.categories.filter((c) => p.reqSet.has(c.id));
   const ok = p.health.filter((h) => h.state === "ok");
   const off = p.health.filter((h) => h.state === "off");
@@ -430,14 +434,14 @@ export function Accessories() {
         )}
       </div>
 
-      {open != null && (
+      {shown != null && (
         <Panel
-          open
+          open={open != null}
           onClose={() => setOpen(null)}
           backLabel="Accessories"
           kicker="Standard options · step 2"
-          title={nameOf(open)}
-          chip={draftChip(state, dirtyIds.includes(open))}
+          title={nameOf(shown)}
+          chip={draftChip(state, dirtyIds.includes(shown))}
           notices={
             <>
               {state === "failed" && <SnipeDown onRetry={() => void saveDrafts()}>Couldn&rsquo;t save. Your edits are still here; try Save changes again.</SnipeDown>}
@@ -455,11 +459,11 @@ export function Accessories() {
           }}
         >
           <OptionsEditor
-            categoryId={open}
-            list={optsOf(open)}
+            categoryId={shown}
+            list={optsOf(shown)}
             openRow={openRow}
             onOpenRow={setOpenRow}
-            onEdit={(fn) => edit(open, fn)}
+            onEdit={(fn) => edit(shown, fn)}
           />
         </Panel>
       )}

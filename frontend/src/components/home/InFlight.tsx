@@ -113,7 +113,7 @@ export default function InFlight({ rows, anyRequests, loading, viewer, onOpen }:
                       <Icon name="chevron_right" size={17.5} className="mt-2 text-mut" />
                     </span>
                     <span className="flex w-full items-center gap-2.5 pl-13">
-                      <RouteRail route={route} hideLabel stationWidth="0.875rem" className="flex-none" />
+                      <RouteRail route={route} hideLabel className="w-28 flex-none" />
                       <span className="truncate fs-11.5 font-medium text-tx2">
                         {route.stations[route.current]?.label}
                       </span>

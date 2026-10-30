@@ -153,7 +153,7 @@ function Row({ row, index, kind, canAct, pending, flash, selected, phone, onOpen
           </div>
           <div className="flex min-w-0 items-center gap-2 fs-12.5 whitespace-nowrap text-tx3">
             <span className="flex-none">{r.userName}</span>
-            <RouteRail route={row.route} hideLabel stationWidth="0.8125rem" className="flex-none" />
+            <RouteRail route={row.route} hideLabel className="w-24 flex-none" />
             <span className={cn("min-w-0 truncate fs-12 font-medium", isOver ? "text-stop" : "text-tx2")}>{station}</span>
           </div>
           {showMeta && (

@@ -53,13 +53,19 @@ export function SettingsPanel({ open, layout, onClose, backLabel, kicker, title,
   useEffect(() => {
     if (open || !present) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const t = window.setTimeout(() => setPresent(false), docked || reduce ? 0 : 260);
+    const t = window.setTimeout(() => setPresent(false), reduce ? 0 : 260);
     return () => window.clearTimeout(t);
   }, [open, present, docked]);
 
+  // Focus moves into the panel when it opens, and only then. Tying this to
+  // the effect below re-ran it on every render a parent made with a fresh
+  // onClose, pulling focus out of whatever field was being typed in.
+  useEffect(() => {
+    if (open) ref.current?.focus({ preventScroll: true });
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    ref.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !e.defaultPrevented) onClose();
     };
@@ -67,24 +73,10 @@ export function SettingsPanel({ open, layout, onClose, backLabel, kicker, title,
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!present || (docked && !open)) return null;
+  if (!present) return null;
 
-  return (
-    <aside
-      ref={ref}
-      tabIndex={-1}
-      aria-label={title}
-      aria-hidden={!open || undefined}
-      className={cn(
-        "flex min-h-0 flex-col bg-subtle outline-none",
-        layout === "docked" && "h-full w-[max(32.5rem,34vw)] min-w-0 border-l border-line",
-        layout === "float" &&
-          "absolute inset-y-0 right-0 z-10 w-[min(35rem,100%)] border-l border-line shadow-[-0.25rem_0_0.75rem_var(--shade)]",
-        layout === "phone" && "fixed inset-0 z-45",
-        !docked && (open ? "animate-insp-in" : "pointer-events-none animate-insp-out"),
-        "motion-reduce:animate-none"
-      )}
-    >
+  const body = (
+    <>
       {layout === "phone" && (
         <div className="sticky top-0 z-2 flex h-13 flex-none items-center border-b border-line bg-sheet px-2">
           <button
@@ -132,6 +124,30 @@ export function SettingsPanel({ open, layout, onClose, backLabel, kicker, title,
           {foot.saving ? "Saving…" : "Save changes"}
         </button>
       </div>
+    </>
+  );
+
+  return (
+    <aside
+      ref={ref}
+      tabIndex={-1}
+      aria-label={title}
+      aria-hidden={!open || undefined}
+      className={cn(
+        "bg-subtle outline-none motion-reduce:animate-none",
+        docked
+          ? // The column grows and shrinks; the panel inside keeps its width,
+            // pinned right, so it reads as sliding in rather than unrolling.
+            cn("relative h-full w-[max(32.5rem,34vw)] overflow-hidden border-l border-line", open ? "animate-dock-in" : "pointer-events-none animate-dock-out")
+          : cn(
+              "flex min-h-0 flex-col",
+              layout === "float" && "absolute inset-y-0 right-0 z-10 w-[min(35rem,100%)] border-l border-line shadow-[-0.25rem_0_0.75rem_var(--shade)]",
+              layout === "phone" && "fixed inset-0 z-45",
+              open ? "animate-insp-in" : "pointer-events-none animate-insp-out"
+            )
+      )}
+    >
+      {docked ? <div className="absolute inset-y-0 right-0 flex w-[max(32.5rem,34vw)] min-w-0 flex-col">{body}</div> : body}
     </aside>
   );
 }

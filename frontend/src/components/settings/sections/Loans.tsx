@@ -83,9 +83,13 @@ export function Loans() {
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [draft, setDraft] = useState<LoanDevice | null>(null);
   const [state, setState] = useState<"idle" | "saving" | "failed">("idle");
-  const saved = editing === "new" ? null : editing != null ? devices[editing] : null;
+  // Kept while the panel slides out, so it still has something to show.
+  const [last, setLast] = useState(editing);
+  if (editing != null && editing !== last) setLast(editing);
+  const target = editing ?? last;
+  const saved = target === "new" ? null : target != null ? devices[target] : null;
   const current = draft ?? saved ?? BLANK;
-  const dirty = editing === "new" ? true : !!draft && JSON.stringify(draft) !== JSON.stringify(saved);
+  const dirty = editing === "new" ? true : editing != null && !!draft && JSON.stringify(draft) !== JSON.stringify(saved);
   const patch = (p: Partial<LoanDevice>) => {
     setState("idle");
     setDraft({ ...current, ...p });
@@ -114,7 +118,7 @@ export function Loans() {
     setState("idle");
   };
 
-  const records = useQuery({ ...accessoriesInCategoryQuery(current.categoryId ?? 0), enabled: editing != null && current.categoryId != null });
+  const records = useQuery({ ...accessoriesInCategoryQuery(current.categoryId ?? 0), enabled: target != null && current.categoryId != null });
 
   return (
     <>
@@ -213,15 +217,15 @@ export function Loans() {
 
       {config.data && <Bookings config={config.data} commit={commit} />}
 
-      {editing != null && (
+      {target != null && (
         <Panel
-          open
+          open={editing != null}
           onClose={() => {
             setEditing(null);
             setDraft(null);
           }}
           backLabel="Loans"
-          kicker={editing === "new" ? "New loanable device" : `Loanable device · ${editing + 1} of ${devices.length}`}
+          kicker={target === "new" ? "New loanable device" : `Loanable device · ${target + 1} of ${devices.length}`}
           title={current.displayName.trim() || "New device"}
           chip={draftChip(state, dirty)}
           notices={

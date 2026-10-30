@@ -276,6 +276,10 @@
   --animate-insp-in: insp-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   /* And back out; it holds the end frame until the panel unmounts. */
   --animate-insp-out: insp-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+  /* A docked panel's column opening and closing: it grows from nothing,
+     so the page beside it makes room as the panel slides in. */
+  --animate-dock-in: dock-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-dock-out: dock-out 0.26s cubic-bezier(0.4, 0, 0.6, 1) forwards;
   --animate-toast-in: toast-in 0.16s ease-out;
   /* Popovers, menus and tooltips appearing. */
   --animate-pop-in: pop-in 0.12s ease-out;
@@ -296,6 +300,12 @@
   @keyframes insp-out {
     from { transform: none; }
     to { transform: translateX(100%); }
+  }
+  @keyframes dock-in {
+    from { width: 0; }
+  }
+  @keyframes dock-out {
+    to { width: 0; }
   }
   /* Revealed from the top edge as it moves down. The clip leaves room at the
      sides and bottom for the menu's shadow. */
