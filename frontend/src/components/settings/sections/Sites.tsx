@@ -8,6 +8,7 @@ import { btn } from "@/components/ui/variants";
 import { locationsQuery, siteColoursQuery, stockKeepersFullQuery, stockKeepersQuery, usersQuery } from "@/api/queries";
 import { setSiteColour, setStockKeepersForLocation } from "@/api/settings";
 import type { StockKeeperEntry, StockKeepersConfig } from "@/types/settingsType";
+import type { User } from "@/types/userType";
 import { ChipToggle, SaveNote, Section, Sheet, SnipeDown } from "../parts";
 import { useSave } from "../saveStatus";
 
@@ -49,8 +50,6 @@ export function Sites() {
   const colours = useQuery(siteColoursQuery);
   const [added, setAdded] = useState<Person[]>([]);
   const [removed, setRemoved] = useState<number[]>([]);
-  const [q, setQ] = useState("");
-  const [adding, setAdding] = useState(false);
 
   const config: StockKeepersConfig = keepersQ.data?.config ?? {};
   const cap = keepersQ.data?.maxPerLocation ?? 3;
@@ -96,62 +95,21 @@ export function Sites() {
     }
   };
 
-  const needle = q.trim().toLowerCase();
-  const results = (users.data ?? [])
-    .filter((u) => !cols.some((c) => String(c.userId) === u.id) && (!needle || u.name.toLowerCase().includes(needle)))
-    .slice(0, 8);
-  const pick = (u: { id: string; name: string; email: string | null }) => {
+  const pick = (u: User) => {
     const p = { userId: Number(u.id), name: u.name, email: u.email };
     setAdded((a) => [...a, p]);
     setRemoved((r) => r.filter((x) => x !== p.userId));
-    setAdding(false);
-    setQ("");
   };
 
   const sitesOf = (p: Person) => sites.filter((s) => keepersAt(s.id).some((k) => k.userId === p.userId)).length;
   const noEmail = cols.filter((p) => !p.email);
   const grid = { gridTemplateColumns: `minmax(12.5rem,1.3fr) repeat(${cols.length}, minmax(7.75rem,1fr)) 5.625rem 8.75rem` };
 
+  // Rendered in two places, the table and the phone list, each with its own
+  // open state: one shared state opened both, and the hidden one's search box
+  // took focus and dismissed the visible one.
   const addPerson = (
-    <Popover open={adding} onOpenChange={setAdding}>
-      <PopoverTrigger asChild>
-        <button type="button" className={btn({ size: "sm", className: "h-7.5 rounded-8 pr-2.5 pl-1.5 fs-11 max-desk:h-11 max-desk:w-full max-desk:rounded-10 max-desk:fs-12" })}>
-          <Icon name="person_add" size={15} />
-          Add person
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-70 gap-1 p-1.5">
-        <label className="flex h-8.5 items-center gap-2 rounded-8 border border-strong px-2 text-mut focus-within:border-brand">
-          <Icon name="search" size={15} />
-          <input
-            autoFocus
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search people…"
-            aria-label="Search people"
-            className="min-w-0 flex-1 border-0 bg-transparent font-sans fs-11.5 text-tx outline-none"
-          />
-        </label>
-        {users.isError ? (
-          <div className="flex items-center gap-2 p-2 fs-11 text-tx3">
-            <Icon name="sync_problem" size={14} className="text-stop" />
-            People search needs Snipe-IT.
-          </div>
-        ) : (
-          results.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => pick(u)}
-              className="flex w-full cursor-pointer flex-col rounded-7 border-0 bg-transparent p-2 text-left font-sans fs-11.5 text-tx outline-none hover:bg-hover focus-visible:bg-hover"
-            >
-              <span className="font-medium">{u.name}</span>
-              <span className="fs-10.5 text-mut">{u.email || "No email on record"}</span>
-            </button>
-          ))
-        )}
-      </PopoverContent>
-    </Popover>
+    <AddPerson users={users.data ?? []} failed={users.isError} exclude={cols.map((c) => String(c.userId))} onPick={pick} />
   );
 
   return (
@@ -383,3 +341,56 @@ function Swatch({ label, on, onClick, fill }: { label: string; on: boolean; onCl
   );
 }
 
+function AddPerson({ users, failed, exclude, onPick }: { users: User[]; failed: boolean; exclude: string[]; onPick: (u: User) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+
+  const needle = q.trim().toLowerCase();
+  const results = users.filter((u) => !exclude.includes(u.id) && (!needle || u.name.toLowerCase().includes(needle))).slice(0, 8);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={btn({ size: "sm", className: "h-7.5 rounded-8 pr-2.5 pl-1.5 fs-11 max-desk:h-11 max-desk:w-full max-desk:rounded-10 max-desk:fs-12" })}>
+          <Icon name="person_add" size={15} />
+          Add person
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-70 gap-1 p-1.5">
+        <label className="flex h-8.5 items-center gap-2 rounded-8 border border-strong px-2 text-mut focus-within:border-brand">
+          <Icon name="search" size={15} />
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search people…"
+            aria-label="Search people"
+            className="min-w-0 flex-1 border-0 bg-transparent font-sans fs-11.5 text-tx outline-none"
+          />
+        </label>
+        {failed ? (
+          <div className="flex items-center gap-2 p-2 fs-11 text-tx3">
+            <Icon name="sync_problem" size={14} className="text-stop" />
+            People search needs Snipe-IT.
+          </div>
+        ) : (
+          results.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => {
+                onPick(u);
+                setOpen(false);
+                setQ("");
+              }}
+              className="flex w-full cursor-pointer flex-col rounded-7 border-0 bg-transparent p-2 text-left font-sans fs-11.5 text-tx outline-none hover:bg-hover focus-visible:bg-hover"
+            >
+              <span className="font-medium">{u.name}</span>
+              <span className="fs-10.5 text-mut">{u.email || "No email on record"}</span>
+            </button>
+          ))
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
