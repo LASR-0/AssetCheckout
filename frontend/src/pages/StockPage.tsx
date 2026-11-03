@@ -178,11 +178,9 @@ export default function StockPage() {
 
   const keeper = site && stock.admin && !stock.keeps(site.id) && stock.keepersKnown ? stock.keeperOf(site.id) : null;
   const covering = !!site && stock.admin && !stock.keeps(site.id);
-  const sub = !stock.canUse
-    ? "For stock keepers: what is waiting at your site, and what is on the shelf."
-    : site
-      ? `What's at ${site.name}, who's holding it, and what's waiting on ${covering ? "the keeper" : "you"}.`
-      : "Pick a location to act as its stock keeper.";
+  const sub = site
+    ? `What's at ${site.name}, who's holding it, and what's waiting on ${covering ? "the keeper" : "you"}.`
+    : "Pick a location to act as its stock keeper.";
 
   const docket = (row: LogRow) => <Docket key={row.r.id} row={row} viewer={viewer} intent="look" onLanded={landed} />;
 
@@ -193,7 +191,7 @@ export default function StockPage() {
           <h1 className="m-0 font-head fs-21 font-medium tracking-head">Stock</h1>
           <p className="m-0 mt-0.75 fs-13 text-pretty text-mut">{sub}</p>
         </div>
-        {stock.canUse && <SitePicker stock={stock} onPick={pickSite} className="phone:w-70" />}
+        <SitePicker stock={stock} onPick={pickSite} className="phone:w-70" />
       </div>
 
       {covering && (
@@ -209,14 +207,7 @@ export default function StockPage() {
         </div>
       )}
 
-      {stock.authLoading ? null : !stock.canUse ? (
-        <Notice icon="inventory_2">
-          <div className="fs-15 font-medium">You aren't assigned as a stock keeper.</div>
-          <div className="fs-13.5 leading-[1.55] text-pretty text-tx3">
-            If this looks wrong, ask IT to assign you to your location under Settings → Stock Keepers.
-          </div>
-        </Notice>
-      ) : !site ? (
+      {stock.authLoading ? null : !site ? (
         <Notice icon="location_on">
           <div className="fs-13.5 leading-[1.55] text-pretty text-tx2">
             You can act as stock keeper anywhere, so pick a location above to see its handover queue and what Snipe-IT records there.

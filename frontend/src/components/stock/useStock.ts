@@ -108,8 +108,6 @@ export function useStock() {
   return {
     viewer,
     admin,
-    /** Keeps stock somewhere, or is an admin: the page is theirs to use. */
-    canUse: admin || assigned.length > 0,
     keeps: (id: number) => assigned.some((l) => l.id === id),
     canAct: site != null && canActAsStockKeeper(viewer.role, assigned, site.id),
     sites,

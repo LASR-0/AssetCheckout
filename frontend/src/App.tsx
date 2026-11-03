@@ -70,14 +70,14 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* The stock keeper's own page. requireRole={false} matches the
-                  requests route: a keeper is usually a REQUESTER, and the page
-                  gates itself on the assignment rather than on the role — see the
-                  empty state, which explains what to do instead. */}
+              {/* The stock keeper's own page. requireRole={false} because a
+                  keeper is usually a REQUESTER: it's gated on the assignment
+                  rather than the role, and anyone else gets /no-access, which
+                  says what to ask IT for. */}
               <Route
                 path="/stock"
                 element={
-                  <ProtectedRoute requireRole={false}>
+                  <ProtectedRoute requireRole={false} requireStockKeeper>
                     <StockPage />
                   </ProtectedRoute>
                 }
