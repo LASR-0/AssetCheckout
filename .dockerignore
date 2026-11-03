@@ -1,0 +1,34 @@
+# Keep the build context to what a clean checkout has. Without this file,
+# Docker copies local secrets, data and host-built output into the build stage
+# and its layer cache.
+
+# Installed and built on the host; the image installs and builds its own.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+backend/generated
+
+# Secrets. frontend/.env stays in: Vite bakes its VITE_ branding values into
+# the build, and they are public by design (see README).
+**/.env
+**/.env.local
+**/.env.*.local
+!frontend/.env
+backend/cert
+
+# Local data: dev databases and supplier quotes.
+backend/data
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite
+**/*.sqlite3
+
+# Not part of the app.
+.git
+misc
+prototype
+Documentation
+**/*.log
+**/*:Zone.Identifier
