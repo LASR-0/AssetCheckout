@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -25,7 +25,17 @@ import { Icon } from "@/components/ui/icon";
 //  Floating, its content renders 10% larger than the page's: it is portaled
 //  out of the page column, so it misses the page's wide-screen growth, and
 //  at 1:1 it read as small beside the list it was opened from.
+//
+//  A page can pass `beside`, the element the panel opens next to. Then on a
+//  wide screen it reaches left to just short of that element instead of
+//  leaving a strip of empty page between them, and its content grows with
+//  the page's zoom (never below the 1.1). Its minimum width grows with it,
+//  so larger text never means a narrower column. Where the element isn't
+//  laid out (phones, or display: contents) none of this applies.
 ///  +-----------------------------------------------------------------+
+
+/** The space left between the panel and the element it opens beside. */
+const GAP_PX = 16;
 
 type InspectorProps = {
   open: boolean;
@@ -36,6 +46,8 @@ type InspectorProps = {
   backLabel?: string;
   /** Laid out in the page's flow (a grid column) instead of floating. */
   docked?: boolean;
+  /** Floating, the element it opens beside: it widens up to it. See the header. */
+  beside?: RefObject<HTMLElement | null>;
   className?: string;
   children: ReactNode;
 };
@@ -46,6 +58,7 @@ export function Inspector({
   label,
   backLabel = "Back",
   docked = false,
+  beside,
   className,
   children,
 }: InspectorProps) {
@@ -79,6 +92,33 @@ export function Inspector({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Written to the panel as custom properties rather than kept in state:
+  // they follow the page's layout, not anything React renders.
+  useLayoutEffect(() => {
+    const panel = ref.current;
+    const target = beside?.current;
+    if (!present || docked || !panel || !target) return;
+
+    const measure = () => {
+      const box = target.getBoundingClientRect();
+      if (box.width === 0) {
+        panel.style.removeProperty("--insp-reach");
+        panel.style.removeProperty("--insp-z");
+        return;
+      }
+      const zoom = (target as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom ?? 1;
+      panel.style.setProperty("--insp-reach", `${Math.max(0, window.innerWidth - box.right - GAP_PX * zoom)}px`);
+      panel.style.setProperty("--insp-z", String(Math.max(1.1, zoom)));
+    };
+
+    measure();
+    // The root's box follows the viewport, so this also catches a resize.
+    const observer = new ResizeObserver(measure);
+    observer.observe(target);
+    observer.observe(document.documentElement);
+    return () => observer.disconnect();
+  }, [present, docked, beside]);
+
   if (!present) return null;
 
   const panel = (
@@ -91,7 +131,7 @@ export function Inspector({
         "overflow-auto bg-canvas outline-none",
         docked
           ? "h-full border-l border-line"
-          : "fixed inset-0 z-45 phone:inset-auto phone:top-13 phone:right-0 phone:bottom-12 phone:w-[min(33rem,100vw)] phone:border-l phone:border-line phone:shadow-[-4px_0_12px_var(--shade)] phone:[clip-path:inset(0_0_0_-1.5rem)] bar:top-18 motion-reduce:animate-none",
+          : "fixed inset-0 z-45 phone:inset-auto phone:top-13 phone:right-0 phone:bottom-12 phone:w-[min(100vw,max(calc(33rem*var(--insp-z,1.1)/1.1),var(--insp-reach,0px)))] phone:border-l phone:border-line phone:shadow-[-4px_0_12px_var(--shade)] phone:[clip-path:inset(0_0_0_-1.5rem)] bar:top-18 motion-reduce:animate-none",
         !docked && (open ? "animate-insp-in" : "pointer-events-none animate-insp-out"),
         className
       )}
@@ -108,7 +148,7 @@ export function Inspector({
           </button>
         </div>
       )}
-      <div className={cn("flex flex-col gap-3 p-3 phone:p-4", !docked && "phone:[zoom:1.1]")}>{children}</div>
+      <div className={cn("flex flex-col gap-3 p-3 phone:p-4", !docked && "phone:[zoom:var(--insp-z,1.1)]")}>{children}</div>
     </aside>
   );
 

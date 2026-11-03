@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,8 @@ type Props = {
   row: Row | null;
   viewer: Viewer;
   busy: boolean;
+  /** Home's right-hand column, which the panel widens up to. */
+  beside?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onAct: (row: Row) => void;
 };
@@ -53,7 +55,7 @@ function facts(row: Row): Fact[] {
  * Read-only apart from the requester's own next step, which is the same
  * action as the "Needs you" card. Everything else lives in the request log.
  */
-export default function RequestInspector({ row: current, viewer, busy, onClose, onAct }: Props) {
+export default function RequestInspector({ row: current, viewer, busy, beside, onClose, onAct }: Props) {
   const { data: siteColours } = useQuery(siteColoursQuery);
   // The last request shown, so the panel still has it while it slides out.
   const [last, setLast] = useState(current);
@@ -71,7 +73,7 @@ export default function RequestInspector({ row: current, viewer, busy, onClose, 
   const site = r.userLocationName?.trim();
 
   return (
-    <Inspector open={!!current} onClose={onClose} label={`Request #${r.id}`} backLabel="Home">
+    <Inspector open={!!current} onClose={onClose} label={`Request #${r.id}`} backLabel="Home" beside={beside}>
       <InspectorHeader
         code={`#${r.id}`}
         title={requestTitle(r)}

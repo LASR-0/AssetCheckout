@@ -199,6 +199,7 @@ export default function Home() {
         row={inspected}
         viewer={home.viewer}
         busy={inspected != null && busyId === inspected.r.id}
+        beside={sideRef}
         onClose={() => setInspecting(null)}
         onAct={act}
       />
