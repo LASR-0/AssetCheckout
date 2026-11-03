@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Page } from "@/components/shell/Page";
 import { useToast } from "@/components/ui/toast-context";
-import { useTourReady } from "@/components/tour/TourProvider";
-import EnterSelfProcuredDetailsDialog from "@/components/dialogs/EnterSelfProcuredDetailsDialog";
+import { useTourReady } from "@/components/tour/tourContext";
+import PurchaseDetails from "@/components/home/PurchaseDetails";
 import { CountTiles, Greeting } from "@/components/home/HomeHead";
 import NeedsYou from "@/components/home/NeedsYou";
 import InFlight from "@/components/home/InFlight";
@@ -205,7 +205,7 @@ export default function Home() {
 
       <ReportProblem start={flow} onClose={() => setFlow(null)} assets={assets} accessories={accessories} />
 
-      <EnterSelfProcuredDetailsDialog
+      <PurchaseDetails
         request={purchasing}
         open={purchasing !== null}
         onOpenChange={(next) => {

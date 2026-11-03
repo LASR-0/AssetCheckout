@@ -1,11 +1,10 @@
 /*  +-----------------------------------------------------------------+
- *  |                  PALETTES ON THE NEW TOKENS                      |
+ *  |                  PALETTES                                        |
  *  +-----------------------------------------------------------------+
  *
- *  KSB, Grayscale and Miramare, expressed in the token set the rebuilt pages
- *  use (styles/tokens.css). Selected by `data-preset` on <html>, exactly as
- *  the old presets.css is; that file's blocks restyle the old tokens and go
- *  with them in Phase 9.
+ *  KSB, Grayscale and Miramare, as overrides of the tokens in
+ *  styles/tokens.css. Selected by `data-preset` on <html> (set before first
+ *  paint by index.html, then by hooks/usePreset).
  *
  *  A PALETTE DECLARES ONLY WHAT IT CHANGES. Everything else falls through to
  *  Platinum in tokens.css. Unlayered on purpose: tokens.css sits in
@@ -178,4 +177,20 @@
   --stop: #E8937F;
   --stop-bg: #4A2B25;
   --stop-line: #6C3F35;
+}
+
+/* ── Swapping ───────────────────────────────────────────────────────────
+   Set for a single frame while the preset attribute changes. Without it the
+   elements that carry `transition-colors` animate to the new palette while
+   everything else jumps, so the page arrives in two waves and reads as a
+   glitch. Suppressing transitions makes the swap instantaneous and whole.
+
+   Not a cross-fade: theme-transition.ts interpolates between the light and
+   dark palettes, which is a different journey from one preset to another. */
+
+html.preset-swapping,
+html.preset-swapping *,
+html.preset-swapping *::before,
+html.preset-swapping *::after {
+  transition: none !important;
 }

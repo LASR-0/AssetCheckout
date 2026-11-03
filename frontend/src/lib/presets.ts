@@ -3,8 +3,7 @@
 ///  +-----------------------------------------------------------------+
 //
 //  A preset is a set of palette overrides — a `[data-preset="…"]` block in
-//  styles/palettes.css (and, until Phase 9, the old tokens' blocks in
-//  styles/presets.css). This file is only the CATALOGUE: which ones exist,
+//  styles/palettes.css. This file is only the CATALOGUE: which ones exist,
 //  what to call them, and what to show in the picker.
 //
 //  THE COLOURS LIVE IN CSS, NOT HERE. Two reasons. The cascade does the work:

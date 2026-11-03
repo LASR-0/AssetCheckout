@@ -48,7 +48,7 @@ export function Modal({ open, onOpenChange, label, children, width = 560, classN
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-80 bg-scrim data-[state=open]:animate-fade-in motion-reduce:animate-none" />
+        <DialogPrimitive.Overlay data-slot="modal-overlay" className="fixed inset-0 z-80 bg-scrim data-[state=open]:animate-fade-in motion-reduce:animate-none" />
         {/* Positioning wrapper rather than translate-centring, so the frame
             can be a bottom sheet on phones and grow to the viewport height. */}
         <div className="pointer-events-none fixed inset-0 z-80 flex items-end justify-center pt-6 phone:items-center phone:p-6">

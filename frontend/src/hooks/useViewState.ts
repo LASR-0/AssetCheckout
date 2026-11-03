@@ -110,8 +110,11 @@ export function useViewState<T>(
 
   // Latest state, so the scroll listener can persist the current value
   // without being torn down and re-registered on every keystroke.
+  // Updated in a layout effect, which runs before the effect that writes it.
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useLayoutEffect(() => {
+    stateRef.current = state;
+  });
 
   const write = useCallback(
     (scrollY: number) => {

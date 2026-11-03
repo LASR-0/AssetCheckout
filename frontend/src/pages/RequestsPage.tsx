@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/ui/inspector";
-import { useTourReady } from "@/components/tour/TourProvider";
+import { useTourReady } from "@/components/tour/tourContext";
 import { queryClient } from "@/api/queryClient";
 import { requestsQuery } from "@/api/queries";
 import { markRequestSeen } from "@/api/requests";

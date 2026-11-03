@@ -109,6 +109,17 @@ export function isTourRunning(): boolean {
   return active?.isActive() ?? false;
 }
 
+// Who wants to know when a tour starts or ends: the provider, through
+// useSyncExternalStore, so the tour button can say "running" without React
+// keeping a copy of state that lives here.
+const listeners = new Set<() => void>();
+const notify = () => listeners.forEach((l) => l());
+
+export function subscribeTour(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function stopTour(): void {
   active?.destroy();
   active = null;
@@ -167,12 +178,14 @@ export function startTour({ steps, onDone }: StartOptions): boolean {
     },
     onDestroyed: () => {
       active = null;
+      notify();
       onDone();
     },
   });
 
   active = instance;
   instance.drive();
+  notify();
 
   return true;
 }

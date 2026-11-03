@@ -1,11 +1,10 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,8 +13,9 @@ import { markTourSeen } from "@/api/tours";
 import { tourStateQuery } from "@/api/queries";
 import { queryClient } from "@/api/queryClient";
 import { planTour, TOURS } from "@/lib/tours/registry";
-import { startTour, stopTour, isTourRunning } from "@/lib/tours/driverAdapter";
+import { startTour, stopTour, isTourRunning, subscribeTour } from "@/lib/tours/driverAdapter";
 import type { TourId } from "@/lib/tours/types";
+import { TourContext, type TourContextValue } from "./tourContext";
 
 ///  +-----------------------------------------------------------------+
 ///  |             WHEN A TOUR RUNS, AND WHO SAYS SO                   |
@@ -62,37 +62,6 @@ const NO_SIGNAL_DELAY_MS = 600;
  */
 const SLOW_PAGE_CEILING_MS = 20000;
 
-type TourContextValue = {
-  /** What the button would run here. Null hides it. */
-  tourId: TourId | null;
-  isRunning: boolean;
-  /** Run this page's tour now, whether or not it has been seen. */
-  run: () => void;
-  /** Pages call this to report whether their async content has landed. */
-  reportReady: (ready: boolean) => void;
-};
-
-const TourContext = createContext<TourContextValue | null>(null);
-
-export function useTour(): TourContextValue {
-  const ctx = useContext(TourContext);
-  if (!ctx) throw new Error("useTour must be used inside a TourProvider");
-  return ctx;
-}
-
-/**
- * Report whether this page's content has arrived.
- *
- * Pages with nothing to wait for need not call it — the deadline covers them.
- */
-export function useTourReady(ready: boolean): void {
-  const { reportReady } = useTour();
-
-  useEffect(() => {
-    reportReady(ready);
-  }, [ready, reportReady]);
-}
-
 export default function TourProvider({ children }: { children: React.ReactNode }) {
   const { role, isLoading } = useAuth();
   const { pathname } = useLocation();
@@ -104,22 +73,26 @@ export default function TourProvider({ children }: { children: React.ReactNode }
   const enabled = tourState.data?.enabled ?? false;
   const identified = tourState.data?.identified ?? false;
   const seen = useMemo(() => tourState.data?.seen ?? [], [tourState.data]);
-  const [running, setRunning] = useState(false);
+  // Driver owns whether a tour is up; React only listens.
+  const running = useSyncExternalStore(subscribeTour, isTourRunning);
 
   // null: no page has claimed it has anything to wait for.
   // false: a page has, and it has not arrived.
   // true:  go.
-  const [ready, setReady] = useState<boolean | null>(null);
+  //
+  // Keyed by pathname, so a new page starts at null without an effect to
+  // reset it — an effect that, running after the page's own, would also have
+  // wiped the page's first report.
+  const [readiness, setReadiness] = useState<{ pathname: string; ready: boolean } | null>(null);
+  const ready = readiness?.pathname === pathname ? readiness.ready : null;
+  const reportReady = useCallback(
+    (r: boolean) => setReadiness({ pathname, ready: r }),
+    [pathname]
+  );
 
   // Which pathname has already had its shot this session. Without it, any
   // re-render between starting and recording would start a second tour.
   const startedFor = useRef<string | null>(null);
-
-  // A new page is a new decision, and a new readiness question — including
-  // whether anybody is going to answer it.
-  useEffect(() => {
-    setReady(null);
-  }, [pathname]);
 
   // Leaving the page mid-tour would strand an overlay pointing at elements
   // that no longer exist.
@@ -140,11 +113,12 @@ export default function TourProvider({ children }: { children: React.ReactNode }
 
       const steps = ids.flatMap((id) => TOURS[id].steps);
 
-      const started = startTour({
+      // If nothing survives resolution — the page is barer than any fallback
+      // anticipated — nothing starts and onDone never fires, so the tour is
+      // not marked as seen and can try again another day.
+      startTour({
         steps,
         onDone: () => {
-          setRunning(false);
-
           // Optimistic, and not only for responsiveness: it is what stops a
           // failed POST restarting the tour on the next navigation.
           queryClient.setQueryData(tourStateQuery.queryKey, (s) =>
@@ -158,10 +132,6 @@ export default function TourProvider({ children }: { children: React.ReactNode }
           }
         },
       });
-
-      // Nothing survived resolution: the page is barer than any fallback
-      // anticipated. Not marked as seen, so it can try again another day.
-      if (started) setRunning(true);
     },
     []
   );
@@ -180,26 +150,26 @@ export default function TourProvider({ children }: { children: React.ReactNode }
     if (startedFor.current === pathname) return;
     if (isTourRunning()) return;
 
-    // Never over an open dialog: Radix portals to the body at z-50 and the
-    // tour's overlay sits far above it, so the tour would paint over the
-    // thing the user is actually looking at.
-    if (document.querySelector('[data-slot="dialog-overlay"]')) return;
+    // Never over an open modal: Radix portals it to the body and the tour's
+    // overlay sits far above it, so the tour would paint over the thing the
+    // user is actually looking at.
+    if (document.querySelector('[data-slot="modal-overlay"]')) return;
 
     if (ready !== true) {
       // A page that promised to report gets the long wait; one that never
       // registered gets just enough time to paint.
       const delay = ready === null ? NO_SIGNAL_DELAY_MS : SLOW_PAGE_CEILING_MS;
-      const timer = window.setTimeout(() => setReady(true), delay);
+      const timer = window.setTimeout(() => reportReady(true), delay);
       return () => window.clearTimeout(timer);
     }
 
     startedFor.current = pathname;
     begin(plan.run);
-  }, [isLoading, loaded, enabled, identified, plan, pathname, ready, begin]);
+  }, [isLoading, loaded, enabled, identified, plan, pathname, ready, reportReady, begin]);
 
   const value = useMemo<TourContextValue>(
-    () => ({ tourId: plan.tourId, isRunning: running, run, reportReady: setReady }),
-    [plan.tourId, running, run]
+    () => ({ tourId: plan.tourId, isRunning: running, run, reportReady }),
+    [plan.tourId, running, run, reportReady]
   );
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;

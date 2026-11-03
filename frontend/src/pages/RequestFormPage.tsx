@@ -12,7 +12,7 @@ import { iconForCategory, isPhoneCategory, isTabletCategory } from "@/lib/catego
 import { resolveMobileNumber } from "@/lib/mobileNumber";
 import { previewRoute } from "@/lib/formRoute";
 import { useMobileFilterConfig } from "@/hooks/useMobileFilterConfig";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import type { AssetCategory } from "@/types/categoriesType";
 import { FormLayout, type FormError } from "@/components/forms/FormLayout";
 import { goToSection } from "@/components/forms/helpers";

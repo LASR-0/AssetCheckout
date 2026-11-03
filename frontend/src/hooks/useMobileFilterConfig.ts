@@ -13,7 +13,7 @@ import {
 //
 //  Client access to the admin-configurable mobile-filter setting
 //  (GET/PUT /api/settings/mobile-filter). One cached query, so many mounts
-//  (UserSelect, RequestFormPage) share one fetch per session. On ANY
+//  (RequestFormPage, EditStep) share one fetch per session. On ANY
 //  failure the AU defaults apply — the feature degrades to previous
 //  behaviour, it never blocks checkout.
 ///  +-----------------------------------------------------------------+

@@ -71,7 +71,7 @@ export function applyPreset(id: PresetId): void {
 }
 
 /** As above, but suppressing transitions so the new palette arrives in one
- *  piece rather than in two waves — see `.preset-swapping` in presets.css. */
+ *  piece rather than in two waves — see `.preset-swapping` in palettes.css. */
 function swapPreset(id: PresetId): void {
   const root = document.documentElement;
   root.classList.add("preset-swapping");

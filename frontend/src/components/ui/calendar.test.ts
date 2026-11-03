@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CALENDAR_CLASS_NAMES as C } from "./calendar";
+import { CALENDAR_CLASS_NAMES as C } from "./calendarClasses";
 
 ///  +-----------------------------------------------------------------+
 ///  |        THE MONTH ARROWS ARE POSITIONED, NOT LAID OUT            |

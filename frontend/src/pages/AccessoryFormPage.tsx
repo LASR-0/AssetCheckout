@@ -13,7 +13,7 @@ import {
 import type { AccessoryOptionChoice } from "@/api/accessories";
 import { iconForCategory } from "@/lib/categoryIcon";
 import { previewRoute } from "@/lib/formRoute";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import type { AccessoryCategory } from "@/types/accessoriesType";
 import { FormLayout, type FormError } from "@/components/forms/FormLayout";
 import { goToSection } from "@/components/forms/helpers";

@@ -2,7 +2,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import { Field, FieldError, FormSection, Question } from "./FormSection";
 import { PersonPicker } from "./PersonPicker";
 

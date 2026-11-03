@@ -7,7 +7,7 @@ import { InputGroupAddon } from "@/components/ui/input-group";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { siteColoursQuery } from "@/api/queries";
 import { scrollRoot } from "@/lib/scrollRoot";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import { initials } from "./helpers";
 
 ///  +-----------------------------------------------------------------+

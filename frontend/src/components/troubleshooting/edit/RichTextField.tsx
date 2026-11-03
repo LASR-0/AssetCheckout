@@ -41,11 +41,7 @@ export default function RichTextField(props: RichTextFieldProps) {
         // The text, in place, at the size it will be. A spinner here would
         // make the page flicker through a hole every time edit mode opens;
         // this only differs from the loaded editor by not being typeable yet.
-        <div
-          className={`rounded-md border border-dashed border-outline/60 px-2 py-1 opacity-60 ${
-            props.className ?? ""
-          }`}
-        >
+        <div className={`rounded-10 border border-dashed border-brand-line bg-sheet px-3 py-2.5 opacity-60 ${props.className ?? ""}`}>
           {props.value || props.placeholder || ""}
         </div>
       }

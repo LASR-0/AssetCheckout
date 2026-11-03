@@ -8,7 +8,7 @@ import CountBadge from "@/components/ui/countbadge";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useTour } from "@/components/tour/TourProvider";
+import { useTour } from "@/components/tour/tourContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useActionCounts } from "@/hooks/useActionCounts";
 import { isStockKeeper } from "@/lib/permissions";

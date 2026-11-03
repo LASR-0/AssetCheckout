@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import { PersonPicker } from "./PersonPicker";
 
 export type ForMode = "me" | "other";

@@ -363,8 +363,8 @@ function ComboboxChips({
       data-slot="combobox-chips"
       className={cn(
         // No focus ring — this was the purple one. `focus-within:ring-ring/50`
-        // compiles to nothing (--ring lives in App.css, which main.tsx never
-        // imports), so `focus-within:ring-3` supplied a width with no colour
+        // compiled to nothing (there is no --ring token), so
+        // `focus-within:ring-3` supplied a width with no colour
         // and fell through to Tailwind's `var(--tw-ring-color, currentcolor)`.
         // comboboxfield.tsx then set --tw-ring-color globally on the field via
         // `!ring-purple-900`, and that's what filled it in. Both halves are

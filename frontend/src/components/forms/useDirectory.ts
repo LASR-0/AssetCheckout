@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usersQuery } from "@/api/queries";
 import { useAuth } from "@/hooks/useAuth";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 
 const NO_USERS: User[] = [];
 

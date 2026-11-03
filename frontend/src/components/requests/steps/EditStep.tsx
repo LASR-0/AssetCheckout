@@ -8,7 +8,7 @@ import { ChoiceChip } from "@/components/ui/pills";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { PersonPicker } from "@/components/forms/PersonPicker";
 import { useDirectory } from "@/components/forms/useDirectory";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import { accessoryCategoriesForUserQuery, accessoryOptionsQuery, assetCategoriesQuery } from "@/api/queries";
 import { editRequest, type EditRequestPayload } from "@/api/requests";
 import { canEditRequestShape } from "@/lib/permissions";

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/ui/inspector";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast-context";
-import { useTourReady } from "@/components/tour/TourProvider";
+import { useTourReady } from "@/components/tour/tourContext";
 import { invalidateWorkflow } from "@/api/queries";
 import { markReadyToCollect } from "@/api/requests";
 import { returnLoan } from "@/api/loans";

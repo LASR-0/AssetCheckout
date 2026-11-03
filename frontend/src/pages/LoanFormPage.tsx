@@ -14,7 +14,7 @@ import { iconForCategory } from "@/lib/categoryIcon";
 import { countDays, toDateString } from "@/lib/format";
 import { previewRoute, weekdayDate } from "@/lib/formRoute";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import type { User } from "@/components/request-form/UserSelect";
+import type { User } from "@/types/userType";
 import { FormLayout, type FormError } from "@/components/forms/FormLayout";
 import { goToSection } from "@/components/forms/helpers";
 import { Field, FieldError, FormSection, Question } from "@/components/forms/FormSection";
