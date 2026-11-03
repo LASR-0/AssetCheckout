@@ -242,3 +242,25 @@ export async function setSiteColour(locationId: number, colour: string | null): 
   queryClient.setQueryData(["reference", "site-colours"], data.colours);
   return data.colours;
 }
+
+// ---- dev settings (development builds only) -------------------------------
+
+/** Switches that take a guard out of the way on a dev instance. The server
+ *  ignores them, and answers 404, outside development. */
+export type DevSettings = {
+  /** Log each email instead of sending it. */
+  suppressEmail: boolean;
+  /** Let the requester be their own approver. */
+  allowSelfApproval: boolean;
+};
+
+export async function getDevSettings(): Promise<DevSettings> {
+  return apiFetch<DevSettings>("/api/settings/dev");
+}
+
+/** Change one or both. Admin only. */
+export async function setDevSettings(patch: Partial<DevSettings>): Promise<DevSettings> {
+  const data = await apiFetch<DevSettings>("/api/settings/dev", { method: "PUT", body: patch });
+  queryClient.setQueryData(["settings", "dev"], data);
+  return data;
+}

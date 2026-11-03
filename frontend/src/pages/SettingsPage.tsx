@@ -12,6 +12,7 @@ import { PanelHostContext, SaveContext, useSave, useSaveStore, type PanelHost } 
 import { useAccessoryPipeline } from "@/components/settings/accessoryPipeline";
 import { Appearance } from "@/components/settings/sections/Appearance";
 import { DevAuth } from "@/components/settings/sections/DevAuth";
+import { DevSwitches } from "@/components/settings/sections/DevSwitches";
 import { Assets } from "@/components/settings/sections/Assets";
 import { Accessories } from "@/components/settings/sections/Accessories";
 import { Sites } from "@/components/settings/sections/Sites";
@@ -49,7 +50,7 @@ const NAV: { group: string; dev?: boolean; items: { key: Key; label: string; ico
   { group: "Automation", items: [{ key: "jobs", label: "Jobs & integrations", icon: "schedule" }] },
   { group: "Insight", items: [{ key: "insight", label: "Troubleshooting & feedback", icon: "insights" }] },
   { group: "You", items: [{ key: "appearance", label: "Appearance", icon: "palette" }] },
-  { group: "Developer", dev: true, items: [{ key: "dev", label: "Dev Auth", icon: "key" }] },
+  { group: "Developer", dev: true, items: [{ key: "dev", label: "Dev tools", icon: "key" }] },
 ];
 
 const TITLES: Record<Key, [string, string]> = {
@@ -60,7 +61,7 @@ const TITLES: Record<Key, [string, string]> = {
   jobs: ["Jobs & integrations", "Background jobs, their schedules and history, and the two outbound integrations."],
   insight: ["Troubleshooting & feedback", "How the troubleshooting library is used, and what staff say about Checkout."],
   appearance: ["Appearance", "How Checkout looks for you on this browser."],
-  dev: ["Dev Auth", "Sign in as someone else to test their view."],
+  dev: ["Dev tools", "Switch off the guards that get in the way of testing, and sign in as someone else."],
 };
 
 const SECTIONS: Record<Key, () => ReactNode> = {
@@ -71,7 +72,12 @@ const SECTIONS: Record<Key, () => ReactNode> = {
   jobs: () => <Jobs />,
   insight: () => <Insight />,
   appearance: () => <Appearance staff={false} />,
-  dev: () => <DevAuth />,
+  dev: () => (
+    <>
+      <DevSwitches />
+      <DevAuth />
+    </>
+  ),
 };
 
 const isKey = (s: string | undefined): s is Key => !!s && s in TITLES;
@@ -88,7 +94,7 @@ export default function SettingsPage() {
 
   if (isLoading) return null;
 
-  // Anyone but an admin: Appearance, and Dev Auth in a development build.
+  // Anyone but an admin: Appearance, and impersonation in a development build.
   if (!admin) {
     if (section) return <Navigate to="/settings" replace />;
     return (

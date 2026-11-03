@@ -96,7 +96,7 @@ export function Sites() {
   };
 
   const pick = (u: User) => {
-    const p = { userId: Number(u.id), name: u.name, email: u.email };
+    const p = { userId: u.id, name: u.name, email: u.email };
     setAdded((a) => [...a, p]);
     setRemoved((r) => r.filter((x) => x !== p.userId));
   };
@@ -109,7 +109,7 @@ export function Sites() {
   // open state: one shared state opened both, and the hidden one's search box
   // took focus and dismissed the visible one.
   const addPerson = (
-    <AddPerson users={users.data ?? []} failed={users.isError} exclude={cols.map((c) => String(c.userId))} onPick={pick} />
+    <AddPerson users={users.data ?? []} failed={users.isError} exclude={cols.map((c) => c.userId)} onPick={pick} />
   );
 
   return (
@@ -341,7 +341,7 @@ function Swatch({ label, on, onClick, fill }: { label: string; on: boolean; onCl
   );
 }
 
-function AddPerson({ users, failed, exclude, onPick }: { users: User[]; failed: boolean; exclude: string[]; onPick: (u: User) => void }) {
+function AddPerson({ users, failed, exclude, onPick }: { users: User[]; failed: boolean; exclude: number[]; onPick: (u: User) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 

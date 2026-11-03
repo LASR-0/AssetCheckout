@@ -124,7 +124,7 @@ export function PersonPicker({ users, value, onChange, placeholder, label, sub, 
       value={null}
       onValueChange={(u) => u && onChange(u)}
       itemToStringLabel={(u) => u.name}
-      itemToStringValue={(u) => u.id}
+      itemToStringValue={(u) => String(u.id)}
       autoHighlight
       onOpenChange={(open) => open && makeRoomBelow(fieldRef.current)}
     >

@@ -84,7 +84,7 @@ export default function RequestFormPage() {
   const phoneCall = isPhone || callText;
   const simImplied = isPhone || (isTablet && (callText || needsData));
   const requestee = forMode === "me" ? me : other;
-  const autoApproved = !!me && !!requestee && requestee.managerId != null && requestee.managerId === Number(me.id);
+  const autoApproved = !!me && !!requestee && requestee.managerId != null && requestee.managerId === me.id;
   const non = spec === "NON_STANDARD";
 
   function pickCategory(c: AssetCategory) {

@@ -65,6 +65,7 @@ import type {
   MarkShippedResponse,
   MarkReadyResponse
 } from "../types/requestTypes.js"
+import { getDevSettings } from "./devSettings.js";
 
 const SKELETON_STATUS_NAME = "Pending";
 
@@ -975,7 +976,10 @@ export async function editRequest(
   // because this fires on the resulting state rather than on what moved.
   // That is the right trade — the alternative is an edit path that can leave a
   // request in a state the forms would refuse to produce.
-  if (managerId === request.userId) {
+  //
+  // A dev instance can switch this off (devSettings), to walk one request
+  // through every step as one person.
+  if (managerId === request.userId && !(await getDevSettings()).allowSelfApproval) {
     throw new AppError("The requester can't be their own approver.", 400);
   }
 

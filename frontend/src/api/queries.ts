@@ -30,6 +30,7 @@ import {
 } from "@/api/troubleshooting";
 import {
   getAccessoryAssetMap,
+  getDevSettings,
   getLoanConfig,
   getRequestableCategoryIds,
   getSiteColours,
@@ -214,7 +215,7 @@ export const accessoryCategoriesForMeQuery = queryOptions({
 });
 
 /** What one person's devices unlock (the accessory form, filing for anyone). */
-export const accessoryCategoriesForUserQuery = (userId: string) =>
+export const accessoryCategoriesForUserQuery = (userId: number) =>
   queryOptions({
     queryKey: ["reference", "accessory-categories", "for-user", userId],
     queryFn: () => getAccessoryCategoriesForUser(userId),
@@ -289,6 +290,15 @@ export const usersQuery = queryOptions({
 });
 
 // ---- feature switches and per-session state ------------------------------
+
+/** The dev switches. Never fetched outside a development build, where the
+ *  route doesn't exist; read as all off there (see useDevSettings). */
+export const devSettingsQuery = queryOptions({
+  queryKey: ["settings", "dev"],
+  queryFn: () => getDevSettings(),
+  staleTime: SESSION,
+  enabled: import.meta.env.VITE_APP_ENV === "development",
+});
 
 export const feedbackEnabledQuery = queryOptions({
   queryKey: ["feature", "feedback"],

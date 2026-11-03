@@ -15,6 +15,7 @@ import { canEditRequestShape } from "@/lib/permissions";
 import { isPhoneCategory, isTabletCategory } from "@/lib/categoryIcon";
 import { resolveMobileNumber } from "@/lib/mobileNumber";
 import { useMobileFilterConfig } from "@/hooks/useMobileFilterConfig";
+import { useDevSettings } from "@/hooks/useDevSettings";
 import { originalReason } from "../facts";
 import { FieldGrid, StepError, StepField, StepFoot, StepNote } from "./parts";
 import { errorText, type StepProps } from "./types";
@@ -76,9 +77,10 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unchanged, setUnchanged] = useState(false);
+  const { allowSelfApproval } = useDevSettings();
 
   // The approver and a reused number's owner, found in the directory once it loads.
-  const currentApprover = useMemo(() => users.find((u) => u.id === String(r.managerId)) ?? null, [users, r.managerId]);
+  const currentApprover = useMemo(() => users.find((u) => u.id === r.managerId) ?? null, [users, r.managerId]);
   const currentReuse = useMemo(
     () => (r.reuseNumberFromEmail ? users.find((u) => u.email?.toLowerCase() === r.reuseNumberFromEmail?.toLowerCase()) ?? null : null),
     [users, r.reuseNumberFromEmail]
@@ -87,7 +89,7 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
   const chosenReuse = reuseUser ?? currentReuse;
 
   const assetCats = useQuery({ ...assetCategoriesQuery, enabled: kind === "ASSET" });
-  const accessoryCats = useQuery({ ...accessoryCategoriesForUserQuery(String(r.userId)), enabled: kind === "ACCESSORY" });
+  const accessoryCats = useQuery({ ...accessoryCategoriesForUserQuery(r.userId), enabled: kind === "ACCESSORY" });
   const cats = (kind === "ASSET" ? assetCats.data : accessoryCats.data) ?? [];
   const catsLoading = kind === "ASSET" ? assetCats.isPending : accessoryCats.isPending;
   const options = useQuery({ ...accessoryOptionsQuery(cat?.id ?? 0), enabled: kind === "ACCESSORY" && !!cat });
@@ -120,7 +122,7 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
   function problem(): string | null {
     if (!cat?.id) return kind === "ACCESSORY" ? "Pick which accessory this request is for." : "Pick which asset this request is for.";
     if (!chosenApprover) return "Pick an approver.";
-    if (chosenApprover.id === String(r.userId)) return "The requester can't be their own approver.";
+    if (chosenApprover.id === r.userId && !allowSelfApproval) return "The requester can't be their own approver.";
     if (kind === "ACCESSORY" && opts.length > 0 && !option) return "Pick which option this request is for.";
     if (effective === "NON_STANDARD" && !reason.trim()) return "A non-standard request needs a reason.";
     if (kind === "ASSET" && simImplied && numberOption === "REUSE" && !chosenReuse) return "Pick whose number is being reused.";
@@ -139,7 +141,7 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
       categoryName: cat!.name,
       requestType: effective,
       manager: chosenApprover!.name,
-      managerId: Number(chosenApprover!.id),
+      managerId: chosenApprover!.id,
       reason: effective === "NON_STANDARD" ? reason : "",
       preferredModel: effective === "NON_STANDARD" ? model : "",
       ...(kind === "ACCESSORY"
@@ -302,7 +304,7 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
           onChange={setApprover}
           placeholder="Search for their manager"
           label="Approver"
-          exclude={(u) => u.id === String(r.userId)}
+          exclude={allowSelfApproval ? undefined : (u) => u.id === r.userId}
         />
       </Row>
 

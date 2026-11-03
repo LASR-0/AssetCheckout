@@ -26,6 +26,7 @@ import {
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 import { saveLoanDevices } from "../services/loan.js";
+import { devSettingsAvailable, getDevSettings, setDevSettings } from "../services/devSettings.js";
 
 const router = Router();
 
@@ -235,6 +236,44 @@ router.put("/mobile-filter", async (req: Request, res: Response, next: NextFunct
     await setMobileFilterConfig(countryCode, mobileLeadingDigit, getActorEmail(req));
     const saved = await getMobileFilterConfig();
     res.json(saved);
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
+///  |          DEV SETTINGS (development only)                        |
+///  +-----------------------------------------------------------------+
+
+/**
+ * GET/PUT /api/settings/dev — the switches in services/devSettings.ts.
+ *
+ * 404 outside development, as if the route weren't there. Anyone may read
+ * them (the request forms need to know whether to hide the requestee from
+ * the approver picker); only an admin may change them.
+ */
+router.get("/dev", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!devSettingsAvailable()) return res.status(404).json({ error: "Not found" });
+    res.json(await getDevSettings());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/dev", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!devSettingsAvailable()) return res.status(404).json({ error: "Not found" });
+    if (!requireAdmin(req, res)) return;
+    const body = req.body ?? {};
+    const patch: Record<string, boolean> = {};
+    for (const key of ["suppressEmail", "allowSelfApproval"]) {
+      if (key in body) {
+        if (typeof body[key] !== "boolean") return res.status(400).json({ error: `${key} must be true or false` });
+        patch[key] = body[key];
+      }
+    }
+    res.json(await setDevSettings(patch, getActorEmail(req)));
   } catch (err) {
     next(err);
   }

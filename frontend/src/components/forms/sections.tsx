@@ -2,6 +2,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented";
+import { useDevSettings } from "@/hooks/useDevSettings";
 import type { User } from "@/types/userType";
 import { Field, FieldError, FormSection, Question } from "./FormSection";
 import { PersonPicker } from "./PersonPicker";
@@ -97,6 +98,7 @@ type ApprovalProps = {
 
 /** Who approves it. Shows when filing as the manager means it passes on send. */
 export function ApprovalSection({ question, users, approver, onApprover, requestee, autoApproved, error }: ApprovalProps) {
+  const { allowSelfApproval } = useDevSettings();
   return (
     <FormSection id="appr" label="Approval">
       <Question hint="They get an email to approve it before it reaches IT.">{question}</Question>
@@ -106,7 +108,7 @@ export function ApprovalSection({ question, users, approver, onApprover, request
         onChange={onApprover}
         placeholder="Search for their manager"
         label="Approver"
-        exclude={requestee ? (u) => u.id === requestee.id : undefined}
+        exclude={requestee && !allowSelfApproval ? (u) => u.id === requestee.id : undefined}
         invalid={!!error}
       />
       {autoApproved && (

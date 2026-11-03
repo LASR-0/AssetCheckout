@@ -20,7 +20,7 @@ export function useDirectory() {
   const me = useMemo(() => {
     const email = auth.email.toLowerCase();
     return (
-      users.find((u) => auth.userId != null && Number(u.id) === auth.userId) ??
+      users.find((u) => auth.userId != null && u.id === auth.userId) ??
       users.find((u) => !!email && u.email?.toLowerCase() === email) ??
       null
     );

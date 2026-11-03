@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import tls from "node:tls";
+import { getDevSettings } from "./devSettings.js";
 
 ///  +-----------------------------------------------------------------+
 ///  |                        EMAIL SERVICE                            |
@@ -74,6 +75,15 @@ export type SendEmailInput = {
 };
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
+  // The dev switch. Logged rather than silent, so you can still see what
+  // would have gone out and to whom.
+  if ((await getDevSettings()).suppressEmail) {
+    console.log(
+      `[email] NOT sent (dev: email off) "${input.subject}" to ${Array.isArray(input.to) ? input.to.join(", ") : input.to}`
+    );
+    return;
+  }
+
   const info = await getTransporter().sendMail({
     from: SMTP_FROM,
     to: input.to,

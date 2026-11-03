@@ -117,7 +117,7 @@ export default function LoanFormPage() {
     setSubmitError(null);
     try {
       const data = await createLoanRequest({
-        userId: Number(requestee!.id),
+        userId: requestee!.id,
         userName: requestee!.name,
         deviceOptionId: device!.id,
         startDate: toDateString(range!.from!),

@@ -65,7 +65,7 @@ export default function AccessoryRequestFormPage() {
   const [other, setOther] = useState<User | null>(null);
   // Keyed by whom (and by category) so a change upstream drops the choice
   // below it, without an effect to reset it.
-  const [pick, setPick] = useState<{ forId: string; cat: AccessoryCategory } | null>(null);
+  const [pick, setPick] = useState<{ forId: number; cat: AccessoryCategory } | null>(null);
   const [opt, setOpt] = useState<{ catId: number; value: string } | null>(null);
   const [spec, setSpec] = useState<Spec>("STANDARD");
   const [reason, setReason] = useState("");
@@ -77,10 +77,10 @@ export default function AccessoryRequestFormPage() {
 
   const requestee = forMode === "me" ? me : other;
   const forMe = forMode === "me";
-  const autoApproved = !!me && !!requestee && requestee.managerId != null && requestee.managerId === Number(me.id);
+  const autoApproved = !!me && !!requestee && requestee.managerId != null && requestee.managerId === me.id;
 
   const available = useQuery({
-    ...accessoryCategoriesForUserQuery(requestee?.id ?? ""),
+    ...accessoryCategoriesForUserQuery(requestee?.id ?? 0),
     enabled: !!requestee,
   });
   const avail = requestee ? available.data ?? NO_CATEGORIES : NO_CATEGORIES;
