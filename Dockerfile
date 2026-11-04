@@ -2,12 +2,15 @@
 FROM node:24.22.2-alpine AS base
 # Behind a TLS-inspecting firewall, pass its root CA as the extra_ca build
 # secret (see docker-compose.override.example.yml). Without it, nothing changes.
+# One step with apk on purpose: a secret isn't part of the cache key, so on its
+# own the CA step cached a build made without one and silently reused it. Here
+# a build without the CA fails at apk behind the firewall instead of caching.
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -s /run/secrets/extra_ca ]; then \
       cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt; \
-    fi
-ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
-RUN apk add --no-cache libc6-compat python3 make g++
+    fi \
+ && apk add --no-cache libc6-compat python3 make g++
 
 # ── deps: install all workspace deps ────────────────────────────────────────
 FROM base AS deps
