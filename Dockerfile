@@ -1,5 +1,12 @@
 # syntax=docker.io/docker/dockerfile:1
 FROM node:24.22.2-alpine AS base
+# Behind a TLS-inspecting firewall, pass its root CA as the extra_ca build
+# secret (see docker-compose.override.example.yml). Without it, nothing changes.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -s /run/secrets/extra_ca ]; then \
+      cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt; \
+    fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 RUN apk add --no-cache libc6-compat python3 make g++
 
 # ── deps: install all workspace deps ────────────────────────────────────────
@@ -14,7 +21,9 @@ RUN corepack enable pnpm && pnpm install --frozen-lockfile
 FROM deps AS build
 COPY backend ./backend
 COPY frontend ./frontend
-RUN pnpm --filter @asset-checkout/backend exec prisma generate
+# prisma.config.ts requires DATABASE_URL, but generate never connects, and
+# backend/.env stays out of the build. Compose sets the real one at runtime.
+RUN DATABASE_URL=file:/tmp/build.db pnpm --filter @asset-checkout/backend exec prisma generate
 RUN pnpm --filter @asset-checkout/frontend run build
 RUN pnpm --filter @asset-checkout/backend exec tsc
 # Bundle prod-only deps into /deploy, then add compiled/generated artifacts
