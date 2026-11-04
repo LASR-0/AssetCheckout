@@ -1,13 +1,21 @@
 import * as React from "react"
+import type { VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
+import { fieldVariants } from "@/components/ui/variants"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+function Textarea({
+  className,
+  size,
+  ...props
+}: React.ComponentProps<"textarea"> & VariantProps<typeof fieldVariants>) {
   return (
     <textarea
       data-slot="textarea"
       className={cn(
-        "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50",
+        fieldVariants({ size }),
+        "min-h-18 resize-y py-2 leading-normal",
+        size === "lg" && "py-2.5",
         className
       )}
       {...props}

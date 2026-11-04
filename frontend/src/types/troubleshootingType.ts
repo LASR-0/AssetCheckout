@@ -130,9 +130,11 @@ export type Article = {
   source?: { name: string; url: string };
 };
 
-export type SubjectCategoriesResponse = {
-  subject: SubjectSummary;
-  categories: SymptomCategoryListing[];
+/** Every subject's listed taxonomy, keyed by subject, and the most-opened
+ *  written articles (empty when analytics are off). */
+export type TroubleshootingLibrary = {
+  taxonomy: Record<string, SymptomCategoryListing[]>;
+  popular: { subjectKey: SubjectKey; symptomId: string }[];
 };
 
 /** `article` is null for a symptom nobody has written up yet. */

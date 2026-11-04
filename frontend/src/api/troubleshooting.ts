@@ -1,4 +1,5 @@
-import { apiFetch, getDevHeaders } from "@/api/client";
+import { apiFetch, ApiError, type ApiFetchOptions } from "@/api/client";
+import { invalidate } from "@/api/queryClient";
 import type {
   ArticleBody,
   ContentHealth,
@@ -11,8 +12,8 @@ import type {
   DeletedSymptom,
   PublishResult,
   UploadedImage,
-  SubjectCategoriesResponse,
   SubjectPickerTile,
+  TroubleshootingLibrary,
   SymptomResponse,
   TroubleshootingConfig,
 } from "@/types/troubleshootingType";
@@ -25,10 +26,9 @@ import type {
 //  not to Snipe — so there is no mutation here and won't be until the
 //  instrumentation in a later increment.
 //
-//  Symptom search is deliberately absent. The taxonomy for one device is a
-//  couple of dozen labels, already in hand once the page loads, so filtering
-//  it client-side is instant and costs no round trip. A server search
-//  endpoint exists on the repository for when the library outgrows that.
+//  Symptom search runs in the browser over the whole library, fetched once
+//  (getTroubleshootingLibrary): a few hundred short labels, so filtering them
+//  is instant and costs no round trip per search.
 ///  +-----------------------------------------------------------------+
 
 export async function getTroubleshootingConfig(): Promise<TroubleshootingConfig> {
@@ -42,12 +42,8 @@ export async function getTroubleshootingSubjects(): Promise<SubjectPickerTile[]>
   return res.subjects;
 }
 
-export async function getSubjectCategories(
-  subjectKey: string
-): Promise<SubjectCategoriesResponse> {
-  return apiFetch<SubjectCategoriesResponse>(
-    `/api/troubleshooting/subjects/${encodeURIComponent(subjectKey)}`
-  );
+export async function getTroubleshootingLibrary(): Promise<TroubleshootingLibrary> {
+  return apiFetch<TroubleshootingLibrary>("/api/troubleshooting/library");
 }
 
 export async function getSymptom(
@@ -76,6 +72,10 @@ export type ArticleStat = {
   opens: number;
   escapes: number;
   deepestStep: number | null;
+  /** The article's length now, for "3.4 of 5". */
+  stepCount: number | null;
+  /** Escapes from inside this article, by control: called, messaged, nothing_worked. */
+  escapesByControl: Record<string, number>;
 };
 
 export type NoMatchSearch = {
@@ -130,15 +130,13 @@ export async function setTroubleshootingAnalyticsEnabled(
 //  surfaces `error`, so these use a wrapper that keeps them.
 
 /** An error from the admin API that names specific problems. */
-export class ContentApiError extends Error {
-  status: number;
+export class ContentApiError extends ApiError {
   issues: ContentIssue[];
 
-  constructor(message: string, status: number, issues: ContentIssue[] = []) {
-    super(message);
+  constructor(err: ApiError) {
+    super(err.message, err.status, err.body);
     this.name = "ContentApiError";
-    this.status = status;
-    this.issues = issues;
+    this.issues = Array.isArray(err.body?.details) ? (err.body.details as ContentIssue[]) : [];
   }
 }
 
@@ -153,32 +151,20 @@ const ADMIN = "/api/troubleshooting/admin";
  */
 async function adminFetch<T>(
   path: string,
-  init: Omit<RequestInit, "body"> & { body?: unknown } = {}
+  init: ApiFetchOptions = {},
+  { invalidates = true }: { invalidates?: boolean } = {}
 ): Promise<T> {
-  const { body, ...rest } = init;
-
-  const res = await fetch(path, {
-    ...rest,
-    headers: {
-      Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...getDevHeaders(),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-
-  const text = await res.text();
-  const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-
-  if (!res.ok) {
-    throw new ContentApiError(
-      (parsed.error as string) || `${res.status} ${res.statusText}`,
-      res.status,
-      (parsed.details as ContentIssue[]) ?? []
-    );
+  let result: T;
+  try {
+    result = ((await apiFetch<T>(path, init)) ?? {}) as T;
+  } catch (err) {
+    throw err instanceof ApiError ? new ContentApiError(err) : err;
   }
-
-  return parsed as T;
+  // Any edit can change what readers see: the subject tiles, the config.
+  // A draft save is the exception — readers never see a draft, and refetching
+  // the library on every pause in typing would be pure waste.
+  if (invalidates && init.method && init.method !== "GET") await invalidate(["troubleshooting"]);
+  return result;
 }
 
 export async function getEditableSubject(subjectKey: string): Promise<EditableCategory[]> {
@@ -206,7 +192,8 @@ export async function saveArticleDraft(
 ): Promise<{ draftUpdatedAt: string }> {
   return adminFetch(
     `${ADMIN}/subjects/${encodeURIComponent(subjectKey)}/symptoms/${encodeURIComponent(symptomId)}/draft`,
-    { method: "PUT", body: { body, expectedPublishedAt } }
+    { method: "PUT", body: { body, expectedPublishedAt } },
+    { invalidates: false }
   );
 }
 
@@ -302,7 +289,9 @@ export async function uploadTroubleshootingImage(
         light: { base64: payload.light },
         ...(payload.dark ? { dark: { base64: payload.dark } } : {}),
       },
-    }
+    },
+    // Nothing a reader sees changes until the figure is saved and published.
+    { invalidates: false }
   );
 }
 
@@ -472,4 +461,17 @@ export async function composeSupportMessage(
     // send a JSON-encoded JSON string and the server would reject it.
     { method: "POST", body: input }
   );
+}
+
+/**
+ * Compose a message from the front page, where there is no article: a search
+ * that found nothing, or a subject with nothing written. Same rules as above —
+ * composed on the server, never sent.
+ */
+export async function composeGeneralSupportMessage(input: {
+  query: string;
+  subjectKey: string | null;
+  notes: string;
+}): Promise<SupportMessageDraft> {
+  return apiFetch("/api/troubleshooting/support-message", { method: "POST", body: input });
 }

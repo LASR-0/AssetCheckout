@@ -18,6 +18,7 @@ export const HOUR_INTERVALS = [1, 2, 3, 4, 6, 8, 12];
 export function cronFromSchedule(s: ScheduleSpec): string {
   if (s.mode === "interval") {
     if (s.unit === "minutes") return `*/${s.every} * * * *`;
+    if (s.every === 1) return "0 * * * *"; // the usual spelling of hourly
     return `0 */${s.every} * * *`; // every N hours, at minute 0
   }
 
@@ -53,6 +54,11 @@ export function scheduleFromCron(cron: string): ScheduleSpec | null {
   }
 
   // 0 */N * * *
+  // "0 * * * *" is the plain way to write every hour, on the hour.
+  if (min === "0" && hr === "*" && dom === "*" && mon === "*" && dow === "*") {
+    return { mode: "interval", unit: "hours", every: 1 };
+  }
+
   const hrStep = /^\*\/(\d+)$/.exec(hr);
   if (min === "0" && hrStep && dom === "*" && mon === "*" && dow === "*") {
     const every = Number(hrStep[1]);

@@ -47,7 +47,7 @@ function Marked({ node, children }: { node: RichNode; children: React.ReactNode 
         href={node.href}
         target="_blank"
         rel="noreferrer noopener"
-        className="text-primary underline underline-offset-2 hover:no-underline"
+        className="text-brand-tx underline underline-offset-2 hover:no-underline"
       >
         {out}
       </a>

@@ -208,6 +208,30 @@ export async function refreshPricesCache(): Promise<number> {
   return rows.length;
 }
 
+/**
+ * Per model: how many assets are free to hand out, and how many of those
+ * carry a Tier value — the two numbers that decide whether a model works as
+ * a standard. From the cached /hardware list, so the settings page can show
+ * them for every model in a category without a Snipe call per model.
+ *
+ * "Free" uses the same test as getAvailableAssetFromModel: Ready to Deploy
+ * and assigned to nobody.
+ */
+export async function getModelAvailability(): Promise<Map<number, { available: number; withTier: number }>> {
+  const rows = (await getCachedHardware()) as Asset[];
+  const out = new Map<number, { available: number; withTier: number }>();
+  for (const asset of rows) {
+    const modelId = (asset as { model?: { id?: number } }).model?.id;
+    if (typeof modelId !== "number") continue;
+    if (asset.status_label?.name !== "Ready to Deploy" || asset.assigned_to !== null) continue;
+    const entry = out.get(modelId) ?? { available: 0, withTier: 0 };
+    entry.available++;
+    if (assetMatchesTier(asset, { mode: "any" })) entry.withTier++;
+    out.set(modelId, entry);
+  }
+  return out;
+}
+
 ///  +-----------------------------------------------------------------+
 ///  |                       CHECKOUT FLOW                             |
 ///  +-----------------------------------------------------------------+
@@ -1273,12 +1297,30 @@ export async function getTierCustomFieldColumnName(): Promise<string> {
 ///  +-----------------------------------------------------------------+
 
 /**
+ * The user directory as the request forms see it. Site and manager ride
+ * along so a picker can show where someone is, the form can say where they
+ * will collect ("Ready at Perth"), and it can tell the person filing when
+ * they are the requestee's manager, which is when the manager step passes
+ * automatically (see resolveRequesteeFacts).
+ */
+export type DirectoryUser = User & {
+  locationId: number | null;
+  locationName: string | null;
+  managerId: number | null;
+};
+
+type SnipeUserRow = User & {
+  location?: { id?: number; name?: string } | null;
+  manager?: { id?: number } | null;
+};
+
+/**
  * Trimmed-down user list for populating the "who is this for?" dropdown on
  * the request form. Users with no name are filtered out — they exist in
  * Snipe sometimes (service accounts, legacy data) but can't sensibly be
  * shown to humans.
  */
-export async function getAllUsersCleaned(): Promise<User[]> {
+export async function getAllUsersCleaned(): Promise<DirectoryUser[]> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/v1/users`;
 
   const res = await fetchWithTimeout(url, {
@@ -1286,7 +1328,7 @@ export async function getAllUsersCleaned(): Promise<User[]> {
     headers: getHeaders(),
   });
 
-  const data: { rows: User[] } = await res.json();
+  const data: { rows: SnipeUserRow[] } = await res.json();
 
   if (!data?.rows) {
     throw new AppError('Failed to fetch users', 500);
@@ -1300,6 +1342,9 @@ export async function getAllUsersCleaned(): Promise<User[]> {
       email: user.email ?? null,
       phone: cleanPhoneField(user.phone),
       mobile: cleanPhoneField(user.mobile),
+      locationId: typeof user.location?.id === 'number' ? user.location.id : null,
+      locationName: user.location?.name?.trim() || null,
+      managerId: typeof user.manager?.id === 'number' ? user.manager.id : null,
     }));
 }
 
@@ -1700,6 +1745,11 @@ export async function getAssetsByLocation(locationId: number): Promise<LocationA
       assigned && typeof assigned === "object" && typeof assigned.name === "string"
         ? assigned.name
         : null;
+    // What kind of holder it is, so the ledger can tell "with a person" from
+    // "checked out to the boardroom". Snipe sends user / location / asset.
+    const kind = assignedTo ? assigned.type : null;
+    const assignedKind: "user" | "location" | "asset" | null =
+      kind === "user" || kind === "location" || kind === "asset" ? kind : assignedTo ? "user" : null;
 
     return {
       id: Number(asset.id),
@@ -1714,6 +1764,7 @@ export async function getAssetsByLocation(locationId: number): Promise<LocationA
       // instance, so reading the meta flag beats matching on label names.
       available: asset.status_label?.status_meta === "deployable",
       assignedTo,
+      assignedKind,
       lastCheckout: asset.last_checkout?.datetime ?? null,
     };
   });

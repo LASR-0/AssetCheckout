@@ -121,3 +121,9 @@ backend/src/scripts/*
 # the folder and this rule together once the page is built.
 prototype/
 miramare-dark-theme.css
+
+#-----------------------------------------------------------------------------
+# DOCKER - machine-specific Compose overrides
+#-----------------------------------------------------------------------------
+# docker-compose.override.example.yml is the tracked template.
+docker-compose.override.yml

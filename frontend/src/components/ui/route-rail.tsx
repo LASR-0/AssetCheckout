@@ -1,0 +1,264 @@
+import type { CSSProperties } from "react";
+import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
+import { shortDate } from "@/lib/format";
+import type { Route, Station } from "@/lib/route";
+
+///  +-----------------------------------------------------------------+
+///  |                  THE ROUTE RAIL, AT THREE SIZES                 |
+///  +-----------------------------------------------------------------+
+//
+//    RouteRail   inline: a thin horizontal line with only the current
+//                station labelled (table rows, Home's in-flight list)
+//    RouteChain  full: the vertical chain of custody with names, dates and
+//                who holds it now (inspectors)
+//    RouteDots   micro: a dot sequence for the tightest spaces (mobile
+//                cards, the form's submit bar)
+//
+//  All three draw one Route (lib/route.ts). Finished stations are filled,
+//  the current one is the amber ringed dot, future ones are hollow. A
+//  rejection cuts the line in red where it happened; a courier leg into the
+//  current station is dashed; a failed write to Snipe-IT turns the current
+//  station red. Colour is never the only signal: the inline rail's label and
+//  the chain's text say the same thing in words, and the rail is labelled
+//  for screen readers.
+///  +-----------------------------------------------------------------+
+
+type Phase = "done" | "current" | "future" | "cut";
+
+function phaseOf(station: Station, route: Route): Phase {
+  if (station.state === "current" && route.blocked) return "cut";
+  return station.state;
+}
+
+/** One sentence a screen reader can say for the whole rail. */
+function describe(route: Route): string {
+  const cur = route.stations[route.current];
+  if (route.finished) return `Finished: ${route.stations.at(-1)?.label ?? ""}`;
+  if (route.rejected) return `Rejected at ${route.stations[route.current - 1]?.label ?? "the start"}`;
+  return `Step ${route.current + 1} of ${route.stations.length}: ${cur?.label ?? ""}`;
+}
+
+const DOT: Record<Phase, string> = {
+  done: "size-1.75 bg-tx2",
+  current: "size-2.5 bg-prog shadow-[0_0_0_3px_var(--prog-bg)]",
+  cut: "size-2.5 bg-stop shadow-[0_0_0_3px_var(--stop-bg)]",
+  future: "size-1.75 border-[1.5px] border-strong bg-sheet",
+};
+
+/** The leg leading INTO station `i`. */
+function segmentStyle(route: Route, i: number): CSSProperties {
+  const station = route.stations[i];
+  const reached = i <= route.current;
+  const afterCut = !!route.rejected && i > route.current;
+  const transit = station.transit && station.state === "current";
+  return {
+    borderTopWidth: "1.5px",
+    borderTopStyle: transit ? "dashed" : "solid",
+    borderTopColor: transit ? "var(--prog)" : reached && !afterCut ? "var(--tx2)" : "var(--strong)",
+    opacity: afterCut ? 0.45 : 1,
+  };
+}
+
+type RouteRailProps = {
+  route: Route;
+  /** Hide the current station's label (when the row says it elsewhere). */
+  hideLabel?: boolean;
+  /** Give it a width here (e.g. `w-28`) for a rail that isn't filling a
+   *  column: every rail is the same length, whatever its station count. */
+  className?: string;
+};
+
+export function RouteRail({ route, hideLabel, className }: RouteRailProps) {
+  const n = route.stations.length;
+  const cur = Math.min(route.current, n - 1);
+  const showLabel = !hideLabel && !route.finished;
+  return (
+    <div
+      role="img"
+      aria-label={describe(route)}
+      className={cn("grid min-w-0 items-center gap-y-1.5", className)}
+      style={{
+        // The end stations get half a cell, so the first dot sits on the
+        // rail's left edge and the last on its right, at any station count:
+        // a three-stop correction and a seven-stop request start and finish
+        // in the same place, with the stops between spread evenly.
+        gridTemplateColumns:
+          n < 2
+            ? "minmax(0, 1fr)"
+            : n === 2
+              ? "repeat(2, minmax(0, 1fr))"
+              : `minmax(0, 0.5fr) repeat(${n - 2}, minmax(0, 1fr)) minmax(0, 0.5fr)`,
+        gridTemplateRows: showLabel ? "0.75rem auto" : "0.75rem",
+      }}
+    >
+      {route.stations.map((s, i) => {
+        const phase = phaseOf(s, route);
+        const faded = !!route.rejected && i > route.current;
+        return (
+          <span key={s.key + i} className="flex h-3 min-w-0 items-center">
+            {i > 0 && <span className="h-0 min-w-0.5 flex-1" style={segmentStyle(route, i)} />}
+            <span className={cn("shrink-0 rounded-full", DOT[phase], faded && "opacity-45")} />
+            {i < n - 1 && <span className="h-0 min-w-0.5 flex-1" style={segmentStyle(route, i + 1)} />}
+          </span>
+        );
+      })}
+      {showLabel && (
+        <span
+          className={cn(
+            "row-start-2 truncate fs-11 font-medium whitespace-nowrap",
+            route.rejected || route.blocked ? "text-stop" : "text-tx2",
+            cur === 0 ? "justify-self-start" : cur === n - 1 ? "justify-self-end" : "justify-self-center"
+          )}
+          style={{ gridColumn: String(cur + 1) }}
+        >
+          {route.stations[cur]?.label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type RouteChainProps = {
+  route: Route;
+  /** Under the current station: who holds it, e.g. "With you". */
+  holder?: string;
+  /** Under a future station: who will hold it, e.g. "Perth stock keeper". */
+  futureSub?: (station: Station) => string | null;
+  /** Under the current station: what signs it off. `mine` when that's the
+   *  viewer ("Your move · Approve"), else a quiet note ("Signs with …"). */
+  sign?: { text: string; mine: boolean } | null;
+  /** `sm` for Home's inspector; `md`, with rules between stations, for the
+   *  request log's docket. */
+  size?: "sm" | "md";
+  className?: string;
+};
+
+export function RouteChain({ route, holder, futureSub, sign, size = "sm", className }: RouteChainProps) {
+  const md = size === "md";
+  // A rejected route stops at the cut: the stations after it never happen.
+  const shown = route.rejected ? route.stations.slice(0, route.current + 1) : route.stations;
+  const last = shown.length - 1;
+
+  return (
+    <ol aria-label="Route" className={cn("m-0 list-none p-0", className)}>
+      {shown.map((s, i) => {
+        const phase = phaseOf(s, route);
+        const next = shown[i + 1];
+        const nextReached = !!next && next.state !== "future";
+        const transitIn = s.transit && s.state === "current";
+
+        let sub: string | null = s.by;
+        let date = shortDate(s.at);
+        if (phase === "current") {
+          sub = holder ?? null;
+          date = "now";
+        } else if (s.state === "cut" && route.rejected) {
+          sub = [route.rejected.reason, route.rejected.by].filter(Boolean).join(" · ") || null;
+        } else if (phase === "cut" && route.blocked) {
+          sub = route.blocked;
+          date = "now";
+        } else if (phase === "future") {
+          sub = futureSub?.(s) ?? null;
+        }
+
+        return (
+          <li key={s.key + i} className="grid grid-cols-[1.375rem_minmax(0,1fr)_auto] gap-x-3">
+            <div className="flex flex-col items-center" aria-hidden>
+              <span
+                // md pins the dot level with the title; sm centres it in the row.
+                className={cn("w-0", md ? "h-3.25 flex-none" : i === 0 ? "min-h-3" : "min-h-2.5 flex-1", i > 0 && "border-l-[1.5px]")}
+                style={
+                  i === 0
+                    ? undefined
+                    : {
+                        borderLeftStyle: transitIn ? "dashed" : "solid",
+                        borderLeftColor: transitIn ? "var(--prog)" : phase === "future" ? "var(--strong)" : "var(--tx2)",
+                      }
+                }
+              />
+              {phase === "done" && (
+                <Icon name="check_circle" size={md ? 18 : 15.5} fill className="leading-[1.125rem] text-tx2" />
+              )}
+              {phase === "current" && (
+                <span className="my-px size-4 rounded-full border-[2.5px] border-prog bg-prog-bg" />
+              )}
+              {phase === "future" && (
+                <span className="my-0.5 size-3.5 rounded-full border-2 border-strong bg-sheet" />
+              )}
+              {phase === "cut" && (
+                <Icon
+                  name={route.blocked ? "link_off" : "cancel"}
+                  size={md ? 18 : 15.5}
+                  fill={!route.blocked}
+                  className="leading-[1.125rem] text-stop"
+                />
+              )}
+              <span
+                className={cn("w-0", i === last ? "min-h-1.5 flex-1" : "min-h-2.5 flex-1 border-l-[1.5px]")}
+                style={i === last ? undefined : { borderLeftColor: nextReached ? "var(--tx2)" : "var(--strong)" }}
+              />
+            </div>
+            <div className={cn("min-w-0", md ? "py-2.75" : "py-3", md && i > 0 && "border-t border-line2")}>
+              <div
+                className={cn(
+                  md ? "fs-13.5" : "fs-12.5",
+                  phase === "current" || phase === "cut" ? "font-semibold" : "font-medium",
+                  phase === "future" ? (md ? "font-normal text-tx3" : "text-mut") : phase === "cut" ? "text-stop" : phase === "current" && md ? "text-prog" : "text-tx"
+                )}
+              >
+                {s.label}
+                {phase === "current" && <span className="sr-only"> (current step)</span>}
+              </div>
+              {sub && <div className={cn("mt-0.5 text-mut", md ? "fs-12.5" : "fs-11.5")}>{sub}</div>}
+              {phase === "current" && sign && (
+                <div
+                  className={
+                    sign.mine
+                      ? "mt-2.5 inline-flex rounded-7 bg-brand-sub px-2.5 py-1.25 fs-12.5 leading-[1.35] font-semibold text-brand-tx"
+                      : "mt-2.25 border-t border-dashed border-strong pt-1.5 fs-12 text-mut"
+                  }
+                >
+                  {sign.text}
+                </div>
+              )}
+            </div>
+            <div
+              className={cn(
+                "whitespace-nowrap",
+                md ? cn("py-3 fs-12", i > 0 && "border-t border-line2") : "py-3.25 fs-11",
+                date === "now" ? (phase === "cut" ? "font-medium text-stop" : "font-medium text-prog") : "text-mut"
+              )}
+            >
+              {date}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+const MICRO: Record<Phase, string> = {
+  done: "bg-tx2",
+  current: "bg-prog",
+  cut: "bg-stop",
+  future: "border-[1.5px] border-strong",
+};
+
+export function RouteDots({ route, className }: { route: Route; className?: string }) {
+  return (
+    <span role="img" aria-label={describe(route)} className={cn("flex shrink-0 items-center gap-1", className)}>
+      {route.stations.map((s, i) => (
+        <span
+          key={s.key + i}
+          className={cn(
+            "size-1.75 rounded-full",
+            MICRO[phaseOf(s, route)],
+            !!route.rejected && i > route.current && "opacity-45"
+          )}
+        />
+      ))}
+    </span>
+  );
+}

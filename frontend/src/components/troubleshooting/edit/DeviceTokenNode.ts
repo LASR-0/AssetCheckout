@@ -73,8 +73,8 @@ export const DeviceTokenNode = Node.create({
       "span",
       mergeAttributes(HTMLAttributes, {
         class:
-          "inline-block align-baseline leading-none rounded bg-primary/15 " +
-          "px-1.5 py-[0.15em] mx-[0.05em] text-primary font-medium " +
+          "inline-block align-baseline leading-none rounded-4 bg-brand-sub " +
+          "px-1.5 py-[0.15em] mx-[0.05em] text-brand-tx font-medium " +
           "whitespace-nowrap cursor-default select-none",
         title: `Replaced with the device name — {${node.attrs.token}}`,
       }),

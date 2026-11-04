@@ -1,0 +1,196 @@
+/*  +-----------------------------------------------------------------+
+ *  |                  PALETTES                                        |
+ *  +-----------------------------------------------------------------+
+ *
+ *  KSB, Grayscale and Miramare, as overrides of the tokens in
+ *  styles/tokens.css. Selected by `data-preset` on <html> (set before first
+ *  paint by index.html, then by hooks/usePreset).
+ *
+ *  A PALETTE DECLARES ONLY WHAT IT CHANGES. Everything else falls through to
+ *  Platinum in tokens.css. Unlayered on purpose: tokens.css sits in
+ *  `@layer base`, and an unlayered rule wins whatever its specificity.
+ *
+ *  THE DARK BLOCK REPEATS EVERY TOKEN THE LIGHT BLOCK SETS. The light block
+ *  matches in dark mode too (`[data-preset]` is on <html> either way), so a
+ *  token set only in light would leak its light value into dark.
+ *
+ *  THE INTENTS KEEP THEIR MEANING. Green is done, amber is in progress, red
+ *  is stop, in every palette. Miramare retunes their shades to sit on its
+ *  warmer ground; nothing reassigns them.
+ *
+ *  Contrast is checked for every palette in both modes by
+ *  tokens.contrast.test.ts, from this file, and the Appearance cards draw
+ *  their strips from it (lib/palettes.ts), so neither can drift from it.
+ *  +-----------------------------------------------------------------+ */
+
+/* Muted text is a touch stronger than the design's in Grayscale light and
+   both Miramare modes: the design's value fell under 4.5:1 on the tray and
+   track grounds. */
+
+/* ── KSB: corporate blue, cooler ground ─────────────────────────────── */
+
+[data-preset="ksb"] {
+  --brand: #0E74BE;
+  --brand-tx: #0B5E9A;
+  --brand-sub: #E6F1FA;
+  --brand-line: #C2DBF0;
+  --canvas: #F4F5F7;
+  --tray: #E6E9EE;
+  --track: #E9ECF0;
+  --hover: #ECEFF3;
+  --subtle: #F9FAFB;
+  --dot: #D7DCE2;
+}
+
+[data-preset="ksb"].dark {
+  --brand: #5AACE8;
+  --brand-tx: #8FC6EF;
+  --brand-sub: #13283B;
+  --brand-line: #1F4263;
+  --on-brand: #08141F;
+  --canvas: #13161B;
+  --sheet: #1B1F25;
+  --tray: #20242B;
+  --track: #262B33;
+  --hover: #272C34;
+  --subtle: #1E2228;
+  --line: #2F3640;
+  --line2: #272D35;
+  --strong: #46505C;
+  --dot: #272D35;
+}
+
+/* ── Grayscale: near-monochrome, slate-teal accent ──────────────────── */
+
+[data-preset="grayscale"] {
+  --brand: #375A60;
+  --brand-tx: #2C4A4F;
+  --brand-sub: #E8EFF0;
+  --brand-line: #C6D6D8;
+  --canvas: #F5F5F5;
+  --tray: #E8E8E8;
+  --track: #EAEAEA;
+  --hover: #EDEDED;
+  --subtle: #FAFAFA;
+  --line: #E2E2E2;
+  --line2: #EBEBEB;
+  --strong: #CDCDCD;
+  --dot: #DADADA;
+  --tx: #1A1A1A;
+  --tx2: #383838;
+  --tx3: #555555;
+  --mut: #646464;
+  --placeholder: #767676;
+  --id1: #5F6B78;
+  --id2: #7A6670;
+  --id3: #5E7470;
+  --id4: #776D60;
+}
+
+[data-preset="grayscale"].dark {
+  --brand: #86AEB4;
+  --brand-tx: #A9CACE;
+  --brand-sub: #1E2A2C;
+  --brand-line: #30474A;
+  --on-brand: #0F1617;
+  --canvas: #141414;
+  --sheet: #1C1C1C;
+  --tray: #212121;
+  --track: #282828;
+  --hover: #2A2A2A;
+  --subtle: #1F1F1F;
+  --line: #333333;
+  --line2: #2A2A2A;
+  --strong: #4A4A4A;
+  --dot: #2A2A2A;
+  --tx: #EDEDED;
+  --tx2: #D4D4D4;
+  --tx3: #AEAEAE;
+  --mut: #959595;
+  --placeholder: #858585;
+  --id1: #9AA6B3;
+  --id2: #B39FA9;
+  --id3: #97ADA9;
+  --id4: #B0A698;
+}
+
+/* ── Miramare: sage on brown and cream, the whole ground ────────────── */
+
+[data-preset="miramare"] {
+  --brand: #4E7A4E;
+  --brand-tx: #3D633D;
+  --brand-sub: #E6EFE2;
+  --brand-line: #C4D7BE;
+  --canvas: #F1ECE2;
+  --sheet: #FBF8F2;
+  --tray: #E4DCCD;
+  --track: #E5DDCE;
+  --hover: #E8E1D3;
+  --subtle: #F6F2E9;
+  --line: #DDD3C3;
+  --line2: #E7DED0;
+  --strong: #CDC1AE;
+  --dot: #D5CAB8;
+  --tx: #2A241C;
+  --tx2: #463E33;
+  --tx3: #5E5446;
+  --mut: #675C4F;
+  --placeholder: #6B6053;
+  --ink: #2A241C;
+  --ink-hover: #463E33;
+  --ok: #2F6B2C;
+  --ok-bg: #E3EFD9;
+  --ok-line: #C3DBB4;
+}
+
+[data-preset="miramare"].dark {
+  --brand: #93B88F;
+  --brand-tx: #AECDA9;
+  --brand-sub: #323D2E;
+  --brand-line: #4A5D45;
+  --on-brand: #1C2219;
+  --canvas: #28231E;
+  --sheet: #312B25;
+  --tray: #352F28;
+  --track: #3D3630;
+  --hover: #3F3831;
+  --subtle: #2E2822;
+  --line: #4A4239;
+  --line2: #3F3830;
+  --strong: #5F564B;
+  --dot: #3F3830;
+  --tx: #E8DBC4;
+  --tx2: #D5C7AF;
+  --tx3: #B7A991;
+  --mut: #B0A38E;
+  --dis: #6E6455;
+  --placeholder: #A69984;
+  --ink: #E8DBC4;
+  --ink-hover: #D5C7AF;
+  --on-ink: #28231E;
+  --ok: #BCD58F;
+  --ok-bg: #36402B;
+  --ok-line: #55643F;
+  --prog: #EBAE69;
+  --prog-bg: #45361F;
+  --prog-line: #67502E;
+  --stop: #E8937F;
+  --stop-bg: #4A2B25;
+  --stop-line: #6C3F35;
+}
+
+/* ── Swapping ───────────────────────────────────────────────────────────
+   Set for a single frame while the preset attribute changes. Without it the
+   elements that carry `transition-colors` animate to the new palette while
+   everything else jumps, so the page arrives in two waves and reads as a
+   glitch. Suppressing transitions makes the swap instantaneous and whole.
+
+   Not a cross-fade: theme-transition.ts interpolates between the light and
+   dark palettes, which is a different journey from one preset to another. */
+
+html.preset-swapping,
+html.preset-swapping *,
+html.preset-swapping *::before,
+html.preset-swapping *::after {
+  transition: none !important;
+}

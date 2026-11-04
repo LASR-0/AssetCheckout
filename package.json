@@ -2,6 +2,9 @@
   "name": "asset-checkout",
   "private": true,
   "version": "0.0.0",
+  "engines": {
+    "node": ">=24.22.1"
+  },
   "scripts": {
     "dev": "pnpm run -r --parallel dev",
     "dev:backend": "pnpm --filter @asset-checkout/backend dev",

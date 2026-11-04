@@ -15,6 +15,7 @@ import {
   getSupportChannelName,
 } from "../config/support.js";
 import {
+  composeGeneralMessage,
   composeSupportMessage,
   getStepChoices,
 } from "../services/supportMessage.js";
@@ -28,6 +29,7 @@ import {
   analyticsEnabled,
   getAnalyticsSummary,
   isEventType,
+  popularArticles,
   recordEvent,
 } from "../services/troubleshootingAnalytics.js";
 import { getActorEmail, getActorName } from "../config/auth.js";
@@ -131,6 +133,52 @@ router.get("/subjects", async (_req: Request, res: Response, next: NextFunction)
         categoryIds: categoryIds.get(tile.key) ?? [],
       })),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/// ── The whole library ────────────────────────────────────────────────────
+//
+//  Every subject's LISTED taxonomy in one response, for the front page's
+//  search across every device and app. It is a few hundred short labels, so
+//  one cached call and an in-browser filter beat a round trip per search —
+//  and the same list lets the editor's branch picker reach other subjects.
+//
+//  Listed, not raw: hidden symptoms and disabled categories are left out
+//  here exactly as they are from one subject's list, or search would surface
+//  what the admin took off the site.
+//
+//  `popular` is the "Most looked up" row: the most-opened written articles,
+//  one per symptom (an article shared by several subjects is one article),
+//  empty whenever analytics are off.
+
+const POPULAR_SHOWN = 4;
+
+router.get("/library", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const taxonomy = Object.fromEntries(
+      troubleshootingRepository
+        .listSubjects()
+        .map((subject) => [subject.key, troubleshootingRepository.getSubjectCategories(subject.key)])
+    );
+
+    const written = new Set(
+      Object.entries(taxonomy).flatMap(([subjectKey, categories]) =>
+        categories.flatMap((category) =>
+          category.symptoms.filter((s) => s.hasArticle).map((s) => `${subjectKey}/${s.id}`)
+        )
+      )
+    );
+
+    const seen = new Set<string>();
+    const popular = (await popularArticles(POPULAR_SHOWN * 4))
+      .filter((p) => written.has(`${p.subjectKey}/${p.symptomId}`))
+      .filter((p) => !seen.has(p.symptomId) && Boolean(seen.add(p.symptomId)))
+      .slice(0, POPULAR_SHOWN)
+      .map(({ subjectKey, symptomId }) => ({ subjectKey, symptomId }));
+
+    res.json({ taxonomy, popular });
   } catch (err) {
     next(err);
   }
@@ -295,6 +343,49 @@ router.post(
     }
   }
 );
+
+/// ── A message without an article ─────────────────────────────────────────
+//
+//  From the front page, where there is no symptom to name: a search that
+//  found nothing, a subject with nothing written. Same rules as above —
+//  composed, never sent, and 404 when messaging isn't set up.
+
+const generalMessageSchema = z.object({
+  query: z.string().max(200).default(""),
+  subjectKey: z.string().max(40).nullable().default(null),
+  notes: z.string().max(2000).default(""),
+});
+
+router.post("/support-message", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isSupportChannelConfigured()) {
+      return res.status(404).json({
+        success: false,
+        message: "Messaging isn't set up for this deployment",
+      });
+    }
+
+    const parsed = generalMessageSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, message: "That request isn't valid" });
+    }
+
+    const subjectKey =
+      parsed.data.subjectKey && troubleshootingRepository.hasSubject(parsed.data.subjectKey)
+        ? parsed.data.subjectKey
+        : null;
+
+    const message = composeGeneralMessage(
+      { ...parsed.data, subjectKey },
+      { name: getActorName(req), email: getActorEmail(req) },
+      appLink()
+    );
+
+    res.json({ ...message, steps: [] });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /// ── Admin: the settings card ─────────────────────────────────────────────
 

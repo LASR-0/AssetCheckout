@@ -1,33 +1,6 @@
 import { apiFetch } from "@/api/client";
 import type { Request, RequestChange } from "@/types/requestType";
 
-type GetRequestsParams = {
-  status?: string;
-  requestType?: string;
-  page?: number;
-  limit?: number;
-  search?: string;
-};
-
-type GetRequestsResponse = {
-  success: boolean;
-  count: number;
-  requests: Request[];
-};
-
-export async function getRequests(params?: GetRequestsParams): Promise<GetRequestsResponse> {
-  const query = new URLSearchParams();
-
-  if (params?.status) query.append("status", params.status);
-  if (params?.requestType) query.append("requestType", params.requestType);
-  if (params?.page) query.append("page", String(params.page));
-  if (params?.limit) query.append("limit", String(params.limit));
-  if (params?.search) query.append("search", params.search);
-
-  const qs = query.toString();
-  return apiFetch<GetRequestsResponse>(`/api/requests${qs ? `?${qs}` : ""}`);
-}
-
 /**
  * Clear the "new" marker on one request, for the signed-in viewer only.
  *
@@ -103,19 +76,55 @@ export async function setRequestStartDate(
   });
 }
 
-/**
- * NOTE: likely dead code — RequestTablePage calls the approval endpoints
- * directly via apiFetch, and the backend derives the actor from identity
- * headers rather than the body. Converted to apiFetch for consistency;
- * grep for imports and delete in a follow-up commit if unused.
- */
-export async function approveRequest(id: number) {
-  return apiFetch(`/api/approval/${id}/approve`, { method: "POST" });
+///  +-----------------------------------------------------------------+
+///  |                  MOVING A REQUEST ALONG                         |
+///  +-----------------------------------------------------------------+
+//
+//  The workflow's own steps. Each throws on refusal with the server's
+//  message, so the step that called it can say why where the person is
+//  looking. Refreshing afterwards is the caller's job (invalidateWorkflow).
+
+export type ApproveResult = {
+  type: "STANDARD" | "NON_STANDARD";
+  stage?: "MANAGER" | "ADMIN";
+  message: string;
+};
+
+/** The manager's approval, or IT's sign-off: the server knows which. A
+ *  standard sign-off also assigns stock and checks it out. */
+export async function approveRequest(id: number): Promise<ApproveResult> {
+  return apiFetch<ApproveResult>(`/api/approval/${id}/approve`, { method: "POST" });
 }
 
-export async function rejectRequest(id: number, reason: string) {
-  return apiFetch(`/api/approval/${id}/reject`, {
+/**
+ * Ends a request. The rejection is written into the reason column ahead of
+ * the original ("REJECTED: …\n REQUEST: …", see lib/reason), so a correction
+ * passes its description: corrections store no reason of their own.
+ */
+export async function rejectRequest(r: Request, why: string): Promise<void> {
+  const original = r.requestKind === "CORRECTION" ? r.correctionDetail?.description ?? "" : r.reason ?? "";
+  await apiFetch(`/api/approval/${r.id}/reject`, {
     method: "POST",
-    body: { reason },
+    body: { reason: `REJECTED: ${why}\n REQUEST: ${original}` },
   });
+}
+
+export async function markShipped(id: number, trackingCode: string, trackingUrl: string): Promise<void> {
+  await apiFetch(`/api/approval/${id}/ship`, {
+    method: "POST",
+    body: {
+      ...(trackingCode ? { trackingCode } : {}),
+      ...(trackingUrl ? { trackingUrl } : {}),
+    },
+  });
+}
+
+export async function markReadyToCollect(id: number): Promise<void> {
+  await apiFetch(`/api/approval/${id}/ready-for-collection`, { method: "POST" });
+}
+
+/** Collected, received, or a loan picked up. `promptFeedback` when the
+ *  requester should be asked how it went. */
+export async function markReceived(id: number): Promise<{ promptFeedback?: boolean; message?: string }> {
+  return apiFetch(`/api/approval/${id}/receive`, { method: "POST" });
 }

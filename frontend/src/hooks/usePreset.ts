@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/api/client";
 import { resetPalettes } from "@/lib/theme-transition";
 import {
   DEFAULT_PRESET,
@@ -70,7 +71,7 @@ export function applyPreset(id: PresetId): void {
 }
 
 /** As above, but suppressing transitions so the new palette arrives in one
- *  piece rather than in two waves — see `.preset-swapping` in presets.css. */
+ *  piece rather than in two waves — see `.preset-swapping` in palettes.css. */
 function swapPreset(id: PresetId): void {
   const root = document.documentElement;
   root.classList.add("preset-swapping");
@@ -99,11 +100,7 @@ function swapPreset(id: PresetId): void {
 export async function syncOrgPreset(): Promise<void> {
   let preset: unknown;
   try {
-    const res = await fetch("/api/settings/appearance", {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) return;
-    preset = (await res.json())?.preset;
+    preset = (await apiFetch<{ preset?: unknown }>("/api/settings/appearance"))?.preset;
   } catch {
     return;
   }
@@ -185,5 +182,5 @@ export function usePreset() {
     applyPreset(preset);
   }, [preset]);
 
-  return { preset, isExplicit, setPreset, clearPreset, setOrgDefault };
+  return { preset, isExplicit, setPreset, clearPreset, setOrgDefault, orgDefault: cachedDefault() };
 }

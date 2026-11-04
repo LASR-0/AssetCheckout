@@ -85,6 +85,10 @@ export type ArticleStat = {
   escapes: number;
   /** Furthest step reached, averaged over visits that reached any step. */
   deepestStep: number | null;
+  /** How many steps the article has now, for "3.4 of 5". Null once it's gone. */
+  stepCount: number | null;
+  /** Escapes taken from inside this article, by control (called, messaged, …). */
+  escapesByControl: Record<string, number>;
 };
 
 export type NoMatchSearch = {
@@ -145,6 +149,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
       sessions: Set<string>;
       /** Furthest step this session got to, per session. */
       deepestBySession: Map<string, number>;
+      controls: Map<string, number>;
     }
   >();
 
@@ -167,6 +172,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
             opens: 0,
             sessions: new Set(),
             deepestBySession: new Map(),
+            controls: new Map(),
           })
           .get(articleKey)!)
       : null;
@@ -196,6 +202,7 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
         sessionsWithEscape.add(event.sessionId);
         const control = event.detail ?? "unknown";
         escapeControls.set(control, (escapeControls.get(control) ?? 0) + 1);
+        if (article) article.controls.set(control, (article.controls.get(control) ?? 0) + 1);
         break;
       }
 
@@ -242,6 +249,8 @@ export async function getAnalyticsSummary(sinceDays: number): Promise<AnalyticsS
           deepestStep: depths.length
             ? Math.round((depths.reduce((n, d) => n + d, 0) / depths.length) * 10) / 10
             : null,
+          stepCount: troubleshootingRepository.getArticle(a.subjectKey, a.symptomId)?.steps.length ?? null,
+          escapesByControl: Object.fromEntries(a.controls),
         };
       })
       .filter((a) => a.opens > 0)
@@ -264,6 +273,46 @@ function labelFor(subjectKey: string, symptomId: string): string {
     .find((c) => c.symptoms.some((s) => s.id === symptomId));
 
   return category?.symptoms.find((s) => s.id === symptomId)?.label ?? symptomId;
+}
+
+/// ── Most looked up ───────────────────────────────────────────────────────
+//
+//  The few articles opened most, for the "Most looked up" row readers see on
+//  the library's front page. Counts only, never who: the row says what other
+//  people found useful, which is the whole of what a reader needs from it.
+//
+//  EMPTY WHEN ANALYTICS ARE OFF. Switching recording off is a promise that
+//  nothing about reading is used, so the row goes with it rather than going
+//  on serving whatever was recorded before the switch.
+//
+//  Over-fetches on purpose: the caller drops hidden and unwritten symptoms,
+//  and a short list after filtering would leave the row looking thin.
+
+export async function popularArticles(
+  limit: number,
+  sinceDays = 90
+): Promise<{ subjectKey: string; symptomId: string; opens: number }[]> {
+  if (!(await analyticsEnabled())) return [];
+
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+  const rows = await prisma.troubleshootingEvent.groupBy({
+    by: ["subjectKey", "symptomId"],
+    where: {
+      type: "ARTICLE_OPENED",
+      createdAt: { gte: since },
+      subjectKey: { not: null },
+      symptomId: { not: null },
+    },
+    _count: { _all: true },
+    orderBy: { _count: { symptomId: "desc" } },
+    take: limit,
+  });
+
+  return rows.map((row) => ({
+    subjectKey: row.subjectKey!,
+    symptomId: row.symptomId!,
+    opens: row._count._all,
+  }));
 }
 
 /// ── Retention ────────────────────────────────────────────────────────────

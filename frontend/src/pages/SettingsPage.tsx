@@ -1,354 +1,305 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
+import { TrayLabel } from "@/components/ui/tray";
 import { useAuth } from "@/hooks/useAuth";
-import ThemeSwitch from "@/components/nav/ThemeSwitch";
-import ThemePresetPicker from "@/components/settings/ThemePresetPicker";
-import DevAuthToggle from "@/components/nav/DevAuthToggle";
-import AssetConfigurationSettings from "@/components/settings/AssetConfiguration";
-import AccessoryConfigurationSettings from "@/components/settings/AccessoryConfiguration";
-import SkeletonStatusSelector from "@/components/settings/SkeletonStatusSelector";
-import ScheduledJobsCard from "@/components/settings/ScheduledJobs";
-import JobHistoryTable from "@/components/settings/JobsHistoryTable";
-import JobStatusBar from "@/components/settings/JobStatusBar";
-import FeedbackSettingsCard from "@/components/settings/FeedbackSettingsCard";
-import CollapsibleSection from "@/components/ui/collapsible-section";
-import TroubleshootingSettingsCard from "@/components/settings/TroubleshootingSettingsCard";
-import SharepointSyncCard from "@/components/settings/SharepointSyncCard";
-import MobileFilterCard from "@/components/settings/MobileFilterCard";
-import ScheduledJobsTimeline from "@/components/settings/JobsTimeline";
-import AccessoryAssetMap from "@/components/settings/AccessoryAssetMap";
-import StockKeepersSelector from "@/components/settings/StockKeepersSelector";
-import LoanConfiguration from "@/components/settings/LoanConfiguration";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { loanConfigQuery, requestableAssetIdsQuery } from "@/api/queries";
+import { PanelHostContext, SaveContext, useSave, useSaveStore, type PanelHost } from "@/components/settings/saveStatus";
+import { useAccessoryPipeline } from "@/components/settings/accessoryPipeline";
+import { Appearance } from "@/components/settings/sections/Appearance";
+import { DevAuth } from "@/components/settings/sections/DevAuth";
+import { DevSwitches } from "@/components/settings/sections/DevSwitches";
+import { Assets } from "@/components/settings/sections/Assets";
+import { Accessories } from "@/components/settings/sections/Accessories";
+import { Sites } from "@/components/settings/sections/Sites";
+import { Loans } from "@/components/settings/sections/Loans";
+import { Jobs } from "@/components/settings/sections/Jobs";
+import { Insight } from "@/components/settings/sections/Insight";
+
+///  +-----------------------------------------------------------------+
+///  |                  SETTINGS                                       |
+///  +-----------------------------------------------------------------+
+//
+//  A settings workspace rather than a stack of cards: the areas grouped by
+//  the job they do down the left, one area at a time on the right, and a
+//  panel beyond that for anything too big for a row. Each area has its own
+//  address (/settings/loans), so a link can land on it.
+//
+//  ONE SAVE MODEL, said once in the sidebar: single settings save the moment
+//  they change; editors that open on the right wait for Save changes. The
+//  header carries the page's latest save, and a failed one can be retried
+//  from there or from the row.
+//
+//  EVERYONE GETS APPEARANCE. For anyone but an admin that's the whole page,
+//  laid out as a small complete page rather than an admin page with one
+//  card left on it.
+//
+//  On a phone the sidebar becomes an index page, and an area opens with a
+//  back bar; panels take the whole screen.
+///  +-----------------------------------------------------------------+
+
+type Key = "assets" | "accessories" | "sites" | "loans" | "jobs" | "insight" | "appearance" | "dev";
+
+const NAV: { group: string; dev?: boolean; items: { key: Key; label: string; icon: string }[] }[] = [
+  { group: "Requesting", items: [{ key: "assets", label: "Assets", icon: "inventory_2" }, { key: "accessories", label: "Accessories", icon: "cable" }] },
+  { group: "Fulfilment", items: [{ key: "sites", label: "Sites & stock keepers", icon: "location_on" }, { key: "loans", label: "Loans", icon: "event_repeat" }] },
+  { group: "Automation", items: [{ key: "jobs", label: "Jobs & integrations", icon: "schedule" }] },
+  { group: "Insight", items: [{ key: "insight", label: "Troubleshooting & feedback", icon: "insights" }] },
+  { group: "You", items: [{ key: "appearance", label: "Appearance", icon: "palette" }] },
+  { group: "Developer", dev: true, items: [{ key: "dev", label: "Dev tools", icon: "key" }] },
+];
+
+const TITLES: Record<Key, [string, string]> = {
+  assets: ["Assets", "What people can request, and which models standard requests use."],
+  accessories: ["Accessories", "Three layers decide who can request an accessory. Set them up in order."],
+  sites: ["Sites & stock keepers", "Who hands out hardware at each site, and each site's colour."],
+  loans: ["Loans", "Loanable devices, booking length and reminders."],
+  jobs: ["Jobs & integrations", "Background jobs, their schedules and history, and the two outbound integrations."],
+  insight: ["Troubleshooting & feedback", "How the troubleshooting library is used, and what staff say about Checkout."],
+  appearance: ["Appearance", "How Checkout looks for you on this browser."],
+  dev: ["Dev tools", "Switch off the guards that get in the way of testing, and sign in as someone else."],
+};
+
+const SECTIONS: Record<Key, () => ReactNode> = {
+  assets: () => <Assets />,
+  accessories: () => <Accessories />,
+  sites: () => <Sites />,
+  loans: () => <Loans />,
+  jobs: () => <Jobs />,
+  insight: () => <Insight />,
+  appearance: () => <Appearance staff={false} />,
+  dev: () => (
+    <>
+      <DevSwitches />
+      <DevAuth />
+    </>
+  ),
+};
+
+const isKey = (s: string | undefined): s is Key => !!s && s in TITLES;
 
 export default function SettingsPage() {
-  const { role } = useAuth();
-  const isAdmin = role === "ADMIN";
+  const { section } = useParams<{ section?: string }>();
+  const { role, isLoading } = useAuth();
+  const store = useSaveStore();
+  const desk = useMediaQuery("(min-width: 55rem)");
+  const wide = useMediaQuery("(min-width: 80rem)");
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   const isDev = import.meta.env.VITE_APP_ENV === "development";
+  const admin = role === "ADMIN";
 
-  // Bumped whenever a job is manually queued, so the history table refetches.
-  const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
-  const [assetConfigRefreshKey, setAssetConfigRefreshKey] = useState(0);
+  if (isLoading) return null;
 
-  // -- Left column: the vertically-stacked settings ------------------
-  const stackedSettings = (
-    <div className="space-y-8">
-      {/* Appearance -- visible to everyone */}
-      <SettingsSection icon="palette" title="Appearance">
-        <div className="space-y-6">
-        <SettingsRow
-          title="Theme"
-          description="Switch between light and dark visual interfaces."
-        >
-          {/* inline-flex, not `contents`: an element with display:contents has
-              no box, so getBoundingClientRect returns zeros and the tour's
-              visibility check would treat it as hidden. */}
-          <span data-tour="settings-theme" className="inline-flex">
-            <ThemeSwitch />
-          </span>
-        </SettingsRow>
-
-        {/* Below the toggle, not instead of it: a preset defines BOTH a light
-            and a dark palette, so the two settings compose. */}
-        <SettingsRow
-          stacked
-          title="Palette"
-          description="The colours used across the app. Each has its own light and dark version."
-        >
-          <ThemePresetPicker />
-        </SettingsRow>
-        </div>
-      </SettingsSection>
-
-      {/* Asset Configuration -- admin-only */}
-      {isAdmin && (
-        <SettingsSection icon="inventory" title="Asset Configuration">
-          <AssetConfigurationSettings onRequestableChange={() => setAssetConfigRefreshKey((k) => k + 1)}/>
-        </SettingsSection>
-      )}
-
-      {/* Accessory Configuration -- admin-only */}
-      {isAdmin && (
-        <SettingsSection icon="keyboard" title="Accessory Configuration">
-          <p className="text-sm text-info-light mb-4">
-            Which accessory categories can be requested, and the named options
-            requesters pick from in each. "Something else" is always offered
-            automatically and locks a request to non-standard.
-          </p>
-          {/* Half of the cross-layer story. Repeated in scoped form under
-              Accessory Availability by Asset rather than hoisted into one
-              page-level panel, so each section explains itself where the
-              admin is working. */}
-          <p className="text-sm text-info-light mb-4">
-            This controls what <em>exists</em>, not who can see it. A category
-            set up perfectly here is still invisible to everyone until it's
-            mapped to at least one asset category under{" "}
-            <span className="font-semibold text-on-surface-variant">
-              Accessory Availability by Asset
-            </span>{" "}
-            below — requesters only ever see the two combined. Leaving the
-            requestable list empty applies no restriction rather than blocking
-            everything.
-          </p>
-          <AccessoryConfigurationSettings />
-        </SettingsSection>
-      )}
-
-      {/* Accessory Availability by Asset (L3) -- admin-only */}
-      {isAdmin && (
-        <SettingsSection icon="account_tree" title="Accessory Availability by Asset">
-          <p className="text-sm text-info-light mb-4">
-            Which accessory categories a user can request, based on the asset
-            categories they hold in Snipe-IT. Only requestable accessory
-            categories can be mapped here, and requesters only see accessories
-            tied to assets they actually have.
-          </p>
-          {/* The other half. This is the layer that gates: an unmapped
-              accessory category is invisible no matter how it's configured
-              above, which is the most common "I set it up and nobody can
-              request it" cause. */}
-          <p className="text-sm text-info-light mb-4">
-            This is what decides what a given person sees. An accessory
-            category mapped to nothing here can't be requested by anyone, even
-            when it's requestable and has options configured under{" "}
-            <span className="font-semibold text-on-surface-variant">
-              Accessory Configuration
-            </span>{" "}
-            above. If an admin reports configuring an accessory that nobody can
-            request, check this mapping first.
-          </p>
-          <AccessoryAssetMap refreshKey={assetConfigRefreshKey}/>
-        </SettingsSection>
-      )}
-
-      {/* Stock Keepers -- admin-only */}
-      {isAdmin && (
-        <SettingsSection icon="warehouse" title="Stock Keepers">
-          <p className="text-sm text-info-light mb-4">
-            Who hands out hardware at each site. A stock keeper marks a request
-            ready to collect once the device is physically with them — whether
-            it was already at their location or has just been shipped in — and
-            the requester then confirms they've collected it.
-          </p>
-          <p className="text-sm text-info-light mb-4">
-            Assigned here rather than read from a person's Snipe-IT location,
-            so moving desks doesn't quietly change who can act on a request.
-            Admins can always stand in as stock keeper at any location, so a
-            site left empty falls to IT rather than stalling.
-          </p>
-          <StockKeepersSelector />
-        </SettingsSection>
-      )}
-
-      {/* Loans -- admin-only. Sits after Stock Keepers because the
-          keepers are who hands a loaned device over and takes it back. */}
-      {isAdmin && (
-        <SettingsSection icon="devices" title="Loans">
-          <p className="text-sm text-info-light mb-4">
-            Devices like Wi-Fi hotspots and KVMs are borrowed for a fixed window rather than issued.
-            A request goes straight to IT — there is no manager stage — and IT
-            assigns one of the devices below. The stock keeper hands it
-            over, the requester collects it, and the keeper closes the loan off
-            when it comes back, which checks it in to Snipe-IT.
-          </p>
-          <LoanConfiguration />
-        </SettingsSection>
-      )}
-
-      {/* Snipe-IT Configuration -- admin-only */}
-      {isAdmin && (
-        <SettingsSection icon="settings_applications" title="Snipe-IT Configuration">
-          <SkeletonStatusSelector />
-        </SettingsSection>
-      )}
-
-      {/* FIXED: Mobile Number Filtering -- admin-only */}
-      {isAdmin && (
-        <SettingsSection icon="smartphone" title="Mobile Number Filtering">
-          <p className="text-sm text-info-light mb-4">
-            Which numbers count as mobiles when reusing an existing number on
-            checkout. Numbers not matching these patterns are treated as
-            landlines and hidden from the reuse picker.
-          </p>
-          <MobileFilterCard />
-        </SettingsSection>
-      )}
-
-      {isAdmin && (
-        <SettingsSection icon="sync" title="SharePoint Sync">
-          <p className="text-sm text-info-light mb-4">
-            Mirror tablet and phone requests to the SharePoint ordering ledger. The sync runs
-            nightly; adjust its schedule under Background Jobs.
-          </p>
-          <SharepointSyncCard />
-        </SettingsSection>
-      )}
-
-      {/* Dev Auth -- development-only */}
-      {isDev && (
-        <SettingsSection icon="science" title="Dev Auth">
-          <p className="text-sm text-info-light mb-4">
-            Developer-only control for impersonating users when running outside the SSO gateway.
-          </p>
-          <DevAuthToggle />
-        </SettingsSection>
-      )}
-    </div>
-  );
-
-  // -- Right column: the wide Background Jobs section (admin-only) ----
-  const jobsSection = (
-    <div className="min-w-0 space-y-8">
-      <SettingsSection icon="schedule" title="Background Jobs">
-        <div className="space-y-8">
-          <ScheduledJobsTimeline />
-          <div>
-            <h3 className="font-semibold text-on-background mb-1">Scheduled Jobs</h3>
-            <p className="text-sm text-info-light mb-4">
-              Maintenance jobs, most of them on a schedule. Trigger any of them
-              manually with "Run now"; the ones with no schedule shown are
-              run by hand only.
-            </p>
-            <ScheduledJobsCard onQueued={() => setJobsRefreshKey((k) => k + 1)} />
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-on-background mb-1">Job History</h3>
-            <p className="text-sm text-info-light mb-4">
-              Recent job runs, newest first. Filter by status or type.
-            </p>
-            <div className="mb-4">
-              <JobStatusBar refreshKey={jobsRefreshKey} />
-            </div>
-            <CollapsibleSection title="Jobs History Table">
-              <JobHistoryTable refreshKey={jobsRefreshKey} />
-            </CollapsibleSection>
-          </div>
-        </div>
-      </SettingsSection>
-      <SettingsSection icon="troubleshoot" title="Troubleshooting">
-        <p className="text-sm text-info-light mb-4">
-          How the troubleshooting library is being used, and whether it stops tickets.
-          Collection is anonymous; turn it off here if you'd rather not gather it.
-        </p>
-        <TroubleshootingSettingsCard />
-      </SettingsSection>
-      <SettingsSection icon="forum" title="Feedback">
-        <p className="text-sm text-info-light mb-4">
-          Anonymous staff feedback about Checkout. Toggle collection on or off, review
-          responses, and export them.
-        </p>
-        <FeedbackSettingsCard />
-      </SettingsSection>
-    </div>
-  );
-
-  return (
-    <main className="w-full min-h-[calc(100vh-4rem)] bg-landing-bg">
-      {/* THE GUTTER IS HALVED ON A PHONE, and so is the padding inside every
-          card (see SettingsSection). They compound: 24px of page gutter plus
-          32px of card padding is 112px of empty margin on a 375px screen —
-          under a third of it gone before any content starts, which is what was
-          squeezing the selectors and tables inside.
-          Halving both gives back 56px, about a fifth of the viewport. On a
-          desktop the space is affordable and the breathing room is worth
-          having, so nothing changes there. */}
-      <div
-        className={`${isAdmin ? "max-w-3xl lg:max-w-[1600px]" : "max-w-3xl"} py-8 px-3 mx-auto sm:py-12 sm:px-6`}
-      >
-        {/* Page header */}
-        <div className="mb-10 text-center">
-          <div className="flex items-center mb-2 justify-center">
-            <span className="material-symbols-outlined text-on-background mx-5 !text-4xl"> display_settings </span>
-            <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-background">
-              Settings
-            </h1>
-          </div>
-          {/* Deliberately says nothing about saving. Most sections save on
-              change, but the standard accessories, mobile filter and job
-              schedules have their own Save button — so a blanket "changes save
-              automatically" told people the opposite of the truth in exactly
-              the places where losing an edit costs the most. Save behaviour is
-              stated next to the control it applies to, not up here. */}
-          <p className="text-info-light">
-            What can be requested, how it's fulfilled, and the background jobs that keep it running.
-          </p>
-        </div>
-
-        {isAdmin ? (
-          // Two columns on lg+: fixed-width settings stack on the left,
-          // flexible (wide) jobs section on the right. minmax(0,1fr) lets the
-          // right track shrink so JobHistoryTable's own overflow-x-auto can
-          // scroll on very narrow viewports instead of blowing out the grid.
-          // Collapses to a single stacked column below lg.
-          <div className="grid grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)] gap-8 lg:items-start">
-            {stackedSettings}
-            {jobsSection}
-          </div>
-        ) : (
-          stackedSettings
-        )}
-      </div>
-    </main>
-  );
-}
-
-type SectionProps = {
-  icon: string;
-  title: string;
-  children: React.ReactNode;
-};
-
-function SettingsSection({ icon, title, children }: SectionProps) {
-  return (
-    // Padding halved below `sm` — the other half of the squeeze described on
-    // the page container above. Every section on the page is one of these, so
-    // this is the single place that decides it.
-    <section className="bg-surface-container-lowest shadow-md rounded-xl p-4 shadow-sm sm:p-8">
-      <div className="flex items-center gap-3 mb-4 sm:mb-6">
-        <span className="material-symbols-outlined text-on-background">{icon}</span>
-        <h2 className="font-headline text-xl font-bold text-on-background">{title}</h2>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-type RowProps = {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  /**
-   * Put the control BELOW the text rather than beside it.
-   *
-   * The side-by-side layout gives its control a `shrink-0` column, which is
-   * right for a toggle or a single select but squeezes the description into a
-   * narrow strip once the control is wide. Anything that is a row of options
-   * wants the full width, and the text wants it back.
-   */
-  stacked?: boolean;
-};
-
-function SettingsRow({ title, description, children, stacked = false }: RowProps) {
-  if (stacked) {
+  // Anyone but an admin: Appearance, and impersonation in a development build.
+  if (!admin) {
+    if (section) return <Navigate to="/settings" replace />;
     return (
-      <div className="flex flex-col gap-3">
-        <div>
-          <h3 className="font-semibold text-on-background">{title}</h3>
-          {description && <p className="text-sm text-info-light">{description}</p>}
+      <SaveContext.Provider value={store}>
+        <div className="mx-auto flex w-full max-w-[42.5rem] flex-col gap-4 px-3 pt-4 pb-30 [zoom:1.2] phone:px-8 phone:pt-6">
+          <Header k="appearance" />
+          <Appearance staff />
+          {isDev && <DevAuth />}
         </div>
-        {children}
-      </div>
+      </SaveContext.Provider>
     );
   }
 
+  const key = isKey(section) && (section !== "dev" || isDev) ? section : null;
+  if (section && !key) return <Navigate to="/settings" replace />;
+  if (!key && desk) return <Navigate to="/settings/assets" replace />;
+
+  const host: PanelHost = { slot, layout: !desk ? "phone" : wide ? "docked" : "float" };
+  const narrow = key === "appearance" || key === "dev";
+
+  const page = key && (
+    <div className={cn("mx-auto flex w-full flex-col gap-4 px-3 pt-4 pb-30 [zoom:1.2] desk:px-8 desk:pt-6", narrow ? "max-w-[55rem]" : "max-w-[82.5rem]")}>
+      <Header k={key} />
+      {SECTIONS[key]()}
+    </div>
+  );
+
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <h3 className="font-semibold text-on-background">{title}</h3>
-        {description && (
-          <p className="text-sm text-info-light">{description}</p>
+    <SaveContext.Provider value={store}>
+      <PanelHostContext.Provider value={host}>
+        {desk ? (
+          <div className="grid h-full min-h-0 grid-cols-[17.75rem_minmax(0,1fr)]">
+            <Sidebar current={key} isDev={isDev} />
+            <div className="relative grid min-h-0 grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-h-0 min-w-0 overflow-auto">{page}</div>
+              <div ref={setSlot} className="min-h-0" />
+            </div>
+          </div>
+        ) : key ? (
+          <>
+            <div className="sticky top-0 z-3 flex h-13 items-center border-b border-line bg-sheet px-2">
+              <Link to="/settings" className="flex h-11 items-center gap-1 rounded-10 pr-2.5 pl-1.5 fs-13 font-medium text-tx no-underline outline-none focus-visible:outline-2 focus-visible:outline-brand">
+                <Icon name="arrow_back" size={19} />
+                Settings
+              </Link>
+            </div>
+            {page}
+          </>
+        ) : (
+          <Index isDev={isDev} />
         )}
+      </PanelHostContext.Provider>
+    </SaveContext.Provider>
+  );
+}
+
+/** Which areas need attention, for the sidebar's and the index's marks. */
+function useIssues() {
+  const pipeline = useAccessoryPipeline();
+  const loans = useQuery(loanConfigQuery);
+  const loansOff = loans.isSuccess && loans.data.devices.length === 0;
+  return {
+    accessories: pipeline.attention > 0 ? `${pipeline.attention} need attention` : null,
+    loans: loansOff ? "Loans are off" : null,
+  } as Partial<Record<Key, string | null>>;
+}
+
+function Sidebar({ current, isDev }: { current: Key | null; isDev: boolean }) {
+  const issues = useIssues();
+  return (
+    <aside className="relative z-2 min-h-0 overflow-auto border-r border-line bg-subtle shadow-[2px_0_6px_var(--shade)] [clip-path:inset(0_-1.5rem_0_0)]">
+      <nav aria-label="Settings" className="flex flex-col gap-4.5 pt-5.5 pr-3 pb-30 pl-4 [zoom:1.2]">
+        <div className="px-2 font-head fs-15 font-medium tracking-head">Settings</div>
+        {NAV.filter((g) => !g.dev || isDev).map((g) => (
+          <div key={g.group} className="flex flex-col gap-1">
+            <TrayLabel className="flex items-center gap-1.5 px-2 pb-0.5 fs-10.5">
+              {g.group}
+              {g.dev && <span className="font-sans fs-11 font-normal tracking-normal normal-case">· dev builds</span>}
+            </TrayLabel>
+            {g.items.map((it) => {
+              const on = it.key === current;
+              const issue = issues[it.key];
+              return (
+                <Link
+                  key={it.key}
+                  to={`/settings/${it.key}`}
+                  aria-current={on ? "page" : undefined}
+                  className={cn(
+                    "flex min-h-8 items-center gap-2.25 rounded-8 px-2 py-1.5 fs-13.5 leading-[1.3] no-underline outline-none focus-visible:outline-2 focus-visible:outline-brand",
+                    on ? "bg-sheet font-medium text-tx shadow-[0_0_0_1px_var(--line)]" : "text-tx3 hover:bg-hover hover:text-tx"
+                  )}
+                >
+                  <Icon name={it.icon} size={18} weight={300} fill={on} className={on ? "text-brand" : "text-mut"} />
+                  <span className="flex-1">{it.label}</span>
+                  {issue && <Icon name="error" size={16} weight={300} className="text-stop" aria-label={issue} />}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+        <div className="rounded-12 bg-tray p-0.75">
+          <TrayLabel className="px-2.25 pt-1.5 pb-1.25 fs-10.5">How saving works</TrayLabel>
+          <div className="flex flex-col gap-2 rounded-9 border border-line bg-sheet px-2.75 py-2.5 fs-12 leading-[1.45] text-tx3">
+            <span className="flex gap-1.75">
+              <Icon name="bolt" size={15} className="text-ok" />
+              Single settings save the moment you change them.
+            </span>
+            <span className="flex gap-1.75">
+              <Icon name="right_panel_open" size={15} className="text-prog" />
+              Editors that open on the right wait for Save changes.
+            </span>
+          </div>
+        </div>
+      </nav>
+    </aside>
+  );
+}
+
+function Index({ isDev }: { isDev: boolean }) {
+  const navigate = useNavigate();
+  const issues = useIssues();
+  const { resolvedTheme } = useTheme();
+  const assetReq = useQuery(requestableAssetIdsQuery);
+  const loans = useQuery(loanConfigQuery);
+  const sums: Record<Key, string> = {
+    assets: `${assetReq.data?.length ?? 0} categories requestable`,
+    accessories: issues.accessories ?? "All visible",
+    sites: "Keepers and colours",
+    loans: loans.data ? (loans.data.devices.length ? `${loans.data.devices.length} devices` : "Loans off") : "",
+    jobs: "Schedules, history, SharePoint",
+    insight: "Analytics and feedback",
+    appearance: resolvedTheme === "dark" ? "Dark" : "Light",
+    dev: "Impersonation",
+  };
+  return (
+    <div className="flex flex-col gap-3.5 px-3 pt-4.5 pb-30 [zoom:1.2]">
+      <div className="px-1">
+        <div className="font-head fs-17.5 font-medium tracking-head">Settings</div>
+        <div className="mt-0.75 fs-11.5 text-mut">Single settings save as you change them.</div>
       </div>
-      <div className="shrink-0">{children}</div>
+      {NAV.filter((g) => !g.dev || isDev).map((g) => (
+        <section key={g.group} className="rounded-14 bg-tray p-0.75">
+          <TrayLabel className="px-2.5 pt-1.75 pb-1.5">{g.group}</TrayLabel>
+          <div className="overflow-hidden rounded-11 border border-line bg-sheet">
+            {g.items.map((it, i) => (
+              <button
+                key={it.key}
+                type="button"
+                onClick={() => navigate(`/settings/${it.key}`)}
+                className={cn(
+                  "flex min-h-15 w-full cursor-pointer items-center gap-3 border-0 bg-transparent py-2 pr-3 pl-3.5 text-left font-sans text-tx outline-none focus-visible:bg-subtle",
+                  i > 0 && "border-t border-line2"
+                )}
+              >
+                <Icon name={it.icon} size={17.5} weight={300} className="text-tx3" />
+                <span className="min-w-0 flex-1">
+                  <span className="block fs-13 font-medium">{it.label}</span>
+                  <span className="mt-0.5 block fs-11 text-mut">{sums[it.key]}</span>
+                </span>
+                {issues[it.key] && <Icon name="error" size={15.5} className="text-stop" />}
+                <Icon name="chevron_right" size={17.5} className="text-mut" />
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function Header({ k }: { k: Key }) {
+  const { status, retry } = useSave();
+  const [title, sub] = TITLES[k];
+  const tracked = k !== "insight" && k !== "dev";
+  const s =
+    k === "appearance"
+      ? { icon: "cloud_done", text: "Saved to this browser", tone: "text-mut" }
+      : status?.state === "saving"
+        ? { icon: "hourglass_top", text: "Saving…", tone: "text-mut" }
+        : status?.state === "failed"
+          ? { icon: "error", text: "A change didn’t save", tone: "text-stop" }
+          : status?.state === "saved"
+            ? { icon: "cloud_done", text: `All changes saved · ${status.at}`, tone: "text-tx3" }
+            : { icon: "cloud_done", text: "All changes saved", tone: "text-mut" };
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="min-w-0">
+        <h1 className="m-0 font-head fs-18.5 font-medium tracking-head">{title}</h1>
+        <div className="mt-0.75 fs-11.5 text-pretty text-mut">{sub}</div>
+      </div>
+      {tracked && (
+        <span role="status" className={cn("inline-flex items-center gap-1.5 pb-0.5 fs-11 whitespace-nowrap", s.tone)}>
+          <Icon name={s.icon} size={14} weight={300} />
+          {s.text}
+          {status?.state === "failed" && k !== "appearance" && (
+            <button
+              type="button"
+              onClick={retry}
+              className="h-6.5 cursor-pointer rounded-7 border border-stop-line bg-sheet px-2.25 font-sans fs-10.5 font-medium text-stop"
+            >
+              Retry
+            </button>
+          )}
+        </span>
+      )}
     </div>
   );
 }

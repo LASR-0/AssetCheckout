@@ -290,8 +290,16 @@ export interface Request {
 
   createdAt: string;
 
+  /** The manager's approval (or an admin's on their behalf). */
+  approvedBy?: string | null;
+  approvedAt?: string | null;
   adminApprovedBy?: string | null;
   adminApprovedAt?: string | null;
+  /** When IT handed it to the fulfilment chain: checked out in Snipe. */
+  fulfilledAt?: string | null;
+  /** "Automated Job" for the stale-request and orphan cleanups. */
+  rejectedBy?: string | null;
+  rejectedAt?: string | null;
 
   // The ModelRequest working buffer. Shared by assets and accessories:
   //   - Assets key off snipeModelId + linkedAssetId (the model + skeleton

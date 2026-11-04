@@ -114,7 +114,7 @@ describe("an established account on the home page", () => {
 
   it("uses the authored copy, not the fallback wording", () => {
     const step = steps.find((s) => s.id === "statuses")!;
-    expect(step.description).toContain("waiting on an approver");
+    expect(step.description).toContain("keep their outcome");
   });
 
   it("includes the accessory step this time", () => {

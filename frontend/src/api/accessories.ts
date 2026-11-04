@@ -1,4 +1,5 @@
 import { apiFetch } from "@/api/client";
+import { invalidate } from "@/api/queryClient";
 import type {
   AccessoryCategory,
   AccessorySettings,
@@ -117,6 +118,7 @@ export async function setRequestableAccessoryCategoryIds(
     "/api/accessories/settings/requestable-categories",
     { method: "PUT", body: { ids } }
   );
+  await invalidate(["settings", "accessories"], ["reference", "accessory-categories"]);
 }
 
 /**
@@ -131,6 +133,7 @@ export async function setStandardAccessoriesForCategory(
     `/api/accessories/settings/standard-accessories/${categoryId}`,
     { method: "PUT", body: { options } }
   );
+  await invalidate(["settings", "accessories"]);
 }
 
 ///  +-----------------------------------------------------------------+

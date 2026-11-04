@@ -9,3 +9,6 @@ allowBuilds:
   prisma: true
   bcrypt: false
   msw: false
+
+# Refuse to install on a Node below the root package.json engines floor.
+engineStrict: true

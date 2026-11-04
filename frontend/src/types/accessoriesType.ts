@@ -1,6 +1,8 @@
 export type AccessoryCategory = {
   id: number;
   name: string;
+  /** "For me" lists only: which of the viewer's asset categories unlock it. */
+  unlockedBy?: number[];
 };
 
 ///  +-----------------------------------------------------------------+

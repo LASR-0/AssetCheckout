@@ -6,12 +6,15 @@ import { BrowserRouter } from 'react-router-dom'
 // must be declared before anything can reference it.
 import './styles/material-symbols.css'
 import './index.css'
-import './styles/presets.css'
+import './styles/palettes.css'
 // Last: the tour overrides driver.js's shipped stylesheet, and both are
 // unlayered, so this has to come after everything it restates.
 import './styles/tour.css'
 import App from './App.tsx'
 import { ThemeProvider } from './components/settings/theme-provider.tsx'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { queryClient } from './api/queryClient'
+import { persistOptions } from './api/persist'
 
 createRoot(document.getElementById('root')!).render(
 
@@ -20,9 +23,11 @@ createRoot(document.getElementById('root')!).render(
     attribute="class"
     defaultTheme='system'
     storageKey="vite-ui-theme">
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </PersistQueryClientProvider>
     </ThemeProvider>
   </StrictMode>,
 )

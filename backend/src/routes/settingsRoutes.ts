@@ -18,10 +18,15 @@ import {
   type StockKeeperEntry,
   getLoanDevices,
   getLoanMaxDays,
+  getLoanReminderOffsets,
+  setLoanReminderOffsets,
   setLoanMaxDays,
+  getSiteColours,
+  setSiteColour,
 } from "../services/settings.js";
 import { ADMIN_EMAILS } from "../config/auth.js";
 import { saveLoanDevices } from "../services/loan.js";
+import { devSettingsAvailable, getDevSettings, setDevSettings } from "../services/devSettings.js";
 
 const router = Router();
 
@@ -237,6 +242,44 @@ router.put("/mobile-filter", async (req: Request, res: Response, next: NextFunct
 });
 
 ///  +-----------------------------------------------------------------+
+///  |          DEV SETTINGS (development only)                        |
+///  +-----------------------------------------------------------------+
+
+/**
+ * GET/PUT /api/settings/dev — the switches in services/devSettings.ts.
+ *
+ * 404 outside development, as if the route weren't there. Anyone may read
+ * them (the request forms need to know whether to hide the requestee from
+ * the approver picker); only an admin may change them.
+ */
+router.get("/dev", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!devSettingsAvailable()) return res.status(404).json({ error: "Not found" });
+    res.json(await getDevSettings());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/dev", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!devSettingsAvailable()) return res.status(404).json({ error: "Not found" });
+    if (!requireAdmin(req, res)) return;
+    const body = req.body ?? {};
+    const patch: Record<string, boolean> = {};
+    for (const key of ["suppressEmail", "allowSelfApproval"]) {
+      if (key in body) {
+        if (typeof body[key] !== "boolean") return res.status(400).json({ error: `${key} must be true or false` });
+        patch[key] = body[key];
+      }
+    }
+    res.json(await setDevSettings(patch, getActorEmail(req)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
 ///  |          ACCESSORY ↔ ASSET-CATEGORY MAP (L3)                    |
 ///  +-----------------------------------------------------------------+
 
@@ -363,6 +406,42 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 });
 
 ///  +-----------------------------------------------------------------+
+///  |                        SITE COLOURS                             |
+///  +-----------------------------------------------------------------+
+//
+//  Read by everyone (every page that names a site draws its dot); written
+//  by admins only.
+///  +-----------------------------------------------------------------+
+
+router.get("/site-colours", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ colours: await getSiteColours() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/site-colours", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+
+    const { locationId, colour } = req.body ?? {};
+    if (typeof locationId !== "number" || !Number.isFinite(locationId) || locationId <= 0) {
+      return res.status(400).json({ error: "locationId must be a positive number" });
+    }
+    if (colour !== null && typeof colour !== "string") {
+      return res.status(400).json({ error: "colour must be a #RRGGBB string or null" });
+    }
+
+    // Throws 400 on a malformed colour — surfaced by the error middleware.
+    const colours = await setSiteColour(locationId, colour, getActorEmail(req));
+    res.json({ colours });
+  } catch (err) {
+    next(err);
+  }
+});
+
+///  +-----------------------------------------------------------------+
 ///  |                  LOAN CONFIGURATION                             |
 ///  +-----------------------------------------------------------------+
 //
@@ -373,11 +452,12 @@ router.put("/stock-keepers", async (req: Request, res: Response, next: NextFunct
 
 router.get("/loans", async (_req, res, next) => {
   try {
-    const [devices, maxLoanDays] = await Promise.all([
+    const [devices, maxLoanDays, reminderDays] = await Promise.all([
       getLoanDevices(),
       getLoanMaxDays(),
+      getLoanReminderOffsets(),
     ]);
-    res.json({ devices, maxLoanDays });
+    res.json({ devices, maxLoanDays, reminderDays });
   } catch (err) {
     next(err);
   }
@@ -387,7 +467,7 @@ router.put("/loans", async (req, res, next) => {
   try {
     if (!requireAdmin(req, res)) return;
 
-    const { devices, maxLoanDays } = req.body ?? {};
+    const { devices, maxLoanDays, reminderDays } = req.body ?? {};
 
     // An empty list is a real value here — it turns loans off. Absent means
     // "leave the list alone", so the max-days field can be saved on its own.
@@ -400,6 +480,9 @@ router.put("/loans", async (req, res, next) => {
     ) {
       return res.status(400).json({ error: "maxLoanDays must be a positive integer" });
     }
+    if (reminderDays !== undefined && !Array.isArray(reminderDays)) {
+      return res.status(400).json({ error: "reminderDays must be an array" });
+    }
 
     const actor = getActorEmail(req);
     if (devices !== undefined) {
@@ -408,13 +491,21 @@ router.put("/loans", async (req, res, next) => {
     if (maxLoanDays !== undefined) {
       await setLoanMaxDays(maxLoanDays, actor);
     }
+    if (reminderDays !== undefined) {
+      try {
+        await setLoanReminderOffsets(reminderDays, actor);
+      } catch (err) {
+        return res.status(400).json({ error: (err as Error).message });
+      }
+    }
 
     // Echo the authoritative config back, as every other setter here does.
-    const [savedDevices, savedMaxLoanDays] = await Promise.all([
+    const [savedDevices, savedMaxLoanDays, savedReminderDays] = await Promise.all([
       getLoanDevices(),
       getLoanMaxDays(),
+      getLoanReminderOffsets(),
     ]);
-    res.json({ devices: savedDevices, maxLoanDays: savedMaxLoanDays });
+    res.json({ devices: savedDevices, maxLoanDays: savedMaxLoanDays, reminderDays: savedReminderDays });
   } catch (err) {
     next(err);
   }

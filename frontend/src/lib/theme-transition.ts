@@ -25,9 +25,12 @@ type Palette = Record<string, string>;
 /** How a palette value is written, so we can put it back the same way. */
 type ValueKind = "triple" | "hex" | "rgb";
 
+/** r, g, b, then alpha (1 unless the value was written as rgba). */
+type Channels = [number, number, number, number];
+
 interface ParsedValue {
   kind: ValueKind;
-  channels: [number, number, number];
+  channels: Channels;
 }
 
 let palettes: { light: Palette; dark: Palette } | null = null;
@@ -166,6 +169,7 @@ function parseValue(value: string): ParsedValue | null {
         parseInt(full.slice(0, 2), 16),
         parseInt(full.slice(2, 4), 16),
         parseInt(full.slice(4, 6), 16),
+        1,
       ],
     };
   }
@@ -177,20 +181,27 @@ function parseValue(value: string): ParsedValue | null {
       .filter(Boolean)
       .map(Number);
     if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN)) return null;
-    return { kind: "rgb", channels: [parts[0], parts[1], parts[2]] };
+    // Keep the alpha: the shadow colour (--shade) is translucent, and fading
+    // it as opaque would flash a solid black shadow for the length of the fade.
+    const alpha = parts.length > 3 && !Number.isNaN(parts[3]) ? parts[3] : 1;
+    return { kind: "rgb", channels: [parts[0], parts[1], parts[2], alpha] };
   }
 
   const parts = value.split(/[\s,]+/).filter(Boolean).map(Number);
   if (parts.length === 3 && !parts.some(Number.isNaN)) {
-    return { kind: "triple", channels: [parts[0], parts[1], parts[2]] };
+    return { kind: "triple", channels: [parts[0], parts[1], parts[2], 1] };
   }
 
   return null;
 }
 
-function formatValue(kind: ValueKind, [r, g, b]: [number, number, number]): string {
+function formatValue(kind: ValueKind, [r, g, b, a]: Channels): string {
   const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
   if (kind === "triple") return `${clamp(r)} ${clamp(g)} ${clamp(b)}`;
+  if (a < 1) {
+    const alpha = Math.max(0, Math.round(a * 1000) / 1000);
+    return `rgba(${clamp(r)}, ${clamp(g)}, ${clamp(b)}, ${alpha})`;
+  }
   return `rgb(${clamp(r)}, ${clamp(g)}, ${clamp(b)})`;
 }
 
@@ -250,7 +261,7 @@ export function withThemeFade(
 
   // Pair up only the properties we can actually interpolate; the rest ride
   // along with the class flip below.
-  const tracks: { name: string; kind: ValueKind; from: [number, number, number]; to: [number, number, number] }[] = [];
+  const tracks: { name: string; kind: ValueKind; from: Channels; to: Channels }[] = [];
   for (const name of Object.keys(target)) {
     const from = parseValue(source[name] ?? "");
     const to = parseValue(target[name]);
@@ -285,6 +296,7 @@ export function withThemeFade(
         track.from[0] + (track.to[0] - track.from[0]) * eased,
         track.from[1] + (track.to[1] - track.from[1]) * eased,
         track.from[2] + (track.to[2] - track.from[2]) * eased,
+        track.from[3] + (track.to[3] - track.from[3]) * eased,
       ]);
       root.style.setProperty(track.name, value);
       next[track.name] = value;

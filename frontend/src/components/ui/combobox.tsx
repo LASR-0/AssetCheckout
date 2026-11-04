@@ -11,7 +11,8 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { ChevronDownIcon, XIcon, CheckIcon } from "lucide-react"
+import { Icon } from "@/components/ui/icon"
+import { FLOATING_SURFACE, MENU_ROW } from "@/components/ui/surface"
 
 const Combobox = ComboboxPrimitive.Root
 
@@ -103,6 +104,10 @@ const stopWheelPropagation = (event: WheelEvent) => event.stopPropagation()
 //
 //  `align` stays "shift" and `fallbackAxisSide` stays "none": the popup is
 //  anchor-width and belongs directly above or below its input, never beside it.
+//
+//  `alwaysBelow` is the opt-out, for a caller that makes room under the input
+//  itself (the forms' PersonPicker scrolls the page as it opens). Without
+//  that, it brings the sliver back.
 ///  +-----------------------------------------------------------------+
 
 const COLLISION_AVOIDANCE = {
@@ -110,6 +115,8 @@ const COLLISION_AVOIDANCE = {
   align: "shift",
   fallbackAxisSide: "none",
 } as const
+
+const ALWAYS_BELOW = { ...COLLISION_AVOIDANCE, side: "none" } as const
 
 /** A rect large enough that it never binds, so Floating UI's own root boundary
  *  — the viewport — is what actually confines the popup. Client coordinates, and
@@ -141,11 +148,11 @@ function ComboboxTrigger({
   return (
     <ComboboxPrimitive.Trigger
       data-slot="combobox-trigger"
-      className={cn("[&_svg:not([class*='size-'])]:size-4", className)}
+      className={cn("text-mut", className)}
       {...props}
     >
       {children}
-      <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
+      <Icon name="expand_more" size={18} className="pointer-events-none" />
     </ComboboxPrimitive.Trigger>
   )
 }
@@ -158,7 +165,7 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
       className={cn(className)}
       {...props}
     >
-      <XIcon className="pointer-events-none" />
+      <Icon name="close" size={16} className="pointer-events-none" />
     </ComboboxPrimitive.Clear>
   )
 }
@@ -169,13 +176,15 @@ function ComboboxInput({
   disabled = false,
   showTrigger = true,
   showClear = false,
+  size = "md",
   ...props
-}: ComboboxPrimitive.Input.Props & {
+}: Omit<ComboboxPrimitive.Input.Props, "size"> & {
   showTrigger?: boolean
   showClear?: boolean
+  size?: "md" | "lg"
 }) {
   return (
-    <InputGroup className={cn("w-auto", className)}>
+    <InputGroup size={size} className={cn("w-auto", className)}>
       <ComboboxPrimitive.Input
         render={<InputGroupInput disabled={disabled} />}
         {...props}
@@ -208,12 +217,16 @@ function ComboboxContent({
   alignOffset = 0,
   anchor,
   collisionBoundary,
+  alwaysBelow = false,
   ...props
 }: ComboboxPrimitive.Popup.Props &
   Pick<
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor" | "collisionBoundary"
-  >) {
+  > & {
+    /** Never flip above the input. See COLLISION_AVOIDANCE. */
+    alwaysBelow?: boolean
+  }) {
   const stopWheelRef = useStopWheel()
 
   return (
@@ -227,7 +240,7 @@ function ComboboxContent({
         // See UNBOUNDED above — the default would confine the popup to
         // whatever scrollable box the input happens to sit in.
         collisionBoundary={collisionBoundary ?? UNBOUNDED}
-        collisionAvoidance={COLLISION_AVOIDANCE}
+        collisionAvoidance={alwaysBelow ? ALWAYS_BELOW : COLLISION_AVOIDANCE}
         className="isolate z-50"
       >
         <ComboboxPrimitive.Popup
@@ -237,7 +250,7 @@ function ComboboxContent({
           // Ring dropped to match ComboboxChips below: the popup's edge comes
           // from the border comboboxfield passes plus the shadow, so the
           // hairline ring was only doubling it up.
-          className={cn("group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md duration-100 data-[chips=true]:min-w-(--anchor-width) data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 *:data-[slot=input-group]:m-1 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:border-input/30 *:data-[slot=input-group]:bg-input/30 *:data-[slot=input-group]:shadow-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+          className={cn(FLOATING_SURFACE, "group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-(--anchor-width) origin-(--transform-origin) overflow-hidden data-open:animate-pop-in *:data-[slot=input-group]:m-1 *:data-[slot=input-group]:mb-0", className)}
           {...props}
         />
       </ComboboxPrimitive.Positioner>
@@ -267,7 +280,8 @@ function ComboboxItem({
     <ComboboxPrimitive.Item
       data-slot="combobox-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground not-data-[variant=destructive]:data-highlighted:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        MENU_ROW,
+        "pr-8",
         className
       )}
       {...props}
@@ -275,10 +289,10 @@ function ComboboxItem({
       {children}
       <ComboboxPrimitive.ItemIndicator
         render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
+          <span className="pointer-events-none absolute right-2 flex items-center justify-center text-brand" />
         }
       >
-        <CheckIcon className="pointer-events-none" />
+        <Icon name="check" size={16} />
       </ComboboxPrimitive.ItemIndicator>
     </ComboboxPrimitive.Item>
   )
@@ -301,7 +315,7 @@ function ComboboxLabel({
   return (
     <ComboboxPrimitive.GroupLabel
       data-slot="combobox-label"
-      className={cn("px-2 py-1.5 text-xs text-muted-foreground", className)}
+      className={cn("px-2.5 pt-2 pb-1 font-title fs-10 font-medium tracking-label text-mut uppercase", className)}
       {...props}
     />
   )
@@ -318,7 +332,7 @@ function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
     <ComboboxPrimitive.Empty
       data-slot="combobox-empty"
       className={cn(
-        "hidden w-full justify-center py-2 text-center text-sm text-muted-foreground group-data-empty/combobox-content:flex",
+        "hidden w-full justify-center py-2.5 text-center fs-12.5 text-mut group-data-empty/combobox-content:flex",
         className
       )}
       {...props}
@@ -333,7 +347,7 @@ function ComboboxSeparator({
   return (
     <ComboboxPrimitive.Separator
       data-slot="combobox-separator"
-      className={cn("-mx-1 my-1 h-px bg-border", className)}
+      className={cn("-mx-1 my-1 h-px bg-line2", className)}
       {...props}
     />
   )
@@ -349,14 +363,14 @@ function ComboboxChips({
       data-slot="combobox-chips"
       className={cn(
         // No focus ring — this was the purple one. `focus-within:ring-ring/50`
-        // compiles to nothing (--ring lives in App.css, which main.tsx never
-        // imports), so `focus-within:ring-3` supplied a width with no colour
+        // compiled to nothing (there is no --ring token), so
+        // `focus-within:ring-3` supplied a width with no colour
         // and fell through to Tailwind's `var(--tw-ring-color, currentcolor)`.
         // comboboxfield.tsx then set --tw-ring-color globally on the field via
         // `!ring-purple-900`, and that's what filled it in. Both halves are
         // gone now; same reasoning for the aria-invalid ring, whose colour
         // class (--destructive) is equally undefined.
-        "flex min-h-8 flex-wrap items-center gap-1 rounded-lg border border-input bg-transparent bg-clip-padding px-2.5 py-1 text-sm transition-colors has-aria-invalid:border-destructive has-data-[slot=combobox-chip]:px-1 dark:bg-input/30 dark:has-aria-invalid:border-destructive/50",
+        "flex min-h-9 flex-wrap items-center gap-1 rounded-8 border border-strong bg-sheet px-2.5 py-1 fs-13.5 transition-[border-color,box-shadow] focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--brand-sub)] has-aria-invalid:border-stop has-data-[slot=combobox-chip]:px-1",
         className
       )}
       {...props}
@@ -376,7 +390,7 @@ function ComboboxChip({
     <ComboboxPrimitive.Chip
       data-slot="combobox-chip"
       className={cn(
-        "flex h-[calc(--spacing(5.25))] w-fit items-center justify-center gap-1 rounded-sm bg-muted px-1.5 text-xs font-medium whitespace-nowrap text-foreground has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pr-0",
+        "flex h-6 w-fit items-center justify-center gap-1 rounded-pill border border-line bg-sheet px-2.25 fs-11.5 whitespace-nowrap text-tx2 has-disabled:pointer-events-none has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pr-0.5",
         className
       )}
       {...props}
@@ -384,11 +398,11 @@ function ComboboxChip({
       {children}
       {showRemove && (
         <ComboboxPrimitive.ChipRemove
-          render={<Button variant="ghost" size="icon-xs" />}
-          className="-ml-1 opacity-50 hover:opacity-100"
+          render={<Button variant="ghost" size="icon-sm" />}
+          className="size-5 rounded-pill"
           data-slot="combobox-chip-remove"
         >
-          <XIcon className="pointer-events-none" />
+          <Icon name="close" size={14} className="pointer-events-none" />
         </ComboboxPrimitive.ChipRemove>
       )}
     </ComboboxPrimitive.Chip>
@@ -402,14 +416,10 @@ function ComboboxChipsInput({
   return (
     <ComboboxPrimitive.Input
       data-slot="combobox-chip-input"
-      className={cn("min-w-16 flex-1 outline-none", className)}
+      className={cn("min-w-16 flex-1 bg-transparent outline-none placeholder:text-placeholder", className)}
       {...props}
     />
   )
-}
-
-function useComboboxAnchor() {
-  return React.useRef<HTMLDivElement | null>(null)
 }
 
 export {
@@ -428,5 +438,4 @@ export {
   ComboboxChipsInput,
   ComboboxTrigger,
   ComboboxValue,
-  useComboboxAnchor,
 }

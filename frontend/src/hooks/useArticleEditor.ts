@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ContentApiError,
   discardArticleDraft,
@@ -74,8 +75,20 @@ export function useArticleEditor(
   symptomId: string | undefined,
   enabled: boolean
 ): ArticleEditor {
-  const [loading, setLoading] = useState(false);
-  const [article, setArticle] = useState<EditableArticle | null>(null);
+  // The editable copy comes through the query cache, so a publish or a
+  // discard (which invalidate "troubleshooting") reloads it on their own.
+  // Never refetched on focus: re-seeding mid-sentence would reset the field
+  // under the cursor. Draft saves and uploads don't invalidate it either.
+  const query = useQuery({
+    queryKey: ["troubleshooting", "admin", "article", subjectKey, symptomId],
+    queryFn: () => getEditableArticle(subjectKey!, symptomId!),
+    enabled: enabled && !!subjectKey && !!symptomId,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+  const article = query.data ?? null;
+  const loading = query.isFetching;
+
   const [working, setWorking] = useState<ArticleBody | null>(null);
   const [hasDraft, setHasDraft] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>({ kind: "clean" });
@@ -83,45 +96,25 @@ export function useArticleEditor(
   const [issues, setIssues] = useState<ContentIssue[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
 
+  // Seed the working copy whenever a fresh copy arrives, during render
+  // rather than in an effect, so there's no frame showing the old one.
+  // Resume the draft if there is one — see the header.
+  const [seeded, setSeeded] = useState<EditableArticle | null | undefined>(undefined);
+  if (query.data !== undefined && query.data !== seeded) {
+    setSeeded(query.data);
+    setWorking(query.data ? (query.data.draft ?? query.data.published) : null);
+    setHasDraft(Boolean(query.data?.draft));
+    setSaveState({ kind: "clean" });
+  }
+
   const timer = useRef<number | null>(null);
   const pending = useRef<ArticleBody | null>(null);
 
   const load = useCallback(async () => {
-    if (!subjectKey || !symptomId) return;
+    await query.refetch();
+  }, [query]);
 
-    setLoading(true);
-    try {
-      const loaded = await getEditableArticle(subjectKey, symptomId);
-      setArticle(loaded);
-      // Resume the draft if there is one — see the header.
-      setWorking(loaded ? (loaded.draft ?? loaded.published) : null);
-      setHasDraft(Boolean(loaded?.draft));
-      setSaveState({ kind: "clean" });
-      setIssues([]);
-      setWarnings([]);
-    } catch (err) {
-      setSaveState({
-        kind: "error",
-        message: err instanceof Error ? err.message : "Couldn't load this article",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [subjectKey, symptomId]);
-
-  // Load on entering edit mode, and clear everything on leaving it so the
-  // next article never opens showing the last one's state.
-  useEffect(() => {
-    if (!enabled) {
-      setArticle(null);
-      setWorking(null);
-      setIssues([]);
-      setWarnings([]);
-      setSaveState({ kind: "clean" });
-      return;
-    }
-    void load();
-  }, [enabled, load]);
+  const publishedAt = article?.publishedAt;
 
   const flush = useCallback(async () => {
     const body = pending.current;
@@ -137,7 +130,7 @@ export function useArticleEditor(
         subjectKey,
         symptomId,
         body,
-        article?.publishedAt
+        publishedAt
       );
       setHasDraft(true);
       setSaveState({ kind: "saved", at: res.draftUpdatedAt });
@@ -153,7 +146,7 @@ export function useArticleEditor(
         setIssues(err.issues);
       }
     }
-  }, [subjectKey, symptomId, article?.publishedAt]);
+  }, [subjectKey, symptomId, publishedAt]);
 
   const update = useCallback(
     (mutate: (body: ArticleBody) => ArticleBody) => {
@@ -166,6 +159,7 @@ export function useArticleEditor(
         // A new edit means the last publish refusal is about text that no
         // longer exists, so it stops being shown.
         setIssues([]);
+        setWarnings([]);
 
         if (timer.current) window.clearTimeout(timer.current);
         timer.current = window.setTimeout(() => void flush(), AUTOSAVE_DELAY_MS);
@@ -196,8 +190,9 @@ export function useArticleEditor(
     setIssues([]);
     try {
       const result = await publishArticle(subjectKey, symptomId);
+      // The publish invalidated the cache, which reloads the copy; the
+      // warnings are kept until the next edit.
       setWarnings(result.warnings);
-      await load();
       return true;
     } catch (err) {
       if (err instanceof ContentApiError) {
@@ -213,7 +208,7 @@ export function useArticleEditor(
     } finally {
       setPublishing(false);
     }
-  }, [subjectKey, symptomId, flush, load]);
+  }, [subjectKey, symptomId, flush]);
 
   const discard = useCallback(async (): Promise<{ articleRemoved: boolean }> => {
     if (!subjectKey || !symptomId) return { articleRemoved: false };
@@ -227,7 +222,6 @@ export function useArticleEditor(
     // emptied, so there is nothing left to reload — reloading would show the
     // "not written yet" state under an editor that is still open.
     if (articleRemoved) {
-      setArticle(null);
       setWorking(null);
       setHasDraft(false);
       setSaveState({ kind: "clean" });
@@ -236,9 +230,8 @@ export function useArticleEditor(
       return { articleRemoved: true };
     }
 
-    await load();
     return { articleRemoved: false };
-  }, [subjectKey, symptomId, load]);
+  }, [subjectKey, symptomId]);
 
   return {
     loading,

@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { invalidate, queryClient } from "@/api/queryClient";
 import type {
   StandardModelsConfig,
   StockKeeperEntry,
@@ -53,6 +54,7 @@ export async function setRequestableCategoryIds(
       body: { ids },
     }
   );
+  await invalidate(["reference", "asset-categories"]);
   return data.ids ?? null;
 }
 
@@ -105,6 +107,7 @@ export async function setAccessoryCategoriesForAssetCategory(
     "/api/settings/accessory-asset-map",
     { method: "PUT", body: { assetCategoryId, accessoryCategoryIds } }
   );
+  await invalidate(["reference", "accessory-categories"]);
   return data.map ?? {};
 }
 
@@ -148,6 +151,7 @@ export async function setStockKeepersForLocation(
     method: "PUT",
     body: { locationId, keepers, locationName: locationName ?? null },
   });
+  await invalidate(["identity"], ["requests", "action-counts"]);
   return {
     config: data.config ?? {},
     maxPerLocation: data.maxPerLocation ?? DEFAULT_MAX_STOCK_KEEPERS,
@@ -181,6 +185,8 @@ export type LoanConfig = {
   devices: LoanDevice[];
   /** Longest window a requester may book, in days. */
   maxLoanDays: number;
+  /** The due-back ladder, days from the due date: four, strictly climbing. */
+  reminderDays: number[];
 };
 
 export async function getLoanConfig(): Promise<LoanConfig> {
@@ -188,6 +194,7 @@ export async function getLoanConfig(): Promise<LoanConfig> {
   return {
     devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
+    reminderDays: data.reminderDays ?? [-1, 0, 3, 7],
   };
 }
 
@@ -201,10 +208,59 @@ export async function setLoanConfig(
     body: {
       ...(config.devices !== undefined ? { devices: config.devices } : {}),
       ...(config.maxLoanDays !== undefined ? { maxLoanDays: config.maxLoanDays } : {}),
+      ...(config.reminderDays !== undefined ? { reminderDays: config.reminderDays } : {}),
     },
   });
+  await invalidate(["loans"]);
   return {
     devices: data.devices ?? [],
     maxLoanDays: data.maxLoanDays ?? 30,
+    reminderDays: data.reminderDays ?? [-1, 0, 3, 7],
   };
+}
+
+///  +-----------------------------------------------------------------+
+///  |                         SITE COLOURS                            |
+///  +-----------------------------------------------------------------+
+//
+//  locationId → "#rrggbb", set by admins. Readable by everyone: every page
+//  that names a site draws its dot.
+
+export type SiteColours = Record<string, string>;
+
+export async function getSiteColours(): Promise<SiteColours> {
+  const data = await apiFetch<{ colours: SiteColours }>("/api/settings/site-colours");
+  return data.colours ?? {};
+}
+
+/** Set one site's colour, or clear it with null. Admin only. */
+export async function setSiteColour(locationId: number, colour: string | null): Promise<SiteColours> {
+  const data = await apiFetch<{ colours: SiteColours }>("/api/settings/site-colours", {
+    method: "PUT",
+    body: { locationId, colour },
+  });
+  queryClient.setQueryData(["reference", "site-colours"], data.colours);
+  return data.colours;
+}
+
+// ---- dev settings (development builds only) -------------------------------
+
+/** Switches that take a guard out of the way on a dev instance. The server
+ *  ignores them, and answers 404, outside development. */
+export type DevSettings = {
+  /** Log each email instead of sending it. */
+  suppressEmail: boolean;
+  /** Let the requester be their own approver. */
+  allowSelfApproval: boolean;
+};
+
+export async function getDevSettings(): Promise<DevSettings> {
+  return apiFetch<DevSettings>("/api/settings/dev");
+}
+
+/** Change one or both. Admin only. */
+export async function setDevSettings(patch: Partial<DevSettings>): Promise<DevSettings> {
+  const data = await apiFetch<DevSettings>("/api/settings/dev", { method: "PUT", body: patch });
+  queryClient.setQueryData(["settings", "dev"], data);
+  return data;
 }

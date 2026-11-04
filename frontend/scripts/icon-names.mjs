@@ -63,8 +63,11 @@ const JSX_CHILD = /material-symbols-outlined[^>]*>\s*([a-z][a-z0-9_]*)\s*</g;
  * in the requests table doing exactly that, capital D and all, long before
  * the font was ever subsetted. iconFont.test.ts checks these against the
  * codepoint list for that reason.
+ *
+ * The <Icon name="..."> component counts as explicit for the same reason.
  */
-const DECLARED_ICON = /\bicon(?:Name)?\s*[:=]\s*["'`]([A-Za-z][A-Za-z0-9_]*)["'`]/g;
+const DECLARED_ICON =
+  /(?:\bicon(?:Name)?\s*[:=]|<Icon\b[^>]*?\bname\s*=)\s*["'`]([A-Za-z][A-Za-z0-9_]*)["'`]/g;
 
 function walk(dir) {
   const out = [];

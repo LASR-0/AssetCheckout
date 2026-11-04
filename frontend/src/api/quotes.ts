@@ -1,4 +1,4 @@
-import { apiFetch, getDevHeaders } from "@/api/client";
+import { apiFetch, apiResponse } from "@/api/client";
 import type { QuoteDetail } from "@/types/requestType";
 
 ///  +-----------------------------------------------------------------+
@@ -100,24 +100,10 @@ export async function rejectQuote(
  * Fetched into a blob rather than linked directly. A plain <a target="_blank">
  * would work in production, where the proxy injects the identity headers on
  * every request — but not in development, where identity comes from the
- * x-dev-user-* headers that only apiFetch adds, so the tab would 401. Going
- * through getDevHeaders keeps the two environments behaving the same.
+ * x-dev-user-* headers that only the API client adds, so the tab would 401.
  */
 export async function openQuoteDocument(requestId: number): Promise<void> {
-  const res = await fetch(`/api/approval/${requestId}/quote/document`, {
-    headers: getDevHeaders(),
-  });
-
-  if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      message = body?.error || body?.message || message;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(message);
-  }
+  const res = await apiResponse(`/api/approval/${requestId}/quote/document`);
 
   const url = URL.createObjectURL(await res.blob());
   window.open(url, "_blank", "noopener");

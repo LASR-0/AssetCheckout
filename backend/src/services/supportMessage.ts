@@ -197,6 +197,65 @@ function withSubjectHeader(subject: string, body: string): string {
   ].join("\n");
 }
 
+/// ── Without an article ───────────────────────────────────────────────────
+//
+//  From the library's front page: a search that found nothing, a subject with
+//  nothing written, or nobody to ring. There is no symptom and no steps, so
+//  the admin template — written around {symptom} and {stepsTried} — would come
+//  out with holes in it. This has its own short wording instead.
+//
+//  The search text is the most useful thing here: it is the problem in the
+//  person's own words, and it is what IT would ask for first.
+
+export type GeneralMessageRequest = {
+  /** What they searched for, when the message comes from a search. */
+  query: string;
+  /** The subject they were browsing, when there is one. */
+  subjectKey: string | null;
+  notes: string;
+};
+
+export function composeGeneralMessage(
+  request: GeneralMessageRequest,
+  actor: { name: string; email: string },
+  appBaseUrl: string
+): SupportMessage {
+  const query = request.query.trim();
+  const label = request.subjectKey
+    ? SUBJECT_LABELS[request.subjectKey as SubjectKey]?.labelSingular ?? null
+    : null;
+
+  const about = query ? `“${query}”` : label ? `my ${label}` : "a problem";
+  const base = appBaseUrl.replace(/\/$/, "");
+  const where = request.subjectKey
+    ? `${base}/troubleshooting/${request.subjectKey}`
+    : `${base}/troubleshooting`;
+
+  const text = fill(
+    [
+      `Hi team — I need a hand with ${about}.`,
+      "",
+      "I couldn't find a fix for it in Checkout troubleshooting.",
+      "",
+      "{notes}",
+      "",
+      `Where I looked: ${where}`,
+      "",
+      "— {email}",
+    ].join("\n"),
+    { notes: request.notes.trim(), email: actor.email || actor.name || "no email recorded" }
+  );
+
+  const subject = query ? `Help with “${query}”` : label ? `Help with my ${label}` : "Help with a problem";
+
+  return {
+    subject,
+    text: withSubjectHeader(subject, text),
+    channelUrl: getSupportChannelUrl(),
+    channelName: getSupportChannelName(),
+  };
+}
+
 /** The step titles to offer as checkboxes — served, so the tokens are already
  *  filled and the wording matches what they just read. */
 export async function getStepChoices(

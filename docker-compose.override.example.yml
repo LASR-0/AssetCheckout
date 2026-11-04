@@ -1,0 +1,14 @@
+# For building behind a TLS-inspecting firewall (one that re-signs HTTPS with
+# its own root CA). Copy to docker-compose.override.yml, which Compose merges
+# in automatically and git ignores, and point `file` at a bundle that holds
+# that CA. The Dockerfile adds it to the image's trust store, for apk, pnpm and
+# Prisma at build time and for Snipe-IT and SMTP calls at runtime.
+services:
+  asset-checkout:
+    build:
+      secrets:
+        - extra_ca
+
+secrets:
+  extra_ca:
+    file: /etc/ssl/certs/ca-certificates.crt

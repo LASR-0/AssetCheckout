@@ -29,7 +29,7 @@ import type { ResolvedStep, TourSide, TourStepSpec } from "./types";
 ///  +-----------------------------------------------------------------+
 
 export type ResolveOptions = {
-  /** True when the viewport is at least `md` — see hooks/useIsDesktop. */
+  /** True above the phone breakpoint — see DESKTOP_QUERY in driverAdapter. */
   isDesktop: boolean;
 };
 

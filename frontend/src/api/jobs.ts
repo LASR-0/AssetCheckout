@@ -147,3 +147,16 @@ export async function saveReminderThresholds(
 export async function getJobStats(): Promise<JobStatsResponse> {
   return apiFetch<JobStatsResponse>("/api/job/stats");
 }
+/** Each job type's most recent run, in one call — the settings board. */
+export async function getLatestJobs(): Promise<BackgroundJob[]> {
+  return (await apiFetch<{ jobs: BackgroundJob[] }>("/api/job/latest")).jobs ?? [];
+}
+
+/** Records one live run may delete, per job that deletes. */
+export async function getMaxDeletes(): Promise<Partial<Record<JobType, number>>> {
+  return (await apiFetch<{ limits: Partial<Record<JobType, number>> }>("/api/job/max-deletes")).limits ?? {};
+}
+
+export async function setMaxDeletes(jobType: JobType, max: number): Promise<void> {
+  await apiFetch("/api/job/max-deletes", { method: "POST", body: { jobType, max } });
+}

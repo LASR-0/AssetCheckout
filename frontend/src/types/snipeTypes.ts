@@ -17,9 +17,11 @@ export type LocationAsset = {
   statusLabel: string | null;
   /** Snipe considers it available to issue. */
   available: boolean;
-  /** Who currently holds it, when it is checked out to a person. */
+  /** Who holds it, by name, when it is checked out (see assignedKind). */
   assignedTo: string | null;
   /** When it was last checked out, or null if it never has been. */
+  /** Who holds it: a person, a place, or another asset (null on the shelf). */
+  assignedKind: "user" | "location" | "asset" | null;
   lastCheckout: string | null;
 };
 

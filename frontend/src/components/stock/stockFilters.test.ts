@@ -40,6 +40,7 @@ function asset(over: Partial<LocationAsset> = {}): LocationAsset {
     statusLabel: "Ready to Deploy",
     available: true,
     assignedTo: null,
+    assignedKind: null,
     lastCheckout: null,
     ...over,
   };
@@ -47,10 +48,10 @@ function asset(over: Partial<LocationAsset> = {}): LocationAsset {
 
 const FLEET: LocationAsset[] = [
   asset({ id: 1, categoryName: "Laptop", statusLabel: "Ready to Deploy" }),
-  asset({ id: 2, categoryName: "Laptop", statusLabel: "Deployed", assignedTo: "Sam Taylor" }),
+  asset({ id: 2, categoryName: "Laptop", statusLabel: "Deployed", assignedTo: "Sam Taylor", assignedKind: "user" }),
   asset({ id: 3, categoryName: "Phone", statusLabel: "Ready to Deploy" }),
-  asset({ id: 4, categoryName: "Phone", statusLabel: "Deployed", assignedTo: "Ali Rahman" }),
-  asset({ id: 5, categoryName: "Tablet", statusLabel: "Deployed", assignedTo: "Jo Bailey" }),
+  asset({ id: 4, categoryName: "Phone", statusLabel: "Deployed", assignedTo: "Ali Rahman", assignedKind: "user" }),
+  asset({ id: 5, categoryName: "Tablet", statusLabel: "Deployed", assignedTo: "Boardroom", assignedKind: "location" }),
 ];
 
 describe("facet counts", () => {
@@ -93,26 +94,37 @@ describe("filtering", () => {
     expect(hits.length).toBe(2);
   });
 
-  it("splits shelf stock from issued hardware", () => {
+  it("splits shelf stock from people, and people from places", () => {
     expect(applyFilters(FLEET, { ...EMPTY_FILTERS, assign: "SHELF" }).length).toBe(2);
-    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, assign: "ASSIGNED" }).length).toBe(3);
+    // The boardroom has asset 5, but it isn't a person.
+    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, assign: "PERSON" }).map((a) => a.id)).toEqual([2, 4]);
   });
 
-  it("excludes never-checked-out assets from every age filter", () => {
-    // "Checked out in the last 7 days" cannot honestly include something that
-    // has never been checked out at all.
-    const fleet = [asset({ id: 9, lastCheckout: null })];
-    expect(applyFilters(fleet, { ...EMPTY_FILTERS, age: "7" })).toEqual([]);
-    expect(applyFilters(fleet, { ...EMPTY_FILTERS, age: "365+" })).toEqual([]);
+  it("finds what the viewer holds, and nothing for a viewer with no name", () => {
+    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, assign: "YOU" }, undefined, "Ali Rahman").map((a) => a.id)).toEqual([4]);
+    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, assign: "YOU" })).toEqual([]);
   });
 
-  it("reads 365+ as 'at least', not 'at most'", () => {
-    const fleet = [
-      asset({ id: 1, lastCheckout: daysAgo(400) }),
-      asset({ id: 2, lastCheckout: daysAgo(10) }),
-    ];
-    const old = applyFilters(fleet, { ...EMPTY_FILTERS, age: "365+" });
-    expect(old.map((a) => a.id)).toEqual([1]);
+  it("gives shelf stock no age, however long ago it was last out", () => {
+    // Back on the shelf, a checkout from two years ago isn't "out over a year".
+    const fleet = [asset({ id: 9, lastCheckout: daysAgo(800) })];
+    expect(applyFilters(fleet, { ...EMPTY_FILTERS, age: "gt1" })).toEqual([]);
+    expect(applyFilters(fleet, { ...EMPTY_FILTERS, tile: "old" })).toEqual([]);
+  });
+
+  it("puts each checked-out asset in exactly one age band", () => {
+    const out = (id: number, days: number) =>
+      asset({ id, assignedTo: "Sam Taylor", assignedKind: "user", lastCheckout: daysAgo(days) });
+    const fleet = [out(1, 10), out(2, 200), out(3, 400)];
+    expect(applyFilters(fleet, { ...EMPTY_FILTERS, age: "lt6" }).map((a) => a.id)).toEqual([1]);
+    expect(applyFilters(fleet, { ...EMPTY_FILTERS, age: "6to12" }).map((a) => a.id)).toEqual([2]);
+    expect(applyFilters(fleet, { ...EMPTY_FILTERS, age: "gt1" }).map((a) => a.id)).toEqual([3]);
+  });
+
+  it("narrows by the picked tile", () => {
+    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, tile: "shelf" }).length).toBe(2);
+    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, tile: "out" }).length).toBe(3);
+    expect(applyFilters(FLEET, { ...EMPTY_FILTERS, tile: "people" }).length).toBe(2);
   });
 });
 
