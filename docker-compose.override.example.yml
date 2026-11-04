@@ -1,8 +1,13 @@
 # For building behind a TLS-inspecting firewall (one that re-signs HTTPS with
 # its own root CA). Copy to docker-compose.override.yml, which Compose merges
-# in automatically and git ignores, and point `file` at a bundle that holds
-# that CA. The Dockerfile adds it to the image's trust store, for apk, pnpm and
-# Prisma at build time and for Snipe-IT and SMTP calls at runtime.
+# in automatically and git ignores, and copy in a bundle that holds that CA:
+#
+#   cp /etc/ssl/certs/ca-certificates.crt ./docker-ca-bundle.crt
+#
+# The copy has to sit in the project: Compose builds through buildx bake, which
+# refuses to read a file outside it without --allow. The Dockerfile adds the
+# bundle to the image's trust store, for apk, pnpm and Prisma at build time and
+# for Snipe-IT and SMTP calls at runtime.
 services:
   asset-checkout:
     build:
@@ -11,4 +16,4 @@ services:
 
 secrets:
   extra_ca:
-    file: /etc/ssl/certs/ca-certificates.crt
+    file: ./docker-ca-bundle.crt

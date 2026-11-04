@@ -15,6 +15,7 @@ backend/generated
 **/.env.*.local
 !frontend/.env
 backend/cert
+docker-ca-bundle.crt
 
 # Local data: dev databases and supplier quotes.
 backend/data

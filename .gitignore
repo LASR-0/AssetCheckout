@@ -127,3 +127,4 @@ miramare-dark-theme.css
 #-----------------------------------------------------------------------------
 # docker-compose.override.example.yml is the tracked template.
 docker-compose.override.yml
+docker-ca-bundle.crt
