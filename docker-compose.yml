@@ -6,7 +6,9 @@ services:
       dockerfile: Dockerfile
       target: runner
     ports:
-      - "3000:3000"
+      # Localhost only: the auth proxy is the security boundary, and anyone
+      # who reaches the app directly can claim any identity by header.
+      - "127.0.0.1:3000:3000"
     volumes:
       - /assetc/data:/data
     env_file:
