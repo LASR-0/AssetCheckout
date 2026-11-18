@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -16,6 +16,7 @@ import { STAGE_META } from "@/lib/route";
 import { LogToolbar } from "@/components/requests/LogToolbar";
 import { ListFoot, ListHead, RequestList } from "@/components/requests/RequestList";
 import { Docket, type Intent } from "@/components/requests/Docket";
+import { arrowNudge, colTemplate, startDrag, useColumnWidths, useListWidth } from "@/components/requests/useLayout";
 import {
   ANY,
   inView,
@@ -47,6 +48,19 @@ import {
 
 const VIEW_KEYS = new Set<string>(VIEWS.map((v) => v.key));
 
+// THE SPLIT. The list is never wider than half the page, so the docket
+// always has at least half; it starts at the layout's own width (under
+// that cap) and drags anywhere between the least its table needs and half.
+// Sizes in rem of the page, not of the zoomed list. Below the 1400 design
+// px cutoff the list keeps the design's own minimum; above it the list is
+// zoomed to match the docket and needs more.
+const LIST_MIN = 44.5625;
+const LIST_MIN_ROOMY = 57;
+const LIST_MAX_ROOMY = 70.0625;
+const DOCKET_MIN = 30;
+/** Below the cutoff the design splits 1.44 : 1. */
+const LIST_SHARE = 1.44 / 2.44;
+
 /** An older ?status= link, as a view and a stage. */
 function fromStatus(status: string | null): { view: View; stage: string } | null {
   if (!status) return null;
@@ -63,6 +77,11 @@ export default function RequestsPage() {
   const log = useRequestLog();
   const { viewer } = log;
   const desk = useMediaQuery("(min-width: 55rem)");
+  const roomy = useMediaQuery("(min-width: 70rem)");
+  const [listWidth, setListWidth] = useListWidth();
+  const [colWidths, setColWidths] = useColumnWidths();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   useTourReady(!log.loading);
 
   const [params, setParams] = useSearchParams();
@@ -213,23 +232,56 @@ export default function RequestsPage() {
   if (selected && selected !== lastSelected) setLastSelected(selected);
   const docketRow = selected ?? (desk ? null : lastSelected);
 
+  // ---- the split ----
+  const listMin = roomy ? LIST_MIN_ROOMY : LIST_MIN;
+  // Half the page, unless the table needs more.
+  const listCap = `max(${listMin}rem, 50%)`;
+  // The layout's own list width, under the cap, until it's dragged.
+  const listDefault = roomy
+    ? `min(${listCap}, max(${LIST_MIN_ROOMY}rem, min(${LIST_MAX_ROOMY}rem, 100% - ${DOCKET_MIN}rem)))`
+    : `min(${listCap}, max(${LIST_MIN}rem, ${LIST_SHARE * 100}%))`;
+  /** Holds a width to the split's limits, in CSS px; null at the default. */
+  function clampSplit(px: number): number | null {
+    const grid = gridRef.current;
+    if (!grid) return null;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const gw = grid.getBoundingClientRect().width;
+    const narrowest = listMin * rem;
+    const widest = Math.max(narrowest, gw / 2);
+    const fallback = Math.min(
+      widest,
+      roomy
+        ? Math.max(LIST_MIN_ROOMY * rem, Math.min(LIST_MAX_ROOMY * rem, gw - DOCKET_MIN * rem))
+        : Math.max(LIST_MIN * rem, gw * LIST_SHARE)
+    );
+    const w = Math.max(narrowest, Math.min(widest, px));
+    return Math.abs(w - fallback) < 1 ? null : w;
+  }
+  // The same limits as clampSplit, in CSS, so they hold as the window changes.
+  const listTrack = listWidth == null ? listDefault : `max(${listMin}rem, min(${listWidth}px, ${listCap}))`;
+  const split: CSSProperties | undefined = desk ? { gridTemplateColumns: `${listTrack} minmax(0,1fr)` } : undefined;
+
   const docket = docketRow && (
     <Docket key={`${docketRow.r.id}:${nonce}`} row={docketRow} viewer={viewer} intent={intent} onLanded={landed} />
   );
 
   return (
     <div
+      ref={gridRef}
       data-tour-region="requests"
+      style={split}
       className={cn(
         "grid min-w-0",
-        desk && "h-full min-h-0 grid-cols-[minmax(44.5625rem,1.44fr)_minmax(0,1fr)] min-[70rem]:grid-cols-[minmax(0,70.0625rem)_minmax(30rem,1fr)]"
+        desk &&
+"relative h-full min-h-0"
       )}
     >
       <div
+        ref={listRef}
         className={cn(
           "relative flex min-w-0 flex-col gap-3.5 bg-subtle",
           desk
-            ? "z-2 min-h-0 border-r border-line pt-5.5 pr-5 pb-5 pl-6 shadow-[3px_0_8px_var(--shade)] [clip-path:inset(0_-2rem_0_0)]"
+            ? "z-2 min-h-0 border-r border-line pt-5.5 pr-5 pb-5 pl-6 shadow-[3px_0_8px_var(--shade)] [clip-path:inset(0_-2rem_0_0)] min-[70rem]:[zoom:1.2]"
             : "px-3 pt-4 pb-6 phone:px-6"
         )}
       >
@@ -284,9 +336,14 @@ export default function RequestsPage() {
               "flex flex-col",
               desk && "min-h-0 flex-1 overflow-hidden rounded-12 border border-line bg-sheet"
             )}
+            style={desk ? ({ "--req-cols": colTemplate(colWidths) } as CSSProperties) : undefined}
           >
-            {desk && <ListHead newestFirst={newestFirst} onSort={() => setNewestFirst((v) => !v)} />}
-            <div role={desk ? "table" : undefined} aria-label="Requests" className={cn(desk && "min-h-0 flex-1 overflow-auto")}>
+            {desk && (
+              <ListHead newestFirst={newestFirst} onSort={() => setNewestFirst((v) => !v)} widths={colWidths} onWidths={setColWidths} />
+            )}
+            {/* Never scrolls sideways: the heading sits outside this scroller
+                and would no longer line up with the rows. */}
+            <div role={desk ? "table" : undefined} aria-label="Requests" className={cn(desk && "min-h-0 flex-1 overflow-x-hidden overflow-y-auto")}>
               <RequestList
                 rows={list}
                 contentKey={[view, stage, site, query.trim(), pin, newestFirst].join("|")}
@@ -303,6 +360,36 @@ export default function RequestsPage() {
           </div>
         )}
       </div>
+
+      {desk && (
+        // The split's handle, over the list's right edge. It sits in the
+        // grid rather than the list, so it isn't zoomed with it.
+        <span
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the request list"
+          tabIndex={0}
+          title="Drag to resize · double-click to reset"
+          onPointerDown={(e) => {
+            const left = gridRef.current?.getBoundingClientRect().left ?? 0;
+            startDrag(e, (x) => setListWidth(clampSplit(x - left)));
+          }}
+          onDoubleClick={() => setListWidth(null)}
+          onKeyDown={(e) => {
+            const now = listRef.current?.getBoundingClientRect().width;
+            if (now != null) arrowNudge(e, 16, (d) => setListWidth(clampSplit(now + d)));
+          }}
+          // Both column lines, or an abspos grid child's far edge is the grid's.
+          className="group absolute inset-y-0 right-0 z-3 col-start-1 col-end-2 row-start-1 flex w-3 translate-x-1/2 cursor-col-resize touch-none items-center justify-center outline-none"
+        >
+          <span aria-hidden className="absolute inset-y-0 w-0.5 bg-transparent transition-colors group-hover:bg-strong group-focus-visible:bg-brand group-active:bg-brand" />
+          {/* The grip, always showing, so the edge reads as something to drag. */}
+          <span
+            aria-hidden
+            className="relative h-10 w-1.5 rounded-pill border border-line bg-sheet shadow-[0_1px_2px_var(--soft)] transition-colors group-hover:border-strong group-hover:bg-strong group-focus-visible:border-brand group-focus-visible:bg-brand group-active:border-brand group-active:bg-brand"
+          />
+        </span>
+      )}
 
       {desk ? (
         <div className="min-h-0 min-w-0 overflow-auto bg-canvas bg-[radial-gradient(var(--dot)_0.0625rem,transparent_0.0625rem)] bg-size-[1rem_1rem] px-6 pt-5 pb-6 [zoom:1.2]">

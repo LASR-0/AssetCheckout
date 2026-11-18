@@ -16,6 +16,7 @@ import type { LogRow } from "@/components/requests/useRequestLog";
 import { Queues, type QueueKind } from "@/components/stock/Queues";
 import { Ledger } from "@/components/stock/Ledger";
 import { useStock, type Site } from "@/components/stock/useStock";
+import { pageZoom, useMainWidth } from "@/components/shell/main-width";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  STOCK                                          |
@@ -115,6 +116,9 @@ export default function StockPage() {
   const toast = useToast();
   const phone = !useMediaQuery("(min-width: 36rem)");
   const wide = useMediaQuery("(min-width: 75rem)");
+  // Grows on a wide screen, halfway between its old fixed 1.15 and Home's
+  // growth (a 1240 page), and never below 1.15.
+  const zoom = Math.round(((1.15 + Math.max(1.15, pageZoom(useMainWidth(), 1240))) / 2) * 1e4) / 1e4;
   useTourReady(!stock.loading);
 
   const [sel, setSel] = useState<number | null>(null);
@@ -185,7 +189,10 @@ export default function StockPage() {
   const docket = (row: LogRow) => <Docket key={row.r.id} row={row} viewer={viewer} intent="look" onLanded={landed} />;
 
   return (
-    <div className={cn("mx-auto flex w-full max-w-[calc(50%+45rem)] flex-col", !phone && "h-full min-h-0 [zoom:1.15]")}>
+    <div
+      className={cn("mx-auto flex w-full max-w-[calc(50%+45rem)] flex-col", !phone && "h-full min-h-0")}
+      style={phone ? undefined : { zoom }}
+    >
       <div className="relative z-20 flex flex-none flex-wrap items-end gap-x-6 gap-y-3 px-3 pt-4.5 pb-3 phone:px-6 phone:pt-5.5 phone:pb-4">
         <div className="min-w-0 flex-[1_1_17.5rem]">
           <h1 className="m-0 font-head fs-21 font-medium tracking-head">Stock</h1>

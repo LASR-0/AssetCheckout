@@ -72,8 +72,10 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
   const [callText, setCallText] = useState(!!r.callText);
   const [needsData, setNeedsData] = useState(!!r.needsData);
   const [numberOption, setNumberOption] = useState<NumberOption | null>(r.numberOption ?? null);
-  const [reuseUser, setReuseUser] = useState<User | null>(null);
-  const [approver, setApprover] = useState<User | null>(null);
+  // undefined until touched, so the request's own choice shows; null once
+  // "Change" clears it, so the search comes back instead of the old pick.
+  const [reuseUser, setReuseUser] = useState<User | null | undefined>(undefined);
+  const [approver, setApprover] = useState<User | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unchanged, setUnchanged] = useState(false);
@@ -85,8 +87,8 @@ export function EditStep({ row, onCancel, onDone }: StepProps) {
     () => (r.reuseNumberFromEmail ? users.find((u) => u.email?.toLowerCase() === r.reuseNumberFromEmail?.toLowerCase()) ?? null : null),
     [users, r.reuseNumberFromEmail]
   );
-  const chosenApprover = approver ?? currentApprover;
-  const chosenReuse = reuseUser ?? currentReuse;
+  const chosenApprover = approver === undefined ? currentApprover : approver;
+  const chosenReuse = reuseUser === undefined ? currentReuse : reuseUser;
 
   const assetCats = useQuery({ ...assetCategoriesQuery, enabled: kind === "ASSET" });
   const accessoryCats = useQuery({ ...accessoryCategoriesForUserQuery(r.userId), enabled: kind === "ACCESSORY" });

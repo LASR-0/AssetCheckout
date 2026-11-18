@@ -345,7 +345,9 @@ export function Ledger({ site, me, phone, fill }: Props) {
         </Box>
       ) : (
         <>
-          <div className="flex gap-2 overflow-x-auto px-4 pb-3 max-phone:px-3.5 max-phone:[mask-image:linear-gradient(to_right,#000_calc(100%-2.75rem),transparent)]">
+          {/* pt-1: the row scrolls sideways, which clips it top and bottom too,
+              so it needs room for a picked tile's ring and focus outline. */}
+          <div className="flex gap-2 overflow-x-auto px-4 pt-1 pb-3 max-phone:px-3.5 max-phone:[mask-image:linear-gradient(to_right,#000_calc(100%-2.75rem),transparent)]">
             {isA
               ? assetTiles.map((t) => (
                   <Tile
