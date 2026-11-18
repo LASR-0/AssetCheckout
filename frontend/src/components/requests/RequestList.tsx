@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { ROW_IN, rowIn } from "@/lib/motion";
 import { Icon } from "@/components/ui/icon";
@@ -8,6 +8,7 @@ import { stageMeta } from "@/lib/route";
 import { kindAccent, kindLabel, requestTitle } from "@/lib/requestDisplay";
 import { shortDate } from "@/lib/format";
 import type { LogRow } from "./useRequestLog";
+import { arrowNudge, clampCol, COL_DEFAULT, REQUEST_MIN, startDrag, type ColKey, type ColWidths } from "./useLayout";
 
 ///  +-----------------------------------------------------------------+
 ///  |                  THE LIST                                       |
@@ -29,8 +30,10 @@ const PAGE = 80;
 
 const EDGE = { id1: "bg-id1", id2: "bg-id2", id3: "bg-id3", id4: "bg-id4" } as const;
 
-/** The desktop columns: marker, request, requester, stage, whose move, filed. */
-export const COLS = "grid-cols-[0.5rem_minmax(0,1fr)_7.25rem_8.25rem_11.5rem_2.75rem]";
+/** The desktop columns: marker, request, requester, stage, whose move, filed.
+ *  The table sets --req-cols from the widths someone has dragged them to
+ *  (useLayout); the fallback is the design's own. */
+export const COLS = "grid-cols-[var(--req-cols,0.5rem_minmax(0,1fr)_7.25rem_8.25rem_11.5rem_2.75rem)]";
 
 type Props = {
   rows: LogRow[];
@@ -77,12 +80,12 @@ function Move({ row, onAct, phone }: { row: LogRow; onAct: (e: MouseEvent) => vo
         onClick={onAct}
         data-tour={row.action === "Approve" ? "requests-approve" : "requests-row-actions"}
         className={cn(
-          "inline-flex cursor-pointer items-center gap-1.5 rounded-8 border border-brand-line bg-brand-sub font-sans font-medium whitespace-nowrap text-brand-tx transition-colors outline-none hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
+          "inline-flex max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-8 border border-brand-line bg-brand-sub font-sans font-medium whitespace-nowrap text-brand-tx transition-colors outline-none hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
           phone ? "h-11 w-full justify-center rounded-10 fs-14" : "h-7.5 pr-2.5 pl-2 fs-12.5"
         )}
       >
-        <Icon name="front_hand" size={phone ? 18 : 16} />
-        {row.action}
+        <Icon name="front_hand" size={phone ? 18 : 16} className="shrink-0" />
+        <span className="truncate">{row.action}</span>
       </button>
     );
   }
@@ -326,39 +329,124 @@ export function RequestList({ rows, contentKey, selected, flash, loading, onOpen
   );
 }
 
-/** Column headings for the desktop table. */
-export function ListHead({ newestFirst, onSort }: { newestFirst: boolean; onSort: () => void }) {
-  const H = "flex items-center gap-1.25";
+/** The width of a design px on screen, inside `el` (the root is 80%, and
+ *  the list may be zoomed). */
+function designPx(el: HTMLElement): number {
+  const zoom = (el as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom ?? 1;
+  return (parseFloat(getComputedStyle(document.documentElement).fontSize) / 16) * zoom;
+}
+
+const LABEL: Record<ColKey, string> = { requester: "Requester", stage: "Stage", action: "Whose move", filed: "Filed" };
+
+/**
+ * The drag handle on a column's left edge, sitting in the gap before it.
+ * The Request column takes what's left, so everything right of it is
+ * pinned to the table's right edge: dragging this edge left widens the
+ * column, right narrows it, and the line stays under the pointer.
+ */
+/** A column's width as drawn, in design px, from its grip. */
+function shown(grip: HTMLElement): number {
+  const cell = grip.parentElement;
+  return cell ? cell.getBoundingClientRect().width / designPx(grip) : 0;
+}
+
+function Grip({ col, widths, onWidths }: { col: ColKey; widths: ColWidths; onWidths: (w: ColWidths) => void }) {
+  const set = (w: number) => onWidths({ ...widths, [col]: clampCol(col, w) });
   return (
-    <div role="row" className={cn("grid h-8.5 flex-none items-center gap-x-3 border-b border-line2 bg-subtle pr-3.5 pl-4 fs-12 text-mut", COLS)}>
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize the ${LABEL[col]} column`}
+      aria-valuenow={widths[col]}
+      tabIndex={0}
+      title="Drag to resize · double-click to reset"
+      onPointerDown={(e) => {
+        const el = e.currentTarget;
+        const row = el.closest('[role="row"]');
+        const request = row?.querySelector<HTMLElement>("[data-col=request]");
+        const scale = designPx(el);
+        const x0 = e.clientX;
+        // From the width it's drawn at, which is less than the one asked
+        // for when the table has squeezed it.
+        const w0 = shown(el);
+        // The Request column gives up what this one gains, down to its minimum.
+        const room = request ? request.getBoundingClientRect().width / scale - REQUEST_MIN : Infinity;
+        startDrag(e, (x) => set(Math.min(w0 + Math.max(0, room), w0 - (x - x0) / scale)));
+      }}
+      onDoubleClick={() => set(COL_DEFAULT[col])}
+      onKeyDown={(e) => arrowNudge(e, 8, (d) => set(shown(e.currentTarget) - d))}
+      className="group/grip absolute inset-y-0 -left-3 z-1 flex w-3 cursor-col-resize touch-none items-center justify-center outline-none"
+    >
+      {/* A short divider at rest, darker while the heading is hovered, and
+          the full height in brand under the pointer or while dragged. */}
+      <span
+        aria-hidden
+        className="h-3.5 w-px rounded-pill bg-strong transition-all group-hover/head:bg-dis group-hover/grip:h-full group-hover/grip:w-0.5 group-hover/grip:bg-brand group-focus-visible/grip:h-full group-focus-visible/grip:w-0.5 group-focus-visible/grip:bg-brand group-active/grip:h-full group-active/grip:w-0.5 group-active/grip:bg-brand"
+      />
+    </span>
+  );
+}
+
+/** Column headings for the desktop table. */
+export function ListHead({
+  newestFirst,
+  onSort,
+  widths,
+  onWidths,
+}: {
+  newestFirst: boolean;
+  onSort: () => void;
+  widths: ColWidths;
+  onWidths: (w: ColWidths) => void;
+}) {
+  const H = "relative flex min-w-0 items-center gap-1.25";
+  const cell = (col: ColKey, children: ReactNode, extra?: Record<string, string>) => (
+    <span role="columnheader" className={H} {...extra}>
+      <Grip col={col} widths={widths} onWidths={onWidths} />
+      {children}
+    </span>
+  );
+  return (
+    <div role="row" className={cn("group/head grid h-8.5 flex-none items-center gap-x-3 border-b border-line2 bg-subtle pr-3.5 pl-4 fs-12 text-mut", COLS)}>
       <span />
-      <span role="columnheader" className={H}>
+      <span role="columnheader" data-col="request" className={H}>
         <Icon name="inventory_2" size={15} />
         Request
       </span>
-      <span role="columnheader" className={H}>
-        <Icon name="person" size={15} />
-        Requester
+      {cell(
+        "requester",
+        <>
+          <Icon name="person" size={15} />
+          <span className="truncate">Requester</span>
+        </>
+      )}
+      {cell(
+        "stage",
+        <>
+          <Icon name="route" size={15} />
+          <span className="truncate">Stage</span>
+        </>
+      )}
+      {cell(
+        "action",
+        <>
+          <Icon name="front_hand" size={15} />
+          <span className="truncate">Whose move</span>
+        </>,
+        { "data-tour": "requests-actions-header" }
+      )}
+      <span role="columnheader" aria-sort={newestFirst ? "descending" : "ascending"} className={H}>
+        <Grip col="filed" widths={widths} onWidths={onWidths} />
+        <button
+          type="button"
+          onClick={onSort}
+          title={newestFirst ? "Newest first" : "Oldest first"}
+          className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 font-sans fs-12 text-mut hover:text-tx"
+        >
+          Filed
+          <Icon name={newestFirst ? "arrow_downward" : "arrow_upward"} size={14} />
+        </button>
       </span>
-      <span role="columnheader" className={H}>
-        <Icon name="route" size={15} />
-        Stage
-      </span>
-      <span role="columnheader" data-tour="requests-actions-header" className={H}>
-        <Icon name="front_hand" size={15} />
-        Whose move
-      </span>
-      <button
-        type="button"
-        role="columnheader"
-        aria-sort={newestFirst ? "descending" : "ascending"}
-        onClick={onSort}
-        title={newestFirst ? "Newest first" : "Oldest first"}
-        className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 font-sans fs-12 text-mut hover:text-tx"
-      >
-        Filed
-        <Icon name={newestFirst ? "arrow_downward" : "arrow_upward"} size={14} />
-      </button>
     </div>
   );
 }
