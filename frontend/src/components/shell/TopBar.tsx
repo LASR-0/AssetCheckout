@@ -15,6 +15,7 @@ import { isStockKeeper } from "@/lib/permissions";
 import { withThemeReveal } from "@/lib/theme-transition";
 import { feedbackEnabledQuery } from "@/api/queries";
 import { prefetchFromLink } from "@/api/prefetch";
+import { useShellZoom } from "./main-width";
 
 ///  +-----------------------------------------------------------------+
 ///  |                         THE TOP BAR                             |
@@ -406,10 +407,12 @@ function MenuButton({
 
 export default function TopBar() {
   const nav = useNav();
+  const zoom = useShellZoom();
   return (
     <header
       data-tour-region="navbar"
       className="relative z-30 flex-none"
+      style={{ zoom }}
       onMouseOver={prefetchFromLink}
       onFocus={prefetchFromLink}
     >

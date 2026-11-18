@@ -46,17 +46,20 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-dvh flex-col bg-canvas font-sans text-tx">
-        <TopBar />
-        <main
-          id={SCROLL_ROOT_ID}
-          ref={mainRef}
-          className="relative min-h-0 flex-1 overflow-auto bg-canvas bg-[radial-gradient(var(--dot)_0.0625rem,transparent_0.0625rem)] bg-size-[1rem_1rem]"
-        >
-          <MainWidthContext.Provider value={width}>{children}</MainWidthContext.Provider>
-        </main>
-        <Footer />
-      </div>
+      {/* The bar and footer read the width too: they grow with the page. */}
+      <MainWidthContext.Provider value={width}>
+        <div className="flex h-dvh flex-col bg-canvas font-sans text-tx">
+          <TopBar />
+          <main
+            id={SCROLL_ROOT_ID}
+            ref={mainRef}
+            className="relative min-h-0 flex-1 overflow-auto bg-canvas bg-[radial-gradient(var(--dot)_0.0625rem,transparent_0.0625rem)] bg-size-[1rem_1rem]"
+          >
+            {children}
+          </main>
+          <Footer />
+        </div>
+      </MainWidthContext.Provider>
     </TooltipProvider>
   );
 }
